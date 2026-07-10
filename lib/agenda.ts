@@ -23,6 +23,11 @@ export const corStatus: Record<StatusConsulta, string> = {
   realizada: "bg-teal",
 };
 
+/** Deixa apenas a primeira letra maiúscula (evita "10 De Julho" do CSS capitalize). */
+export function capitalizar(texto: string): string {
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
+}
+
 /** Formata "HH:MM" a partir de uma data ISO. */
 export function formatarHora(iso: string): string {
   return new Date(iso).toLocaleTimeString("pt-BR", {

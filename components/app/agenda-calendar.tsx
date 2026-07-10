@@ -21,14 +21,23 @@ import {
   ChevronRight,
   Plus,
   CalendarDays,
+  Stethoscope,
+  ShieldCheck,
+  Phone,
 } from "lucide-react";
 import type { Consulta } from "@/lib/supabase/types";
 import { Button } from "@/components/ui/button";
-import { corStatus } from "@/lib/agenda";
+import { Badge } from "@/components/ui/badge";
+import {
+  corStatus,
+  rotuloStatus,
+  rotuloTipo,
+  capitalizar,
+  DIAS_CURTOS,
+} from "@/lib/agenda";
 import { cn } from "@/lib/utils";
 import { ConsultaDialog } from "@/components/app/consulta-dialog";
 import { NovaConsultaDialog } from "@/components/app/nova-consulta-dialog";
-import { DIAS_CURTOS } from "@/lib/agenda";
 
 type Visao = "mes" | "semana" | "dia";
 
@@ -68,12 +77,13 @@ export function AgendaCalendar({
     else setCursor((c) => addDays(c, dir));
   }
 
-  const titulo =
+  const titulo = capitalizar(
     visao === "mes"
       ? format(cursor, "MMMM 'de' yyyy", { locale: ptBR })
       : visao === "semana"
         ? `${format(startOfWeek(cursor, { weekStartsOn: 0 }), "dd MMM", { locale: ptBR })} – ${format(endOfWeek(cursor, { weekStartsOn: 0 }), "dd MMM", { locale: ptBR })}`
-        : format(cursor, "EEEE, dd 'de' MMMM", { locale: ptBR });
+        : format(cursor, "EEEE, dd 'de' MMMM", { locale: ptBR })
+  );
 
   function abrirNova(d?: Date) {
     setDataNova(d ?? cursor);
@@ -118,7 +128,7 @@ export function AgendaCalendar({
           >
             Hoje
           </button>
-          <span className="ml-2 font-heading text-lg font-semibold capitalize text-azul-medico">
+          <span className="ml-2 font-heading text-lg font-semibold text-azul-medico">
             {titulo}
           </span>
         </div>
@@ -375,15 +385,29 @@ function DayView({
   onConsulta: (c: Consulta) => void;
   onNova: () => void;
 }) {
+  // Pequeno resumo por status
+  const confirmadas = consultas.filter(
+    (c) => c.status === "confirmada" || c.status === "realizada"
+  ).length;
+
   return (
     <div className="rounded-lg border border-border bg-white shadow-soft">
-      <div className="flex items-center justify-between border-b border-border px-5 py-3">
-        <p className="font-heading font-semibold capitalize text-azul-medico">
-          {format(cursor, "EEEE, dd 'de' MMMM", { locale: ptBR })}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-5 py-4">
+        <p className="font-heading font-semibold text-azul-medico">
+          {capitalizar(format(cursor, "EEEE, dd 'de' MMMM", { locale: ptBR }))}
         </p>
-        <span className="text-sm text-cinza-suave">
-          {consultas.length} consulta{consultas.length === 1 ? "" : "s"}
-        </span>
+        <div className="flex items-center gap-3 text-sm text-cinza-suave">
+          <span>
+            <strong className="text-azul-medico">{consultas.length}</strong>{" "}
+            consulta{consultas.length === 1 ? "" : "s"}
+          </span>
+          {consultas.length > 0 && (
+            <span className="flex items-center gap-1.5">
+              <span className="size-2 rounded-full bg-sucesso" />
+              {confirmadas} confirmada{confirmadas === 1 ? "" : "s"}
+            </span>
+          )}
+        </div>
       </div>
 
       {consultas.length === 0 ? (
@@ -395,28 +419,80 @@ function DayView({
           </Button>
         </div>
       ) : (
-        <ul className="divide-y divide-border">
-          {consultas.map((c) => (
-            <li key={c.id}>
-              <button
-                onClick={() => onConsulta(c)}
-                className="flex w-full items-center gap-4 px-5 py-4 text-left transition-colors hover:bg-verde-menta/30"
-              >
-                <div className="flex w-16 shrink-0 flex-col items-center rounded-lg bg-verde-menta py-2">
-                  <span className="text-sm font-bold text-azul-medico">
-                    {format(new Date(c.data_hora), "HH:mm")}
-                  </span>
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-semibold text-cinza-texto">
-                    {c.paciente_nome}
-                  </p>
-                  <p className="text-sm capitalize text-cinza-suave">{c.tipo}</p>
-                </div>
-                <span className={cn("size-3 rounded-full", corStatus[c.status])} />
-              </button>
-            </li>
-          ))}
+        <ul className="space-y-2.5 p-3 sm:p-4">
+          {consultas.map((c) => {
+            const inicio = new Date(c.data_hora);
+            const fim = c.duracao_min
+              ? new Date(inicio.getTime() + c.duracao_min * 60000)
+              : null;
+            const cancelada = c.status === "cancelada";
+            return (
+              <li key={c.id}>
+                <button
+                  onClick={() => onConsulta(c)}
+                  className={cn(
+                    "group flex w-full overflow-hidden rounded-xl border border-border bg-white text-left transition-all hover:border-teal-claro hover:shadow-soft",
+                    cancelada && "opacity-70"
+                  )}
+                >
+                  {/* Barra de status */}
+                  <span className={cn("w-1.5 shrink-0", corStatus[c.status])} />
+
+                  {/* Faixa de horário */}
+                  <div className="flex w-[4.5rem] shrink-0 flex-col items-center justify-center border-r border-border bg-branco-clinico py-3">
+                    <span className="font-heading text-base font-bold text-azul-medico">
+                      {format(inicio, "HH:mm")}
+                    </span>
+                    {fim && (
+                      <span className="text-[11px] text-cinza-suave">
+                        {format(fim, "HH:mm")}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Conteúdo */}
+                  <div className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3">
+                    <div className="min-w-0 flex-1">
+                      <p
+                        className={cn(
+                          "truncate font-semibold text-cinza-texto",
+                          cancelada && "line-through"
+                        )}
+                      >
+                        {c.paciente_nome}
+                      </p>
+                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-cinza-suave">
+                        <span className="flex items-center gap-1">
+                          <Stethoscope className="size-3.5 text-teal" />
+                          {rotuloTipo[c.tipo]}
+                        </span>
+                        {c.convenio && (
+                          <span className="flex items-center gap-1">
+                            <ShieldCheck className="size-3.5 text-teal" />
+                            {c.convenio}
+                          </span>
+                        )}
+                        {c.paciente_telefone && (
+                          <span className="hidden items-center gap-1 sm:flex">
+                            <Phone className="size-3.5 text-teal" />
+                            {c.paciente_telefone}
+                          </span>
+                        )}
+                      </div>
+                      {c.motivo && (
+                        <p className="mt-1 truncate text-xs text-cinza-suave/80">
+                          {c.motivo}
+                        </p>
+                      )}
+                    </div>
+
+                    <Badge variant={c.status}>{rotuloStatus[c.status]}</Badge>
+                    <ChevronRight className="size-4 shrink-0 text-cinza-suave/40 transition-colors group-hover:text-teal" />
+                  </div>
+                </button>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
