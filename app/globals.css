@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-inter: "Inter", system-ui, sans-serif;
+    --font-poppins: "Poppins", system-ui, sans-serif;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    /* Compensa o header fixo ao navegar por âncoras */
+    scroll-padding-top: 5rem;
+  }
+
+  body {
+    @apply bg-branco-clinico text-cinza-texto font-sans antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-heading text-azul-medico;
+    text-wrap: balance;
+  }
+}
+
+@layer components {
+  /* Container de seção com respiro generoso (estética arejada) */
+  .section {
+    @apply py-20 md:py-28;
+  }
+
+  /* Etiqueta pequena acima dos títulos de seção */
+  .eyebrow {
+    @apply inline-flex items-center gap-2 rounded-full bg-verde-menta px-4 py-1.5 text-sm font-semibold text-teal;
+  }
+}
+
+/* Faixa de rolagem discreta na identidade */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: #cfe3e3;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #b3d6d3;
+}

@@ -1,0 +1,84 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { createClient } from "@/lib/supabase/server";
+import type { StatusConsulta, TipoConsulta } from "@/lib/supabase/types";
+
+export type ActionResult = { ok: true } | { ok: false; erro: string };
+
+async function getUserId() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return { supabase, userId: user?.id };
+}
+
+/** Atualiza o status de uma consulta (ex.: marcar como realizada). */
+export async function atualizarStatus(
+  id: string,
+  status: StatusConsulta
+): Promise<ActionResult> {
+  const { supabase, userId } = await getUserId();
+  if (!userId) return { ok: false, erro: "Sessão expirada." };
+
+  const { error } = await supabase
+    .from("consultas")
+    .update({ status })
+    .eq("id", id);
+
+  if (error) return { ok: false, erro: "Não foi possível atualizar o status." };
+  revalidatePath("/app/agenda");
+  revalidatePath("/app");
+  return { ok: true };
+}
+
+/** Salva/atualiza a observação de uma consulta. */
+export async function salvarObservacao(
+  id: string,
+  observacao: string
+): Promise<ActionResult> {
+  const { supabase, userId } = await getUserId();
+  if (!userId) return { ok: false, erro: "Sessão expirada." };
+
+  const { error } = await supabase
+    .from("consultas")
+    .update({ observacao })
+    .eq("id", id);
+
+  if (error) return { ok: false, erro: "Não foi possível salvar a observação." };
+  revalidatePath("/app/agenda");
+  return { ok: true };
+}
+
+/**
+ * Cria uma consulta. No fluxo real isso é feito pela equipe de atendimento,
+ * mas deixamos disponível para o médico testar/registrar encaixes.
+ */
+export async function criarConsulta(input: {
+  paciente_nome: string;
+  paciente_telefone?: string;
+  data_hora: string; // ISO
+  tipo: TipoConsulta;
+  observacao?: string;
+}): Promise<ActionResult> {
+  const { supabase, userId } = await getUserId();
+  if (!userId) return { ok: false, erro: "Sessão expirada." };
+  if (!input.paciente_nome?.trim()) return { ok: false, erro: "Informe o nome do paciente." };
+
+  const { error } = await supabase.from("consultas").insert({
+    medico_id: userId,
+    criado_por: userId,
+    paciente_nome: input.paciente_nome.trim(),
+    paciente_telefone: input.paciente_telefone || null,
+    data_hora: input.data_hora,
+    tipo: input.tipo,
+    status: "pendente",
+    observacao: input.observacao || null,
+  });
+
+  if (error) return { ok: false, erro: "Não foi possível criar a consulta." };
+  revalidatePath("/app/agenda");
+  revalidatePath("/app");
+  return { ok: true };
+}
