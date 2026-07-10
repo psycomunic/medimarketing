@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import type {
   Bloqueio,
@@ -5,6 +6,14 @@ import type {
   Disponibilidade,
   Profile,
 } from "@/lib/supabase/types";
+import {
+  DEMO_COOKIE,
+  DEMO_USER_ID,
+  demoProfile,
+  demoConsultas,
+  demoDisponibilidade,
+  demoBloqueios,
+} from "@/lib/demo";
 
 /** Indica se as variáveis do Supabase estão configuradas. */
 export function supabaseConfigurado() {
@@ -14,14 +23,25 @@ export function supabaseConfigurado() {
   );
 }
 
+/** Sessão de demonstração ativa (sem Supabase + cookie de demo presente). */
+export async function emModoDemo(): Promise<boolean> {
+  if (supabaseConfigurado()) return false;
+  const cookieStore = await cookies();
+  return cookieStore.get(DEMO_COOKIE)?.value === "1";
+}
+
 /** Retorna o usuário autenticado e o profile associado (ou null). */
 export async function getSessao(): Promise<{
   userId: string | null;
   profile: Profile | null;
 }> {
-  // Sem Supabase configurado ainda: trata como sessão inexistente
-  // (a área logada redireciona para /login em vez de quebrar).
-  if (!supabaseConfigurado()) return { userId: null, profile: null };
+  // Modo demonstração: sessão fictícia se o cookie de demo estiver presente
+  if (!supabaseConfigurado()) {
+    if (await emModoDemo()) {
+      return { userId: DEMO_USER_ID, profile: demoProfile };
+    }
+    return { userId: null, profile: null };
+  }
 
   const supabase = await createClient();
   const {
@@ -44,6 +64,12 @@ export async function getConsultas(
   inicio: string,
   fim: string
 ): Promise<Consulta[]> {
+  if (await emModoDemo()) {
+    return demoConsultas()
+      .filter((c) => c.data_hora >= inicio && c.data_hora <= fim)
+      .sort((a, b) => a.data_hora.localeCompare(b.data_hora));
+  }
+
   const supabase = await createClient();
   const { data } = await supabase
     .from("consultas")
@@ -62,8 +88,31 @@ export async function getResumo(): Promise<{
   taxaConfirmacao: number;
   totalMes: number;
 }> {
-  const supabase = await createClient();
   const agora = new Date();
+
+  // Em modo demo, calcula a partir das consultas fictícias
+  if (await emModoDemo()) {
+    const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1).toISOString();
+    const fimMes = new Date(agora.getFullYear(), agora.getMonth() + 1, 1).toISOString();
+    const inicioHoje = new Date(agora); inicioHoje.setHours(0, 0, 0, 0);
+    const fimHoje = new Date(inicioHoje); fimHoje.setDate(fimHoje.getDate() + 1);
+    const fim7 = new Date(inicioHoje); fim7.setDate(fim7.getDate() + 7);
+
+    const lista = demoConsultas().filter(
+      (c) => c.data_hora >= inicioMes && c.data_hora < fimMes
+    );
+    const hoje = lista.filter((c) => c.data_hora >= inicioHoje.toISOString() && c.data_hora < fimHoje.toISOString()).length;
+    const proximos7 = lista.filter((c) => c.data_hora >= inicioHoje.toISOString() && c.data_hora < fim7.toISOString()).length;
+    const confirmadas = lista.filter((c) => c.status === "confirmada" || c.status === "realizada").length;
+    return {
+      hoje,
+      proximos7,
+      taxaConfirmacao: lista.length ? Math.round((confirmadas / lista.length) * 100) : 0,
+      totalMes: lista.length,
+    };
+  }
+
+  const supabase = await createClient();
 
   const inicioHoje = new Date(agora);
   inicioHoje.setHours(0, 0, 0, 0);
@@ -99,6 +148,8 @@ export async function getResumo(): Promise<{
 
 /** Disponibilidade semanal do médico logado. */
 export async function getDisponibilidade(): Promise<Disponibilidade[]> {
+  if (await emModoDemo()) return demoDisponibilidade();
+
   const supabase = await createClient();
   const { data } = await supabase
     .from("disponibilidade")
@@ -109,6 +160,8 @@ export async function getDisponibilidade(): Promise<Disponibilidade[]> {
 
 /** Bloqueios (futuros e recentes) do médico logado. */
 export async function getBloqueios(): Promise<Bloqueio[]> {
+  if (await emModoDemo()) return demoBloqueios();
+
   const supabase = await createClient();
   const { data } = await supabase
     .from("bloqueios")

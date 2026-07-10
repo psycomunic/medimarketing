@@ -2,7 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { supabaseConfigurado } from "@/lib/supabase/queries";
+import { DEMO_COOKIE, checarCredenciaisDemo } from "@/lib/demo";
 
 export type AuthResult = { ok: false; erro: string } | { ok: true };
 
@@ -12,6 +15,22 @@ export async function login(formData: {
   senha: string;
   redirectTo?: string;
 }): Promise<AuthResult> {
+  // MODO DEMONSTRAÇÃO: sem Supabase, valida a credencial de teste
+  if (!supabaseConfigurado()) {
+    if (!checarCredenciaisDemo(formData.email, formData.senha)) {
+      return { ok: false, erro: "E-mail ou senha incorretos (modo demonstração)." };
+    }
+    const cookieStore = await cookies();
+    cookieStore.set(DEMO_COOKIE, "1", {
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 8, // 8h
+    });
+    revalidatePath("/", "layout");
+    redirect(formData.redirectTo || "/app");
+  }
+
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword({
     email: formData.email,
@@ -28,8 +47,14 @@ export async function login(formData: {
 
 /** Encerra a sessão e volta para o login. */
 export async function logout() {
-  const supabase = await createClient();
-  await supabase.auth.signOut();
+  // Limpa a sessão de demonstração, se houver
+  const cookieStore = await cookies();
+  cookieStore.delete(DEMO_COOKIE);
+
+  if (supabaseConfigurado()) {
+    const supabase = await createClient();
+    await supabase.auth.signOut();
+  }
   revalidatePath("/", "layout");
   redirect("/login");
 }

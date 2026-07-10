@@ -1,6 +1,7 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "./types";
+import { DEMO_COOKIE } from "@/lib/demo";
 
 type CookieItem = { name: string; value: string; options?: CookieOptions };
 
@@ -11,11 +12,26 @@ type CookieItem = { name: string; value: string; options?: CookieOptions };
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
 
-  // Sem variáveis configuradas ainda: não bloqueia (útil em dev/preview inicial)
+  // Sem Supabase configurado: opera em MODO DEMONSTRAÇÃO, protegendo /app
+  // com base no cookie de demo.
   if (
     !process.env.NEXT_PUBLIC_SUPABASE_URL ||
     !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   ) {
+    const temDemo = request.cookies.get(DEMO_COOKIE)?.value === "1";
+    const { pathname: p } = request.nextUrl;
+
+    if (!temDemo && p.startsWith("/app")) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/login";
+      url.searchParams.set("redirect", p);
+      return NextResponse.redirect(url);
+    }
+    if (temDemo && p === "/login") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/app";
+      return NextResponse.redirect(url);
+    }
     return response;
   }
 

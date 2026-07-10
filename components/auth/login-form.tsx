@@ -17,7 +17,15 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>;
 
-export function LoginForm({ redirectTo }: { redirectTo?: string }) {
+export function LoginForm({
+  redirectTo,
+  demoEmail,
+  demoSenha,
+}: {
+  redirectTo?: string;
+  demoEmail?: string;
+  demoSenha?: string;
+}) {
   const [erro, setErro] = useState<string | null>(null);
   const [resetMsg, setResetMsg] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -27,7 +35,11 @@ export function LoginForm({ redirectTo }: { redirectTo?: string }) {
     handleSubmit,
     getValues,
     formState: { errors },
-  } = useForm<FormData>({ resolver: zodResolver(schema) });
+  } = useForm<FormData>({
+    resolver: zodResolver(schema),
+    // Preenche a conta de teste automaticamente em modo demonstração
+    defaultValues: { email: demoEmail ?? "", senha: demoSenha ?? "" },
+  });
 
   function onSubmit(data: FormData) {
     setErro(null);

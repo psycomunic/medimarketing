@@ -2,9 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { emModoDemo } from "@/lib/supabase/queries";
 import type { StatusConsulta, TipoConsulta } from "@/lib/supabase/types";
 
 export type ActionResult = { ok: true } | { ok: false; erro: string };
+
+const MSG_DEMO =
+  "Modo demonstração: as alterações não são salvas. Conecte o Supabase para persistir.";
 
 async function getUserId() {
   const supabase = await createClient();
@@ -19,6 +23,7 @@ export async function atualizarStatus(
   id: string,
   status: StatusConsulta
 ): Promise<ActionResult> {
+  if (await emModoDemo()) return { ok: false, erro: MSG_DEMO };
   const { supabase, userId } = await getUserId();
   if (!userId) return { ok: false, erro: "Sessão expirada." };
 
@@ -38,6 +43,7 @@ export async function salvarObservacao(
   id: string,
   observacao: string
 ): Promise<ActionResult> {
+  if (await emModoDemo()) return { ok: false, erro: MSG_DEMO };
   const { supabase, userId } = await getUserId();
   if (!userId) return { ok: false, erro: "Sessão expirada." };
 
@@ -62,6 +68,7 @@ export async function criarConsulta(input: {
   tipo: TipoConsulta;
   observacao?: string;
 }): Promise<ActionResult> {
+  if (await emModoDemo()) return { ok: false, erro: MSG_DEMO };
   const { supabase, userId } = await getUserId();
   if (!userId) return { ok: false, erro: "Sessão expirada." };
   if (!input.paciente_nome?.trim()) return { ok: false, erro: "Informe o nome do paciente." };

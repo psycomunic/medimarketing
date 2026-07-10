@@ -2,8 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { emModoDemo } from "@/lib/supabase/queries";
 
 export type ActionResult = { ok: true } | { ok: false; erro: string };
+
+const MSG_DEMO =
+  "Modo demonstração: as alterações não são salvas. Conecte o Supabase para persistir.";
 
 async function getUserId() {
   const supabase = await createClient();
@@ -26,6 +30,7 @@ export type DisponibilidadeItem = {
 export async function salvarDisponibilidade(
   itens: DisponibilidadeItem[]
 ): Promise<ActionResult> {
+  if (await emModoDemo()) return { ok: false, erro: MSG_DEMO };
   const { supabase, userId } = await getUserId();
   if (!userId) return { ok: false, erro: "Sessão expirada." };
 
@@ -64,6 +69,7 @@ export async function adicionarBloqueio(input: {
   data_fim: string;
   motivo?: string;
 }): Promise<ActionResult> {
+  if (await emModoDemo()) return { ok: false, erro: MSG_DEMO };
   const { supabase, userId } = await getUserId();
   if (!userId) return { ok: false, erro: "Sessão expirada." };
   if (input.data_inicio > input.data_fim) {
@@ -84,6 +90,7 @@ export async function adicionarBloqueio(input: {
 
 /** Remove um bloqueio. */
 export async function removerBloqueio(id: string): Promise<ActionResult> {
+  if (await emModoDemo()) return { ok: false, erro: MSG_DEMO };
   const { supabase, userId } = await getUserId();
   if (!userId) return { ok: false, erro: "Sessão expirada." };
 
