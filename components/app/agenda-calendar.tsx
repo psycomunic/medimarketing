@@ -34,8 +34,10 @@ type Visao = "mes" | "semana" | "dia";
 
 export function AgendaCalendar({
   consultasIniciais,
+  demo = false,
 }: {
   consultasIniciais: Consulta[];
+  demo?: boolean;
 }) {
   const [visao, setVisao] = useState<Visao>("mes");
   const [cursor, setCursor] = useState(new Date());
@@ -191,6 +193,7 @@ export function AgendaCalendar({
       {/* Modais */}
       <ConsultaDialog
         consulta={selecionada}
+        demo={demo}
         onOpenChange={(o) => !o && setSelecionada(null)}
       />
       <NovaConsultaDialog

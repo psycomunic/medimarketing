@@ -51,3 +51,30 @@ export const DIAS_SEMANA = [
 ];
 
 export const DIAS_CURTOS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+/** Calcula a idade (em anos) a partir de "YYYY-MM-DD". */
+export function calcularIdade(nascimento: string | null): number | null {
+  if (!nascimento) return null;
+  const nasc = new Date(nascimento);
+  if (Number.isNaN(nasc.getTime())) return null;
+  const hoje = new Date();
+  let idade = hoje.getFullYear() - nasc.getFullYear();
+  const m = hoje.getMonth() - nasc.getMonth();
+  if (m < 0 || (m === 0 && hoje.getDate() < nasc.getDate())) idade--;
+  return idade;
+}
+
+/** Formata bytes em KB/MB legível. */
+export function formatarTamanho(bytes: number | null): string {
+  if (!bytes) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/** Formata valor em Real (R$). */
+export function formatarValor(valor: number | null): string {
+  if (valor == null) return "—";
+  if (valor === 0) return "Coberto pelo convênio";
+  return valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}

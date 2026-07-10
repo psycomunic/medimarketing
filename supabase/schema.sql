@@ -40,19 +40,48 @@ create table if not exists public.profiles (
 -- consultas — núcleo da agenda
 -- ---------------------------------------------------------------------
 create table if not exists public.consultas (
-  id                uuid primary key default uuid_generate_v4(),
-  medico_id         uuid not null references public.profiles(id) on delete cascade,
-  paciente_nome     text not null,
-  paciente_telefone text,
-  data_hora         timestamptz not null,
-  tipo              tipo_consulta not null default 'primeira',
-  status            status_consulta not null default 'pendente',
-  observacao        text,
-  criado_por        uuid references public.profiles(id),
-  created_at        timestamptz not null default now()
+  id                  uuid primary key default uuid_generate_v4(),
+  medico_id           uuid not null references public.profiles(id) on delete cascade,
+  paciente_nome       text not null,
+  paciente_telefone   text,
+  paciente_email      text,
+  paciente_nascimento date,
+  convenio            text,
+  data_hora           timestamptz not null,
+  duracao_min         integer default 30,
+  tipo                tipo_consulta not null default 'primeira',
+  status              status_consulta not null default 'pendente',
+  motivo              text,
+  observacao          text,
+  valor               numeric(10,2),
+  criado_por          uuid references public.profiles(id),
+  created_at          timestamptz not null default now()
 );
 create index if not exists idx_consultas_medico_data
   on public.consultas (medico_id, data_hora);
+
+-- Colunas adicionais (para bases criadas antes desta versão)
+alter table public.consultas add column if not exists paciente_email      text;
+alter table public.consultas add column if not exists paciente_nascimento date;
+alter table public.consultas add column if not exists convenio            text;
+alter table public.consultas add column if not exists duracao_min         integer default 30;
+alter table public.consultas add column if not exists motivo              text;
+alter table public.consultas add column if not exists valor               numeric(10,2);
+
+-- ---------------------------------------------------------------------
+-- anexos — documentos das consultas (exames, encaminhamentos, receitas)
+-- ---------------------------------------------------------------------
+create table if not exists public.anexos (
+  id          uuid primary key default uuid_generate_v4(),
+  consulta_id uuid not null references public.consultas(id) on delete cascade,
+  medico_id   uuid not null references public.profiles(id) on delete cascade,
+  nome        text not null,
+  caminho     text not null,           -- path no Storage (bucket "anexos")
+  tipo        text,                    -- mime type
+  tamanho     bigint,                  -- bytes
+  created_at  timestamptz not null default now()
+);
+create index if not exists idx_anexos_consulta on public.anexos (consulta_id);
 
 -- ---------------------------------------------------------------------
 -- disponibilidade — horários de atendimento semanais
@@ -97,6 +126,7 @@ alter table public.consultas      enable row level security;
 alter table public.disponibilidade enable row level security;
 alter table public.bloqueios      enable row level security;
 alter table public.leads          enable row level security;
+alter table public.anexos         enable row level security;
 
 -- Função auxiliar: verifica se o usuário atual é admin
 create or replace function public.is_admin()
@@ -158,6 +188,42 @@ create policy "leads_public_insert" on public.leads
 drop policy if exists "leads_admin_select" on public.leads;
 create policy "leads_admin_select" on public.leads
   for select using (public.is_admin());
+
+-- ---- anexos ---- (médico gerencia os anexos das próprias consultas)
+drop policy if exists "anexos_all" on public.anexos;
+create policy "anexos_all" on public.anexos
+  for all using (medico_id = auth.uid() or public.is_admin())
+  with check (medico_id = auth.uid() or public.is_admin());
+
+-- =====================================================================
+-- STORAGE: bucket privado "anexos" para documentos das consultas
+-- Estrutura de path: {medico_id}/{consulta_id}/{arquivo}
+-- =====================================================================
+insert into storage.buckets (id, name, public)
+values ('anexos', 'anexos', false)
+on conflict (id) do nothing;
+
+-- Cada médico só acessa arquivos dentro da própria pasta ({uid}/...)
+drop policy if exists "anexos_storage_select" on storage.objects;
+create policy "anexos_storage_select" on storage.objects
+  for select using (
+    bucket_id = 'anexos'
+    and (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+drop policy if exists "anexos_storage_insert" on storage.objects;
+create policy "anexos_storage_insert" on storage.objects
+  for insert with check (
+    bucket_id = 'anexos'
+    and (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+drop policy if exists "anexos_storage_delete" on storage.objects;
+create policy "anexos_storage_delete" on storage.objects
+  for delete using (
+    bucket_id = 'anexos'
+    and (storage.foldername(name))[1] = auth.uid()::text
+  );
 
 -- =====================================================================
 -- TRIGGER: cria profile automaticamente ao registrar um usuário

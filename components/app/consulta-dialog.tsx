@@ -7,10 +7,16 @@ import { ptBR } from "date-fns/locale";
 import {
   User,
   Phone,
+  Mail,
+  Cake,
+  ShieldCheck,
   Clock,
+  Hourglass,
+  CalendarCheck,
+  Stethoscope,
+  DollarSign,
   CheckCircle2,
   XCircle,
-  CalendarCheck,
   Loader2,
   Save,
 } from "lucide-react";
@@ -26,14 +32,22 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { rotuloStatus, rotuloTipo } from "@/lib/agenda";
+import {
+  rotuloStatus,
+  rotuloTipo,
+  calcularIdade,
+  formatarValor,
+} from "@/lib/agenda";
 import { atualizarStatus, salvarObservacao } from "@/lib/actions/consultas";
+import { AnexosManager } from "@/components/app/anexos-manager";
 
 export function ConsultaDialog({
   consulta,
+  demo = false,
   onOpenChange,
 }: {
   consulta: Consulta | null;
+  demo?: boolean;
   onOpenChange: (aberto: boolean) => void;
 }) {
   const router = useRouter();
@@ -42,7 +56,6 @@ export function ConsultaDialog({
   const [salvandoObs, setSalvandoObs] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
-  // Sincroniza a observação ao abrir uma nova consulta
   useEffect(() => {
     setObs(consulta?.observacao ?? "");
     setErro(null);
@@ -73,38 +86,60 @@ export function ConsultaDialog({
   }
 
   const data = new Date(consulta.data_hora);
+  const idade = calcularIdade(consulta.paciente_nascimento);
 
   return (
     <Dialog open={!!consulta} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-h-[92vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <DialogTitle>{consulta.paciente_nome}</DialogTitle>
             <Badge variant={consulta.status}>{rotuloStatus[consulta.status]}</Badge>
           </div>
-          <DialogDescription>
-            {format(data, "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+          <DialogDescription className="capitalize">
+            {format(data, "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })} · {format(data, "HH:mm")}
           </DialogDescription>
         </DialogHeader>
 
-        {/* Detalhes */}
-        <div className="grid gap-3 rounded-lg bg-branco-clinico p-4 text-sm">
-          <Linha icon={Clock} label="Horário" valor={format(data, "HH:mm")} />
-          <Linha icon={CalendarCheck} label="Tipo" valor={rotuloTipo[consulta.tipo]} />
-          <Linha icon={User} label="Paciente" valor={consulta.paciente_nome} />
-          {consulta.paciente_telefone && (
-            <Linha icon={Phone} label="Telefone" valor={consulta.paciente_telefone} />
-          )}
+        {/* Dados em duas colunas */}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Bloco titulo="Paciente">
+            <Item icon={User} label="Nome" valor={consulta.paciente_nome} />
+            <Item
+              icon={Cake}
+              label="Idade"
+              valor={
+                idade != null
+                  ? `${idade} anos${consulta.paciente_nascimento ? ` (${format(new Date(consulta.paciente_nascimento), "dd/MM/yyyy")})` : ""}`
+                  : "Não informada"
+              }
+            />
+            <Item icon={Phone} label="Telefone" valor={consulta.paciente_telefone} />
+            <Item icon={Mail} label="E-mail" valor={consulta.paciente_email} />
+            <Item icon={ShieldCheck} label="Convênio" valor={consulta.convenio} />
+          </Bloco>
+
+          <Bloco titulo="Consulta">
+            <Item icon={Clock} label="Horário" valor={format(data, "HH:mm")} />
+            <Item
+              icon={Hourglass}
+              label="Duração"
+              valor={consulta.duracao_min ? `${consulta.duracao_min} min` : null}
+            />
+            <Item icon={CalendarCheck} label="Tipo" valor={rotuloTipo[consulta.tipo]} />
+            <Item icon={Stethoscope} label="Motivo" valor={consulta.motivo} />
+            <Item icon={DollarSign} label="Valor" valor={formatarValor(consulta.valor)} />
+          </Bloco>
         </div>
 
-        {/* Observação */}
+        {/* Observação clínica */}
         <div className="grid gap-1.5">
-          <Label htmlFor="obs">Observação</Label>
+          <Label htmlFor="obs">Observação clínica</Label>
           <Textarea
             id="obs"
             value={obs}
             onChange={(e) => setObs(e.target.value)}
-            placeholder="Anote informações relevantes sobre a consulta..."
+            placeholder="Anote informações relevantes sobre a consulta…"
           />
           <div className="flex justify-end">
             <Button
@@ -121,6 +156,11 @@ export function ConsultaDialog({
               Salvar observação
             </Button>
           </div>
+        </div>
+
+        {/* Anexos / documentos */}
+        <div className="border-t border-border pt-4">
+          <AnexosManager consultaId={consulta.id} demo={demo} />
         </div>
 
         {erro && (
@@ -166,20 +206,40 @@ export function ConsultaDialog({
   );
 }
 
-function Linha({
+/* ---------- blocos auxiliares ---------- */
+function Bloco({
+  titulo,
+  children,
+}: {
+  titulo: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-lg bg-branco-clinico p-4">
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-teal">
+        {titulo}
+      </p>
+      <div className="grid gap-2 text-sm">{children}</div>
+    </div>
+  );
+}
+
+function Item({
   icon: Icon,
   label,
   valor,
 }: {
   icon: React.ElementType;
   label: string;
-  valor: string;
+  valor: string | null;
 }) {
   return (
-    <div className="flex items-center gap-2">
-      <Icon className="size-4 text-teal" />
-      <span className="text-cinza-suave">{label}:</span>
-      <span className="font-medium text-cinza-texto">{valor}</span>
+    <div className="flex items-start gap-2">
+      <Icon className="mt-0.5 size-4 shrink-0 text-teal" />
+      <span className="w-20 shrink-0 text-cinza-suave">{label}</span>
+      <span className="min-w-0 flex-1 break-words font-medium text-cinza-texto">
+        {valor && valor.trim() ? valor : <span className="text-cinza-suave/60">—</span>}
+      </span>
     </div>
   );
 }

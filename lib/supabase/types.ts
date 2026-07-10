@@ -33,11 +33,29 @@ export type Consulta = {
   medico_id: string;
   paciente_nome: string;
   paciente_telefone: string | null;
+  paciente_email: string | null;
+  paciente_nascimento: string | null; // "YYYY-MM-DD"
+  convenio: string | null; // ex.: "Particular", "Unimed"
   data_hora: string; // ISO
+  duracao_min: number | null; // duração estimada em minutos
   tipo: TipoConsulta;
   status: StatusConsulta;
+  motivo: string | null; // queixa / motivo da consulta
   observacao: string | null;
+  valor: number | null; // valor da consulta (R$)
   criado_por: string | null;
+  created_at: string;
+};
+
+/** Documento anexado a uma consulta (exame, encaminhamento, receita...). */
+export type Anexo = {
+  id: string;
+  consulta_id: string;
+  medico_id: string;
+  nome: string;
+  caminho: string; // path no Supabase Storage
+  tipo: string | null; // mime type
+  tamanho: number | null; // bytes
   created_at: string;
 };
 
@@ -96,6 +114,11 @@ export interface Database {
         Partial<Bloqueio>
       >;
       leads: Tabela<Lead, Omit<Lead, "id" | "created_at"> & { id?: string }, Partial<Lead>>;
+      anexos: Tabela<
+        Anexo,
+        Omit<Anexo, "id" | "created_at"> & { id?: string },
+        Partial<Anexo>
+      >;
     };
     // Empty-key form (não use Record<string, never>: isso faria keyof = string
     // e todo nome de tabela casaria com a sobrecarga de "view", quebrando os tipos).
