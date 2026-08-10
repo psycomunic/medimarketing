@@ -103,7 +103,7 @@ export function Planos() {
         <Reveal>
           <p className="mt-8 text-center text-sm text-cinza-suave">
             Não sabe qual escolher? O diagnóstico gratuito indica o plano certo
-            para o momento da sua clínica —{" "}
+            para o momento da sua clínica.{" "}
             <a href="#contato" className="font-semibold text-teal hover:underline">
               agende o seu
             </a>

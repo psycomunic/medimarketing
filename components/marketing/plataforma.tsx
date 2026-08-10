@@ -32,7 +32,7 @@ export function Plataforma() {
               Não é só agência. É o sistema que roda a sua clínica.
             </h2>
             <p className="mt-4 text-lg text-white/70">
-              Um painel único para gestor, secretária e médico — cada um vendo
+              Um painel único para gestor, secretária e médico, cada um vendo
               exatamente o que precisa, no computador ou no celular.
             </p>
           </Reveal>

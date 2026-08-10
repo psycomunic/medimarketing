@@ -11,7 +11,7 @@ export function ProvaSocial() {
       <div className="container py-14 md:py-16">
         <Reveal>
           <p className="text-center text-sm font-medium uppercase tracking-wide text-cinza-suave">
-            Especialistas em saúde — e só em saúde
+            Especialistas em saúde, e só em saúde
           </p>
           <ul className="mt-5 flex flex-wrap items-center justify-center gap-x-8 gap-y-3">
             {segmentos.map((s) => (

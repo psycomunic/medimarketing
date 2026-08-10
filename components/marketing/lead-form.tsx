@@ -77,7 +77,7 @@ export function LeadForm({ origem = "landing" }: { origem?: string }) {
         </h3>
         <p className="text-cinza-suave">
           Nosso time vai falar com você pelo WhatsApp em breve para agendar o
-          diagnóstico. Enquanto isso, respira — o resto é com a gente.
+          diagnóstico. Enquanto isso, respira: o resto é com a gente.
         </p>
       </div>
     );

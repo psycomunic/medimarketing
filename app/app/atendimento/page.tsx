@@ -17,7 +17,7 @@ export default async function AtendimentoPage() {
         "Marcar uma conversa como oportunidade comercial",
         "Histórico completo do que foi dito ao paciente",
       ]}
-      nota="Entra na Fase 3. A conexão com o WhatsApp usa a API oficial (Cloud API) — falta definir o provedor antes da implementação."
+      nota="Entra na Fase 3. A conexão com o WhatsApp usa a API oficial (Cloud API). Falta definir o provedor antes da implementação."
     />
   );
 }

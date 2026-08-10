@@ -30,8 +30,8 @@ export default function PrivacidadePage() {
           <h2 className="text-xl">2. Como usamos</h2>
           <p className="mt-2 text-cinza-suave">
             Utilizamos os dados exclusivamente para prestar os serviços
-            contratados — marketing, atendimento, agenda, CRM, retenção e
-            relatórios — e para o contato comercial autorizado no formulário.
+            contratados (marketing, atendimento, agenda, CRM, retenção e
+            relatórios) e para o contato comercial autorizado no formulário.
             Não vendemos nem cedemos dados a terceiros para fins publicitários.
           </p>
         </section>

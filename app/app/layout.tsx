@@ -27,7 +27,7 @@ export default async function AppLayout({
         {demo && (
           <div className="flex items-center justify-center gap-2 bg-azul-medico px-4 py-2 text-center text-xs font-medium text-white">
             <Info className="size-4 shrink-0" />
-            Você está no <strong>modo demonstração</strong> — dados fictícios,
+            Você está no <strong>modo demonstração</strong>: dados fictícios,
             alterações não são salvas.
           </div>
         )}

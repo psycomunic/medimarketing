@@ -21,7 +21,7 @@ export function Solucoes() {
               Do primeiro anúncio ao paciente que volta
             </h2>
             <p className="mt-4 text-lg text-cinza-suave">
-              Sete frentes que funcionam juntas. Você pode começar por uma —
+              Sete frentes que funcionam juntas. Você pode começar por uma,
               mas é a soma delas que enche e mantém a agenda.
             </p>
           </Reveal>

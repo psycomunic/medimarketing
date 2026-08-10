@@ -18,7 +18,7 @@ const poppins = Poppins({
   display: "swap",
 });
 
-const titulo = `${site.nome} — ${site.tagline}`;
+const titulo = `${site.nome} | ${site.tagline}`;
 
 export const metadata: Metadata = {
   metadataBase: new URL(site.url),

@@ -15,7 +15,7 @@ export function Logo({
     <Link
       href={href}
       className={cn("group inline-flex items-center gap-2.5", className)}
-      aria-label="Medi Marketing — página inicial"
+      aria-label="Medi Marketing, página inicial"
     >
       {/* Símbolo: cruz médica em quadrado arredondado */}
       <span className="grid size-9 place-items-center rounded-lg bg-azul-medico shadow-soft transition-transform group-hover:scale-105">

@@ -31,41 +31,49 @@ export const segmentos = [
 /* ------------------------------------------------------------------ */
 export const dores = [
   {
+    icone: "PhoneMissed",
     titulo: "Perco consultas por falta de atendimento",
     texto:
       "O telefone toca, o WhatsApp acumula e você está no meio de um atendimento. Cada mensagem sem resposta é um paciente que marca com outro.",
   },
   {
+    icone: "UserRoundX",
     titulo: "Perco quem não confirmou e quem não voltou",
     texto:
       "Paciente que faltou, orçamento que não fechou, base parada há meses. É dinheiro já conquistado escapando por falta de um retorno.",
   },
   {
+    icone: "MessageSquareX",
     titulo: "Minha secretária atende, mas não vende",
     texto:
-      "Ela informa preço e horário com educação — e encerra a conversa. Falta processo, script e acompanhamento para transformar contato em consulta.",
+      "Ela informa preço e horário com educação, e encerra a conversa. Falta processo, script e acompanhamento para transformar contato em consulta.",
   },
   {
+    icone: "TrendingDown",
     titulo: "Não tenho clareza dos meus números",
     texto:
       "Quanto custa cada paciente novo? Qual campanha trouxe faturamento? Sem indicador, a decisão vira achismo.",
   },
   {
+    icone: "Unplug",
     titulo: "Meu marketing e meu atendimento não conversam",
     texto:
       "O anúncio gera lead, o lead cai no WhatsApp e some. Ninguém sabe o que aconteceu entre uma coisa e outra.",
   },
   {
+    icone: "CalendarX",
     titulo: "Minha agenda é uma bagunça",
     texto:
       "WhatsApp, papel, caderno e a memória. Sem um lugar único, sobram encaixes errados, faltas e horários vagos.",
   },
   {
+    icone: "Hourglass",
     titulo: "Sei que preciso de marketing, mas não tenho tempo",
     texto:
       "Você entende de medicina, não de anúncios. E aprender tudo isso sozinho toma um tempo que você não tem.",
   },
   {
+    icone: "Banknote",
     titulo: "Já anunciei e só gastei dinheiro",
     texto:
       "Campanhas mal configuradas atraem curioso, não paciente. O resultado é orçamento queimado e nenhuma consulta nova.",
@@ -230,7 +238,7 @@ export const modulosPlataforma = [
     icone: "CalendarDays",
     titulo: "Agenda",
     texto:
-      "Mês, semana e dia com status de cada consulta, bloqueios, encaixes e controle de faltas — atualizada em tempo real entre secretária e médico.",
+      "Mês, semana e dia com status de cada consulta, bloqueios, encaixes e controle de faltas, atualizada em tempo real entre secretária e médico.",
   },
   {
     icone: "Users",
@@ -248,7 +256,7 @@ export const modulosPlataforma = [
     icone: "Megaphone",
     titulo: "Marketing",
     texto:
-      "Campanhas de Google e Meta com investimento, leads, custo por lead e retorno — do jeito que dá para entender sem ser publicitário.",
+      "Campanhas de Google e Meta com investimento, leads, custo por lead e retorno, do jeito que dá para entender sem ser publicitário.",
   },
   {
     icone: "Repeat",
@@ -266,7 +274,7 @@ export const modulosPlataforma = [
     icone: "BarChart3",
     titulo: "Indicadores",
     texto:
-      "A linha inteira: investimento, leads, agendamentos, comparecimento, faturamento e ROI — comparando períodos e etapas do método.",
+      "A linha inteira: investimento, leads, agendamentos, comparecimento, faturamento e ROI, comparando períodos e etapas do método.",
   },
 ] as const;
 
@@ -334,7 +342,7 @@ export const comoFunciona = [
     passo: "03",
     titulo: "Operação",
     texto:
-      "Sua agenda enche, seu paciente é bem atendido e você acompanha tudo pelo painel — com reunião de resultado no seu plano.",
+      "Sua agenda enche, seu paciente é bem atendido e você acompanha tudo pelo painel, com reunião de resultado no seu plano.",
   },
 ] as const;
 
@@ -505,7 +513,7 @@ export const faq = [
   {
     pergunta: "Vocês respeitam as normas do CFM para publicidade?",
     resposta:
-      "Sim. Todas as campanhas seguem o Código de Ética Médica e as resoluções do CFM sobre publicidade — sem promessa de resultado, sem sensacionalismo e sem antes/depois indevidos. O foco é informar e aproximar o paciente certo.",
+      "Sim. Todas as campanhas seguem o Código de Ética Médica e as resoluções do CFM sobre publicidade: sem promessa de resultado, sem sensacionalismo e sem antes/depois indevidos. O foco é informar e aproximar o paciente certo.",
   },
   {
     pergunta: "Como funciona a integração com o WhatsApp?",
@@ -515,7 +523,7 @@ export const faq = [
   {
     pergunta: "Preciso trocar o sistema que já uso hoje?",
     resposta:
-      "Não necessariamente. A plataforma funciona de forma independente e pode ser o seu ponto único de organização. Na implantação avaliamos o que faz sentido migrar e o que pode conviver — a maioria das clínicas acaba centralizando por ser mais prático.",
+      "Não necessariamente. A plataforma funciona de forma independente e pode ser o seu ponto único de organização. Na implantação avaliamos o que faz sentido migrar e o que pode conviver. Na prática, a maioria das clínicas acaba centralizando por ser mais fácil no dia a dia.",
   },
   {
     pergunta: "Como é a migração da minha base de pacientes?",
@@ -525,7 +533,7 @@ export const faq = [
   {
     pergunta: "E a LGPD? Os dados dos meus pacientes ficam seguros?",
     resposta:
-      "Cada clínica é um ambiente isolado no banco de dados, com regras de acesso aplicadas linha a linha: ninguém de fora da sua clínica enxerga seus dados. O acesso ainda é limitado por papel — médico, secretária e gestor veem coisas diferentes. Formulários pedem consentimento explícito e você pode solicitar exclusão de dados a qualquer momento.",
+      "Cada clínica é um ambiente isolado no banco de dados, com regras de acesso aplicadas linha a linha: ninguém de fora da sua clínica enxerga seus dados. O acesso ainda é limitado por papel, então médico, secretária e gestor veem coisas diferentes. Formulários pedem consentimento explícito e você pode solicitar exclusão de dados a qualquer momento.",
   },
   {
     pergunta: "Quem da minha equipe consegue acessar o painel?",
@@ -540,7 +548,7 @@ export const faq = [
   {
     pergunta: "Em quanto tempo vejo resultado?",
     resposta:
-      "A organização da agenda e a queda de faltas aparecem já nos primeiros 30 dias. Conversão de lead em consulta costuma amadurecer por volta dos 90 dias, e retenção e previsibilidade a partir dos 180 — é exatamente o que o método acompanha.",
+      "A organização da agenda e a queda de faltas aparecem já nos primeiros 30 dias. Conversão de lead em consulta costuma amadurecer por volta dos 90 dias, e retenção e previsibilidade a partir dos 180. É exatamente o que o método acompanha.",
   },
   {
     pergunta: "Atendem qualquer especialidade?",

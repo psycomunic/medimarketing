@@ -43,7 +43,7 @@ export default function LoginPage({
               <p className="font-semibold text-azul-medico">🔓 Modo demonstração</p>
               <p className="mt-1 text-cinza-suave">
                 O banco de dados não está conectado. Entre com uma das contas de
-                teste — cada uma enxerga um recorte diferente da plataforma.
+                teste. Cada uma enxerga um recorte diferente da plataforma.
               </p>
               <ul className="mt-3 space-y-1.5">
                 {CONTAS_DEMO.map((c) => (
@@ -98,7 +98,7 @@ export default function LoginPage({
               antes mesmo de chegar no consultório.”
             </p>
             <footer className="mt-6 text-white/70">
-              Dra. Beatriz Nunes — Ginecologia
+              Dra. Beatriz Nunes, Ginecologia
             </footer>
           </blockquote>
         </div>
