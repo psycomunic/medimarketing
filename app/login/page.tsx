@@ -3,11 +3,12 @@ import { ArrowLeft } from "lucide-react";
 import { Logo } from "@/components/logo";
 import { LoginForm } from "@/components/auth/login-form";
 import { supabaseConfigurado } from "@/lib/supabase/queries";
-import { DEMO_EMAIL, DEMO_SENHA } from "@/lib/demo";
+import { CONTAS_DEMO, DEMO_EMAIL, DEMO_SENHA } from "@/lib/demo";
+import { rotuloPapel } from "@/lib/rbac";
 
 export const metadata = {
   title: "Entrar",
-  description: "Acesse a área do médico da Medi Marketing.",
+  description: "Acesse a plataforma Medi Marketing.",
 };
 
 export default function LoginPage({
@@ -31,26 +32,32 @@ export default function LoginPage({
 
           <Logo href="/" />
 
-          <h1 className="mt-8 text-2xl md:text-3xl">Área do Médico</h1>
+          <h1 className="mt-8 text-2xl md:text-3xl">Área do Cliente</h1>
           <p className="mt-2 text-cinza-suave">
-            Acesse sua agenda e acompanhe suas consultas.
+            Agenda, CRM, atendimento e resultados da sua clínica.
           </p>
 
-          {/* Aviso de modo demonstração com as credenciais de teste */}
+          {/* Aviso de modo demonstração com uma conta de teste por papel */}
           {demo && (
             <div className="mt-6 rounded-lg border border-teal/30 bg-verde-menta px-4 py-3 text-sm">
               <p className="font-semibold text-azul-medico">🔓 Modo demonstração</p>
               <p className="mt-1 text-cinza-suave">
-                O banco de dados não está conectado. Entre com a conta de teste:
+                O banco de dados não está conectado. Entre com uma das contas de
+                teste — cada uma enxerga um recorte diferente da plataforma.
               </p>
-              <div className="mt-2 grid gap-0.5 font-mono text-xs text-cinza-texto">
-                <span>
-                  <span className="text-cinza-suave">e-mail:</span> {DEMO_EMAIL}
-                </span>
-                <span>
-                  <span className="text-cinza-suave">senha:</span> {DEMO_SENHA}
-                </span>
-              </div>
+              <ul className="mt-3 space-y-1.5">
+                {CONTAS_DEMO.map((c) => (
+                  <li key={c.email} className="flex items-baseline justify-between gap-3">
+                    <span className="font-mono text-xs text-cinza-texto">{c.email}</span>
+                    <span className="shrink-0 text-[11px] text-cinza-suave">
+                      {rotuloPapel(c.role)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-3 font-mono text-xs text-cinza-texto">
+                <span className="text-cinza-suave">senha (todas):</span> {DEMO_SENHA}
+              </p>
             </div>
           )}
 

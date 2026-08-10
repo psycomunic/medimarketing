@@ -34,7 +34,7 @@ export function Footer() {
             ))}
             <li>
               <Link href="/login" className="transition-colors hover:text-teal-claro">
-                Área do Médico
+                Área do Cliente
               </Link>
             </li>
           </ul>
@@ -84,15 +84,23 @@ export function Footer() {
           </h4>
           <ul className="mt-4 space-y-2.5 text-sm">
             <li>
-              {/* TODO: criar página de política de privacidade */}
+              {/* TODO: revisar juridicamente antes de publicar */}
               <Link href="/privacidade" className="transition-colors hover:text-teal-claro">
                 Política de Privacidade
+              </Link>
+            </li>
+            <li>
+              <Link
+                href="/privacidade#cookies"
+                className="transition-colors hover:text-teal-claro"
+              >
+                Política de Cookies
               </Link>
             </li>
             <li className="flex items-start gap-2 text-white/60">
               <MapPin className="mt-0.5 size-4 shrink-0" />
               {/* TODO: CNPJ e endereço reais */}
-              CNPJ {site.cnpj}
+              CNPJ {site.cnpj} · {site.endereco}
             </li>
           </ul>
         </div>

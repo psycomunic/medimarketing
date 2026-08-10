@@ -3,64 +3,81 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  LayoutDashboard,
-  CalendarDays,
-  Clock,
-  BarChart3,
-  User,
-  LogOut,
-  Menu,
-  X,
-} from "lucide-react";
+import { LogOut, Menu, X, Building2 } from "lucide-react";
 import { Logo } from "@/components/logo";
 import { logout } from "@/lib/actions/auth";
 import { cn } from "@/lib/utils";
+import { GRUPOS, modulosDoPapel, rotuloPapel } from "@/lib/rbac";
+import type { Role } from "@/lib/supabase/types";
 
-const links = [
-  { href: "/app", label: "Dashboard", icon: LayoutDashboard, exato: true },
-  { href: "/app/agenda", label: "Agenda", icon: CalendarDays },
-  { href: "/app/disponibilidade", label: "Disponibilidade", icon: Clock },
-  // Fase 2 — placeholders com layout pronto
-  { href: "/app/relatorios", label: "Relatórios", icon: BarChart3, fase2: true },
-  { href: "/app/perfil", label: "Perfil", icon: User, fase2: true },
-];
-
-export function Sidebar({ nome }: { nome: string }) {
+export function Sidebar({
+  nome,
+  role,
+  organizacao,
+}: {
+  nome: string;
+  role: Role;
+  organizacao: string | null;
+}) {
   const pathname = usePathname();
   const [aberto, setAberto] = useState(false);
 
+  // Só aparece o que o papel pode acessar
+  const modulos = modulosDoPapel(role);
+
   const conteudo = (
     <div className="flex h-full flex-col">
-      <div className="p-6">
+      <div className="p-6 pb-4">
         <Logo href="/app" />
+        {/* Clínica ativa — super admin não pertence a nenhuma */}
+        <div className="mt-4 flex items-center gap-2 rounded-lg bg-verde-menta px-3 py-2">
+          <Building2 className="size-4 shrink-0 text-teal" />
+          <span className="truncate text-xs font-semibold text-azul-medico">
+            {organizacao ?? "Todas as clínicas"}
+          </span>
+        </div>
       </div>
 
-      <nav className="flex-1 space-y-1 px-3">
-        {links.map((l) => {
-          const ativo = l.exato
-            ? pathname === l.href
-            : pathname.startsWith(l.href);
+      <nav className="flex-1 space-y-5 overflow-y-auto px-3 pb-4">
+        {GRUPOS.map((grupo) => {
+          const doGrupo = modulos.filter((m) => m.grupo === grupo.id);
+          if (doGrupo.length === 0) return null;
+
           return (
-            <Link
-              key={l.href}
-              href={l.href}
-              onClick={() => setAberto(false)}
-              className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                ativo
-                  ? "bg-verde-menta text-azul-medico"
-                  : "text-cinza-suave hover:bg-verde-menta/60 hover:text-azul-medico"
-              )}
-            >
-              <l.icon className="size-5" />
-              {l.label}
-              {l.fase2 && (
-                <span className="ml-auto rounded-full bg-alerta/12 px-2 py-0.5 text-[10px] font-semibold text-alerta">
-                  em breve
-                </span>
-              )}
-            </Link>
+            <div key={grupo.id}>
+              <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-cinza-suave/70">
+                {grupo.label}
+              </p>
+              <div className="space-y-0.5">
+                {doGrupo.map((m) => {
+                  const ativo =
+                    m.href === "/app"
+                      ? pathname === "/app"
+                      : pathname.startsWith(m.href);
+                  return (
+                    <Link
+                      key={m.href}
+                      href={m.href}
+                      onClick={() => setAberto(false)}
+                      className={cn(
+                        "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                        ativo
+                          ? "bg-verde-menta text-azul-medico"
+                          : "text-cinza-suave hover:bg-verde-menta/60 hover:text-azul-medico"
+                      )}
+                    >
+                      <m.icone className="size-5 shrink-0" />
+                      <span className="truncate">{m.label}</span>
+                      {m.fase > 1 && (
+                        <span className="ml-auto shrink-0 rounded-full bg-alerta/12 px-1.5 py-0.5 text-[9px] font-semibold text-alerta">
+                          F{m.fase}
+                        </span>
+                      )}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
           );
         })}
       </nav>
@@ -72,7 +89,7 @@ export function Sidebar({ nome }: { nome: string }) {
           </span>
           <div className="min-w-0">
             <p className="truncate text-sm font-medium text-cinza-texto">{nome}</p>
-            <p className="text-xs text-cinza-suave">Médico(a)</p>
+            <p className="truncate text-xs text-cinza-suave">{rotuloPapel(role)}</p>
           </div>
         </div>
         <form action={logout}>
@@ -104,7 +121,7 @@ export function Sidebar({ nome }: { nome: string }) {
 
       {/* Sidebar desktop */}
       <aside className="hidden w-64 shrink-0 border-r border-border bg-white lg:block">
-        {conteudo}
+        <div className="sticky top-0 h-screen">{conteudo}</div>
       </aside>
 
       {/* Drawer mobile */}

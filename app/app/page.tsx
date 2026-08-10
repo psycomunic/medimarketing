@@ -8,11 +8,13 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { getSessao, getResumo, getConsultas } from "@/lib/supabase/queries";
+import { getResumo, getConsultas } from "@/lib/supabase/queries";
+import { exigirSessao } from "@/lib/acesso";
+import { modulosDoPapel } from "@/lib/rbac";
 import { formatarHora, rotuloStatus } from "@/lib/agenda";
 
 export default async function DashboardPage() {
-  const { profile } = await getSessao();
+  const { profile, organizacao, role } = await exigirSessao();
   const resumo = await getResumo();
 
   // Próximas consultas (de agora até 7 dias)
@@ -23,7 +25,20 @@ export default async function DashboardPage() {
     await getConsultas(agora.toISOString(), em7.toISOString())
   ).slice(0, 5);
 
-  const nome = profile?.nome || "Doutor(a)";
+  const nome = profile.nome || "Olá";
+
+  // Cada papel chega no painel com um foco diferente
+  const subtitulo =
+    role === "medico"
+      ? "Aqui está o resumo da sua agenda."
+      : role === "super_admin"
+        ? "Visão consolidada das clínicas atendidas."
+        : `Resumo do dia em ${organizacao?.nome ?? "sua clínica"}.`;
+
+  // Atalhos para os demais módulos liberados para o papel
+  const atalhos = modulosDoPapel(role).filter(
+    (m) => m.href !== "/app" && m.grupo !== "conta"
+  );
 
   const cards = [
     { label: "Consultas hoje", valor: resumo.hoje, icon: CalendarClock, cor: "text-teal bg-teal/10" },
@@ -37,9 +52,7 @@ export default async function DashboardPage() {
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl">Olá, {nome} 👋</h1>
-          <p className="mt-1 text-cinza-suave">
-            Aqui está o resumo da sua agenda.
-          </p>
+          <p className="mt-1 text-cinza-suave">{subtitulo}</p>
         </div>
         <Button asChild variant="marca">
           <Link href="/app/agenda">
@@ -117,6 +130,39 @@ export default async function DashboardPage() {
             ))}
           </ul>
         )}
+      </section>
+
+      {/* Atalhos para os módulos que o papel pode acessar */}
+      <section className="mt-8">
+        <h2 className="text-lg font-semibold text-azul-medico">
+          Seus módulos
+        </h2>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {atalhos.map((m) => (
+            <Link
+              key={m.href}
+              href={m.href}
+              className="group flex items-start gap-3 rounded-lg border border-border bg-white p-4 shadow-soft transition-all hover:-translate-y-0.5 hover:shadow-card"
+            >
+              <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-verde-menta text-teal transition-colors group-hover:bg-teal group-hover:text-white">
+                <m.icone className="size-5" />
+              </span>
+              <span className="min-w-0">
+                <span className="flex items-center gap-2 font-semibold text-azul-medico">
+                  {m.label}
+                  {m.fase > 1 && (
+                    <span className="rounded-full bg-alerta/12 px-1.5 py-0.5 text-[9px] font-semibold text-alerta">
+                      Fase {m.fase}
+                    </span>
+                  )}
+                </span>
+                <span className="mt-0.5 block text-sm leading-snug text-cinza-suave">
+                  {m.resumo}
+                </span>
+              </span>
+            </Link>
+          ))}
+        </div>
       </section>
     </div>
   );

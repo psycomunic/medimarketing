@@ -3,7 +3,8 @@ import { Reveal } from "@/components/ui/reveal";
 import { LeadForm } from "@/components/marketing/lead-form";
 
 const promessas = [
-  "Diagnóstico gratuito da sua rotina",
+  "Diagnóstico gratuito da agenda, do atendimento e dos números",
+  "Plano com metas de 30, 90, 180 e 360 dias",
   "Sem compromisso e sem fidelidade abusiva",
   "Resposta pelo WhatsApp em poucas horas",
 ];
@@ -19,11 +20,12 @@ export function CtaFinal() {
           <Reveal>
             <div>
               <h2 className="text-3xl text-white md:text-4xl lg:text-[2.75rem] lg:leading-tight">
-                Pronto para ter a agenda cheia e o marketing rodando?
+                Vamos olhar os números da sua clínica juntos?
               </h2>
               <p className="mt-5 text-lg text-white/70">
-                Deixe seus dados e nosso time entra em contato para entender seu
-                consultório e montar o plano ideal para você.
+                Deixe seus dados e nosso time entra em contato para entender sua
+                operação, mostrar a plataforma por dentro e montar o plano ideal
+                para o seu momento.
               </p>
               <ul className="mt-8 space-y-3">
                 {promessas.map((p) => (

@@ -1,7 +1,7 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "./types";
-import { DEMO_COOKIE } from "@/lib/demo";
+import { DEMO_COOKIE, papelDemoValido } from "@/lib/demo";
 
 type CookieItem = { name: string; value: string; options?: CookieOptions };
 
@@ -18,7 +18,8 @@ export async function updateSession(request: NextRequest) {
     !process.env.NEXT_PUBLIC_SUPABASE_URL ||
     !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   ) {
-    const temDemo = request.cookies.get(DEMO_COOKIE)?.value === "1";
+    const temDemo =
+      papelDemoValido(request.cookies.get(DEMO_COOKIE)?.value) !== null;
     const { pathname: p } = request.nextUrl;
 
     if (!temDemo && p.startsWith("/app")) {

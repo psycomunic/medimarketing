@@ -11,25 +11,62 @@ export type StatusConsulta =
 
 export type TipoConsulta = "primeira" | "retorno" | "teleconsulta";
 
-export type Role = "medico" | "admin";
+/**
+ * Papéis da plataforma (Parte B do briefing):
+ * - super_admin: equipe Medi Marketing, enxerga todas as clínicas
+ * - gestor:      dono/gestor da clínica, acesso total ao próprio tenant
+ * - secretaria:  agenda, CRM, atendimento e retenção
+ * - medico:      a própria agenda, os próprios indicadores e a Academy
+ */
+export type Role = "super_admin" | "gestor" | "secretaria" | "medico";
+
+export type PlanoOrganizacao = "essencial" | "performance" | "full";
+
+export type EtapaFunil =
+  | "novo"
+  | "em_contato"
+  | "agendado"
+  | "compareceu"
+  | "em_tratamento"
+  | "perdido";
+
+export type StatusLead = "aberto" | "ganho" | "perdido";
 
 // IMPORTANTE: usar `type` (não `interface`). Interfaces não são consideradas
 // atribuíveis a `Record<string, unknown>` pelo TypeScript, o que faria o
 // schema falhar na checagem GenericSchema do supabase-js e os tipos de
 // insert/update colapsarem para `never`.
+
+/** Clínica/consultório — o tenant da plataforma. */
+export type Organization = {
+  id: string;
+  nome: string;
+  slug: string | null;
+  especialidade: string | null;
+  plano: PlanoOrganizacao;
+  cidade: string | null;
+  telefone: string | null;
+  email: string | null;
+  ativo: boolean;
+  created_at: string;
+};
+
 export type Profile = {
   id: string;
+  organization_id: string | null;
   nome: string | null;
   especialidade: string | null;
   crm: string | null;
   telefone: string | null;
   foto_url: string | null;
   role: Role;
+  ativo: boolean;
   created_at: string;
 };
 
 export type Consulta = {
   id: string;
+  organization_id: string | null;
   medico_id: string;
   paciente_nome: string;
   paciente_telefone: string | null;
@@ -75,13 +112,26 @@ export type Bloqueio = {
   motivo: string | null;
 };
 
+/**
+ * Lead. Com `organization_id` nulo é um lead comercial da própria
+ * Medi Marketing (formulário do site). Preenchido, é lead de uma clínica
+ * cliente e alimenta o CRM da Fase 2.
+ */
 export type Lead = {
   id: string;
+  organization_id: string | null;
   nome: string;
   especialidade: string | null;
   whatsapp: string;
+  email: string | null;
   cidade: string | null;
+  faturamento_medio: string | null;
+  tem_equipe_comercial: boolean | null;
+  mensagem: string | null;
   origem: string | null;
+  etapa_funil: EtapaFunil;
+  status: StatusLead;
+  consentimento_lgpd: boolean;
   created_at: string;
 };
 
@@ -97,6 +147,11 @@ type Tabela<Row, Insert, Update> = {
 export interface Database {
   public: {
     Tables: {
+      organizations: Tabela<
+        Organization,
+        Omit<Organization, "id" | "created_at"> & { id?: string },
+        Partial<Organization>
+      >;
       profiles: Tabela<Profile, Partial<Profile> & { id: string }, Partial<Profile>>;
       consultas: Tabela<
         Consulta,
@@ -113,7 +168,15 @@ export interface Database {
         Omit<Bloqueio, "id"> & { id?: string },
         Partial<Bloqueio>
       >;
-      leads: Tabela<Lead, Omit<Lead, "id" | "created_at"> & { id?: string }, Partial<Lead>>;
+      leads: Tabela<
+        Lead,
+        Omit<Lead, "id" | "created_at" | "etapa_funil" | "status"> & {
+          id?: string;
+          etapa_funil?: EtapaFunil;
+          status?: StatusLead;
+        },
+        Partial<Lead>
+      >;
       anexos: Tabela<
         Anexo,
         Omit<Anexo, "id" | "created_at"> & { id?: string },

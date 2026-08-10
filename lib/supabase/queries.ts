@@ -4,15 +4,17 @@ import type {
   Bloqueio,
   Consulta,
   Disponibilidade,
+  Organization,
   Profile,
 } from "@/lib/supabase/types";
 import {
   DEMO_COOKIE,
-  DEMO_USER_ID,
-  demoProfile,
+  demoOrganization,
+  demoProfilePorPapel,
   demoConsultas,
   demoDisponibilidade,
   demoBloqueios,
+  papelDemoValido,
 } from "@/lib/demo";
 
 /** Indica se as variáveis do Supabase estão configuradas. */
@@ -23,24 +25,34 @@ export function supabaseConfigurado() {
   );
 }
 
-/** Sessão de demonstração ativa (sem Supabase + cookie de demo presente). */
+/** Sessão de demonstração ativa (sem Supabase + cookie de demo válido). */
 export async function emModoDemo(): Promise<boolean> {
   if (supabaseConfigurado()) return false;
   const cookieStore = await cookies();
-  return cookieStore.get(DEMO_COOKIE)?.value === "1";
+  return papelDemoValido(cookieStore.get(DEMO_COOKIE)?.value) !== null;
 }
 
-/** Retorna o usuário autenticado e o profile associado (ou null). */
-export async function getSessao(): Promise<{
+export type Sessao = {
   userId: string | null;
   profile: Profile | null;
-}> {
-  // Modo demonstração: sessão fictícia se o cookie de demo estiver presente
+  organizacao: Organization | null;
+};
+
+/** Retorna o usuário autenticado, o profile e a clínica dele (ou nulos). */
+export async function getSessao(): Promise<Sessao> {
+  // Modo demonstração: sessão fictícia conforme o papel gravado no cookie
   if (!supabaseConfigurado()) {
-    if (await emModoDemo()) {
-      return { userId: DEMO_USER_ID, profile: demoProfile };
-    }
-    return { userId: null, profile: null };
+    const cookieStore = await cookies();
+    const papel = papelDemoValido(cookieStore.get(DEMO_COOKIE)?.value);
+    if (!papel) return { userId: null, profile: null, organizacao: null };
+
+    const profile = demoProfilePorPapel(papel);
+    return {
+      userId: profile.id,
+      profile,
+      // Super admin não pertence a uma clínica específica
+      organizacao: profile.organization_id ? demoOrganization : null,
+    };
   }
 
   const supabase = await createClient();
@@ -48,7 +60,7 @@ export async function getSessao(): Promise<{
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) return { userId: null, profile: null };
+  if (!user) return { userId: null, profile: null, organizacao: null };
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -56,10 +68,20 @@ export async function getSessao(): Promise<{
     .eq("id", user.id)
     .single();
 
-  return { userId: user.id, profile: profile ?? null };
+  let organizacao: Organization | null = null;
+  if (profile?.organization_id) {
+    const { data } = await supabase
+      .from("organizations")
+      .select("*")
+      .eq("id", profile.organization_id)
+      .single();
+    organizacao = data ?? null;
+  }
+
+  return { userId: user.id, profile: profile ?? null, organizacao };
 }
 
-/** Consultas do médico logado dentro de um intervalo (ISO). */
+/** Consultas visíveis para o usuário logado dentro de um intervalo (ISO). */
 export async function getConsultas(
   inicio: string,
   fim: string

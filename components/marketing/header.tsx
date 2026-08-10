@@ -36,7 +36,7 @@ export function Header() {
         <Logo />
 
         {/* Navegação desktop */}
-        <nav className="hidden items-center gap-8 lg:flex">
+        <nav className="hidden items-center gap-6 lg:flex xl:gap-8">
           {navLinks.map((link) => (
             <a
               key={link.href}
@@ -53,7 +53,7 @@ export function Header() {
           <Button asChild variant="ghost" size="sm">
             <Link href="/login">
               <LogIn className="size-4" />
-              Área do Médico
+              Área do Cliente
             </Link>
           </Button>
           <Button asChild variant="primary" size="sm">

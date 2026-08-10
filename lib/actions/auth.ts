@@ -15,13 +15,16 @@ export async function login(formData: {
   senha: string;
   redirectTo?: string;
 }): Promise<AuthResult> {
-  // MODO DEMONSTRAÇÃO: sem Supabase, valida a credencial de teste
+  // MODO DEMONSTRAÇÃO: sem Supabase, valida a credencial de teste.
+  // O papel da conta escolhida fica gravado no cookie e define o que o
+  // usuário enxerga no painel.
   if (!supabaseConfigurado()) {
-    if (!checarCredenciaisDemo(formData.email, formData.senha)) {
+    const papel = checarCredenciaisDemo(formData.email, formData.senha);
+    if (!papel) {
       return { ok: false, erro: "E-mail ou senha incorretos (modo demonstração)." };
     }
     const cookieStore = await cookies();
-    cookieStore.set(DEMO_COOKIE, "1", {
+    cookieStore.set(DEMO_COOKIE, papel, {
       httpOnly: true,
       sameSite: "lax",
       path: "/",

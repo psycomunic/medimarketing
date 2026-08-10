@@ -2,8 +2,8 @@
  * MODO DEMONSTRAÇÃO
  * ----------------------------------------------------------------------
  * Quando o Supabase NÃO está configurado, o sistema entra em modo demo:
- * um login de teste fixo e dados fictícios, para navegar pela área do
- * médico sem banco de dados. Alterações não são persistidas.
+ * logins de teste fixos (um por papel) e dados fictícios, para navegar
+ * pela plataforma sem banco de dados. Alterações não são persistidas.
  *
  * Este arquivo é "puro" (sem next/headers) para poder ser importado tanto
  * no middleware (Edge) quanto em Server Components/Actions.
@@ -13,32 +13,118 @@ import type {
   Bloqueio,
   Consulta,
   Disponibilidade,
+  Lead,
+  Organization,
   Profile,
+  Role,
 } from "@/lib/supabase/types";
 
-// Cookie que marca uma sessão de demonstração
+// Cookie que marca uma sessão de demonstração (guarda o papel escolhido)
 export const DEMO_COOKIE = "medi_demo";
 
-// Credenciais de teste (exibidas na tela de login em modo demo)
-export const DEMO_EMAIL = "medico@teste.com";
+// Senha única das contas de teste
 export const DEMO_SENHA = "demo1234";
 
-export const DEMO_USER_ID = "00000000-0000-0000-0000-000000000000";
+export const DEMO_ORG_ID = "00000000-0000-0000-0000-0000000000aa";
 
-export const demoProfile: Profile = {
-  id: DEMO_USER_ID,
-  nome: "Dra. Marina Alves",
+/** Clínica fictícia usada como tenant da demonstração. */
+export const demoOrganization: Organization = {
+  id: DEMO_ORG_ID,
+  nome: "Clínica Vida Derma",
+  slug: "vida-derma",
   especialidade: "Dermatologia",
-  crm: "CRM/SP 123456",
-  telefone: "(11) 98888-7777",
-  foto_url: null,
-  role: "medico",
-  created_at: new Date().toISOString(),
+  plano: "performance",
+  cidade: "São Paulo, SP",
+  telefone: "(11) 3333-4444",
+  email: "contato@vidaderma.com.br",
+  ativo: true,
+  created_at: new Date("2024-01-15").toISOString(),
 };
 
-/** Confere as credenciais de demonstração. */
-export function checarCredenciaisDemo(email: string, senha: string) {
-  return email.trim().toLowerCase() === DEMO_EMAIL && senha === DEMO_SENHA;
+type ContaDemo = {
+  email: string;
+  role: Role;
+  profile: Profile;
+};
+
+function perfil(
+  id: string,
+  role: Role,
+  nome: string,
+  extras: Partial<Profile> = {}
+): Profile {
+  return {
+    id,
+    organization_id: role === "super_admin" ? null : DEMO_ORG_ID,
+    nome,
+    especialidade: null,
+    crm: null,
+    telefone: null,
+    foto_url: null,
+    role,
+    ativo: true,
+    created_at: new Date("2024-01-15").toISOString(),
+    ...extras,
+  };
+}
+
+/** Uma conta de teste por papel — todas com a mesma senha. */
+export const CONTAS_DEMO: readonly ContaDemo[] = [
+  {
+    email: "medico@teste.com",
+    role: "medico",
+    profile: perfil("00000000-0000-0000-0000-000000000000", "medico", "Dra. Marina Alves", {
+      especialidade: "Dermatologia",
+      crm: "CRM/SP 123456",
+      telefone: "(11) 98888-7777",
+    }),
+  },
+  {
+    email: "secretaria@teste.com",
+    role: "secretaria",
+    profile: perfil("00000000-0000-0000-0000-000000000001", "secretaria", "Camila Rocha", {
+      telefone: "(11) 97777-6666",
+    }),
+  },
+  {
+    email: "gestor@teste.com",
+    role: "gestor",
+    profile: perfil("00000000-0000-0000-0000-000000000002", "gestor", "Dr. Paulo Andrade", {
+      especialidade: "Dermatologia",
+      crm: "CRM/SP 654321",
+      telefone: "(11) 96666-5555",
+    }),
+  },
+  {
+    email: "admin@teste.com",
+    role: "super_admin",
+    profile: perfil("00000000-0000-0000-0000-000000000003", "super_admin", "Equipe Medi Marketing"),
+  },
+] as const;
+
+// O médico continua sendo a conta padrão da demonstração
+export const DEMO_EMAIL = CONTAS_DEMO[0].email;
+export const DEMO_USER_ID = CONTAS_DEMO[0].profile.id;
+export const demoProfile = CONTAS_DEMO[0].profile;
+
+/** Papel gravado no cookie é válido? ("1" = formato antigo, vira médico) */
+export function papelDemoValido(valor: string | undefined): Role | null {
+  if (!valor) return null;
+  if (valor === "1") return "medico";
+  const conta = CONTAS_DEMO.find((c) => c.role === valor);
+  return conta ? conta.role : null;
+}
+
+/** Confere as credenciais de demonstração e devolve o papel correspondente. */
+export function checarCredenciaisDemo(email: string, senha: string): Role | null {
+  if (senha !== DEMO_SENHA) return null;
+  const alvo = email.trim().toLowerCase();
+  return CONTAS_DEMO.find((c) => c.email === alvo)?.role ?? null;
+}
+
+/** Perfil fictício de um papel. */
+export function demoProfilePorPapel(role: Role): Profile {
+  return (CONTAS_DEMO.find((c) => c.role === role) ?? CONTAS_DEMO[0]).profile;
 }
 
 // Monta uma data relativa a hoje (offset de dias + hora)
@@ -52,6 +138,7 @@ function em(diasOffset: number, hora: number, minuto = 0): string {
 /** Consultas fictícias distribuídas ao longo da semana atual. */
 export function demoConsultas(): Consulta[] {
   const base = (parcial: Partial<Consulta> & Pick<Consulta, "id" | "paciente_nome" | "data_hora" | "tipo" | "status">): Consulta => ({
+    organization_id: DEMO_ORG_ID,
     medico_id: DEMO_USER_ID,
     criado_por: DEMO_USER_ID,
     created_at: new Date().toISOString(),
@@ -150,5 +237,49 @@ export function demoBloqueios(): Bloqueio[] {
       data_fim: fim.toISOString(),
       motivo: "Férias",
     },
+  ];
+}
+
+/** Leads fictícios da clínica (base do funil que chega na Fase 2). */
+export function demoLeads(): Lead[] {
+  const lead = (
+    id: string,
+    nome: string,
+    origem: string,
+    etapa: Lead["etapa_funil"],
+    diasAtras: number,
+    extras: Partial<Lead> = {}
+  ): Lead => {
+    const d = new Date();
+    d.setDate(d.getDate() - diasAtras);
+    return {
+      id,
+      organization_id: DEMO_ORG_ID,
+      nome,
+      especialidade: "Dermatologia",
+      whatsapp: "(11) 99000-0000",
+      email: null,
+      cidade: "São Paulo, SP",
+      faturamento_medio: null,
+      tem_equipe_comercial: null,
+      mensagem: null,
+      origem,
+      etapa_funil: etapa,
+      status: etapa === "perdido" ? "perdido" : "aberto",
+      consentimento_lgpd: true,
+      created_at: d.toISOString(),
+      ...extras,
+    };
+  };
+
+  return [
+    lead("l1", "Renata Prado", "meta_ads", "novo", 0),
+    lead("l2", "Tiago Moreira", "google_ads", "novo", 0),
+    lead("l3", "Sofia Camargo", "instagram", "em_contato", 1),
+    lead("l4", "Diego Ferraz", "meta_ads", "em_contato", 2),
+    lead("l5", "Luana Teixeira", "indicacao", "agendado", 3),
+    lead("l6", "Otávio Brandão", "google_ads", "compareceu", 6),
+    lead("l7", "Vanessa Lopes", "meta_ads", "em_tratamento", 12),
+    lead("l8", "Henrique Sales", "meta_ads", "perdido", 15),
   ];
 }

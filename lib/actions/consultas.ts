@@ -79,7 +79,16 @@ export async function criarConsulta(input: {
   if (!userId) return { ok: false, erro: "Sessão expirada." };
   if (!input.paciente_nome?.trim()) return { ok: false, erro: "Informe o nome do paciente." };
 
+  // A consulta nasce dentro da clínica (tenant) de quem está criando —
+  // é isso que a RLS usa para isolar os dados entre organizações.
+  const { data: perfil } = await supabase
+    .from("profiles")
+    .select("organization_id")
+    .eq("id", userId)
+    .single();
+
   const { error } = await supabase.from("consultas").insert({
+    organization_id: perfil?.organization_id ?? null,
     medico_id: userId,
     criado_por: userId,
     paciente_nome: input.paciente_nome.trim(),

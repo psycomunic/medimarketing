@@ -18,28 +18,47 @@ const poppins = Poppins({
   display: "swap",
 });
 
+const titulo = `${site.nome} — ${site.tagline}`;
+
 export const metadata: Metadata = {
   metadataBase: new URL(site.url),
   title: {
-    default: `${site.nome} — Atendimento e Marketing para Médicos`,
+    default: titulo,
     template: `%s | ${site.nome}`,
   },
   description: site.descricao,
+  applicationName: site.nome,
   keywords: [
+    "plataforma para clínicas",
+    "software para clínicas",
+    "CRM para clínicas",
     "marketing médico",
     "secretariado remoto",
     "agenda médica",
     "Google Ads para médicos",
     "Meta Ads para clínicas",
     "atendimento para médicos",
+    "reativação de pacientes",
   ],
+  alternates: {
+    canonical: "/",
+  },
   openGraph: {
-    title: `${site.nome} — Atendimento e Marketing para Médicos`,
+    title: titulo,
     description: site.descricao,
     url: site.url,
     siteName: site.nome,
     locale: "pt_BR",
     type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: titulo,
+    description: site.descricao,
+  },
+  robots: {
+    index: true,
+    follow: true,
   },
   icons: {
     icon: "/favicon.svg",

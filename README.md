@@ -1,25 +1,44 @@
 # Medi Marketing
 
-Site institucional + landing page de vendas e **área logada do médico** (agenda de
-consultas) para a **Medi Marketing** — atendimento/secretariado remoto e marketing
-médico (Google Ads e Meta Ads) para médicos e clínicas.
+Site comercial de alta conversão + **plataforma SaaS multi-módulo** para clínicas e
+profissionais de saúde: marketing, comercial, atendimento, agenda, retenção,
+treinamento e dados num só lugar.
 
-Estética médica premium (azul-médico + teal), Next.js 14 (App Router), TypeScript,
-Tailwind CSS, Supabase (Auth + Postgres com RLS) e deploy na Vercel.
+Estética médica premium (azul-médico + teal + coral), Next.js 14 (App Router),
+TypeScript, Tailwind CSS, Supabase (Auth + Postgres com RLS) e deploy na Vercel.
 
 ---
 
-## ✨ O que já está pronto
+## ✨ Estado atual — Fase 1 concluída
 
-- **Landing page** completa e responsiva (one-page com âncoras):
-  Hero · Barra de credibilidade · Dores · 3 Soluções (Atendimento, Agenda, Marketing) ·
-  Como funciona · Diferenciais · Depoimentos · FAQ · CTA final com formulário de lead · Footer.
-- **Autenticação** por e-mail/senha (Supabase Auth) com rota protegida `/app`.
-- **Área do médico**: dashboard com métricas, **agenda** (visões mês/semana/dia,
-  detalhe da consulta, alterar status, observações, criar consulta) e **disponibilidade**
-  (horários semanais + bloqueios de período).
-- **Placeholders da Fase 2**: Relatórios de marketing e Perfil (layout pronto).
-- **Banco + RLS**: script SQL completo em [`supabase/schema.sql`](./supabase/schema.sql).
+### Parte A — Site comercial
+Hero · Prova social (números editáveis) · Dores · **O Método** (Diagnóstico → 30 →
+90 → 180 → 360 dias) · **Soluções** (7 pilares) · **A Plataforma** (mockup + módulos) ·
+**Academy** (trilhas + isca) · Como funciona · Diferenciais · **Planos** (3 níveis) ·
+Resultados/Depoimentos · FAQ · CTA final com **formulário de diagnóstico** · Footer.
+
+SEO técnico: metadata + Open Graph, `sitemap.xml` e `robots.txt` (área logada fora
+do índice).
+
+### Parte B — Plataforma
+- **Multi-tenant**: cada clínica é uma `organization`, isolada por RLS.
+- **4 papéis**: `super_admin` (equipe Medi Marketing), `gestor`, `secretaria`, `medico`.
+- **Shell completo do painel**: sidebar agrupada (Operação / Crescimento / Conta),
+  filtrada por papel, com guard de rota em cada módulo.
+- **Módulos com dados reais**: Início, Agenda (mês/semana/dia, status, criar consulta,
+  anexos), Disponibilidade, Perfil.
+- **Módulos navegáveis com escopo declarado** (entram nas fases 2–5): CRM e Funil,
+  Atendimento, Retenção, Marketing, Indicadores, Academy, Financeiro, Configurações,
+  Clínicas.
+
+### Roadmap
+| Fase | Escopo | Status |
+| ---- | ------ | ------ |
+| 1 | Site comercial completo + captura de lead + auth e shell com papéis | ✅ |
+| 2 | Agenda (evolução) + CRM/Funil + Dashboard por papel | ⏳ |
+| 3 | Central de Atendimento omnichannel + Retenção/Reabordagem | ⏳ |
+| 4 | Marketing (Ads/GA4) + BI/Indicadores | ⏳ |
+| 5 | Academy + Financeiro leve + Configurações e integrações reais | ⏳ |
 
 ---
 
@@ -32,7 +51,7 @@ Tailwind CSS, Supabase (Auth + Postgres com RLS) e deploy na Vercel.
 | UI            | shadcn/ui (customizado) + Radix + lucide     |
 | Animações     | Framer Motion (sutil)                        |
 | Formulários   | react-hook-form + zod                        |
-| Auth + Banco  | Supabase (Auth + Postgres + RLS)             |
+| Auth + Banco  | Supabase (Auth + Postgres + RLS + Storage)   |
 | Deploy        | Vercel                                       |
 
 ---
@@ -41,7 +60,7 @@ Tailwind CSS, Supabase (Auth + Postgres com RLS) e deploy na Vercel.
 
 ### 1. Pré-requisitos
 - Node.js 18.17+ (recomendado 20+)
-- Uma conta no [Supabase](https://supabase.com) (gratuita)
+- Uma conta no [Supabase](https://supabase.com) (opcional — ver modo demonstração)
 
 ### 2. Instalar dependências
 ```bash
@@ -49,7 +68,6 @@ npm install
 ```
 
 ### 3. Configurar variáveis de ambiente
-Copie o exemplo e preencha com os dados do seu projeto Supabase:
 ```bash
 cp .env.example .env.local
 ```
@@ -60,44 +78,69 @@ SUPABASE_SERVICE_ROLE_KEY=sua-service-role-key
 NEXT_PUBLIC_WHATSAPP=5511999999999
 NEXT_PUBLIC_EMAIL_CONTATO=contato@medimarketing.com.br
 ```
-> As variáveis `NEXT_PUBLIC_*` ficam no [`lib/site.ts`](./lib/site.ts). Sem o Supabase
-> configurado o site roda normalmente; os formulários de lead apenas não persistem.
 
-### 4. Iniciar o servidor de desenvolvimento
+### 4. Iniciar
 ```bash
 npm run dev
 ```
-Acesse http://localhost:3000 · Área do médico em http://localhost:3000/login
+http://localhost:3000 · área do cliente em http://localhost:3000/login
+
+### 🔓 Modo demonstração
+**Sem as variáveis do Supabase**, a plataforma entra em modo demonstração: dados
+fictícios e uma conta de teste por papel (senha `demo1234` em todas):
+
+| E-mail | Papel | O que enxerga |
+| ------ | ----- | ------------- |
+| `medico@teste.com` | Médico(a) | Própria agenda, indicadores e Academy |
+| `secretaria@teste.com` | Atendimento | Agenda, CRM, atendimento e retenção |
+| `gestor@teste.com` | Gestor(a) | Tudo da clínica, incluindo marketing e financeiro |
+| `admin@teste.com` | Equipe Medi Marketing | Todas as clínicas |
+
+Alterações não são persistidas nesse modo.
 
 ---
 
 ## 🗄️ Configurando o Supabase
 
 1. Crie um projeto em https://supabase.com.
-2. Em **Project Settings → API**, copie a `URL`, a `anon key` e a `service_role key`
-   para o seu `.env.local`.
-3. Em **SQL Editor**, cole e execute o conteúdo de
-   [`supabase/schema.sql`](./supabase/schema.sql). Isso cria as tabelas
-   (`profiles`, `consultas`, `disponibilidade`, `bloqueios`, `leads`), os enums,
-   as políticas de **Row Level Security** e o trigger que cria o `profile`
-   automaticamente a cada novo usuário.
+2. Em **Project Settings → API**, copie a `URL`, a `anon key` e a `service_role key`.
+3. Em **SQL Editor**, cole e execute [`supabase/schema.sql`](./supabase/schema.sql).
+   O script é **idempotente**: pode ser re-executado sobre uma base existente
+   (inclusive a versão single-tenant anterior, que ganha uma organização padrão e
+   tem os dados migrados automaticamente).
 
-### Criando um médico (enquanto o cadastro é feito pela equipe)
-Em **Authentication → Users → Add user**, crie um usuário com e-mail e senha.
-O trigger cria o `profile` como `medico`. Para promover alguém a **admin**
-(equipe de atendimento, que enxerga tudo), rode no SQL Editor:
+O script cria `organizations`, `profiles`, `consultas`, `anexos`, `disponibilidade`,
+`bloqueios` e `leads`, as funções de acesso, as políticas de **RLS**, o bucket
+privado `anexos` e o trigger que cria o `profile` a cada novo usuário.
+
+### Criando a primeira clínica e o time
 ```sql
-update public.profiles set role = 'admin' where id = 'UUID-DO-USUARIO';
+-- 1. a clínica
+insert into public.organizations (nome, slug, especialidade, plano)
+values ('Clínica Exemplo', 'clinica-exemplo', 'Dermatologia', 'performance');
+
+-- 2. crie os usuários em Authentication → Users → Add user
+--    (o trigger cria o profile como 'medico' sem organização)
+
+-- 3. vincule cada um à clínica e ao papel correto
+update public.profiles
+   set organization_id = 'UUID-DA-ORGANIZATION', role = 'gestor'
+ where id = 'UUID-DO-USUARIO';
+
+-- papéis válidos: 'super_admin' | 'gestor' | 'secretaria' | 'medico'
 ```
+> No convite pelo Supabase, dá para já passar `role` e `organization_id` em
+> *user metadata* — o trigger `handle_new_user` respeita ambos.
 
-### Dados de teste (opcional)
-Depois de logar, use o botão **“Nova consulta”** na agenda para criar consultas
-de teste — elas respeitam o RLS e ficam vinculadas ao médico logado.
-
-### Modelo de dados (RLS)
-- Um médico só lê/edita registros onde `medico_id = auth.uid()`.
-- **Admin** (equipe) enxerga e edita tudo (função `is_admin()`).
-- `leads`: **INSERT público** (formulários da landing); leitura só para admin.
+### Modelo de acesso (RLS)
+- Cada usuário só enxerga registros da própria `organization_id`.
+- `super_admin` enxerga todas as clínicas.
+- Médico vê as próprias consultas; `gestor` e `secretaria` veem as da clínica inteira.
+- `leads` do site entram **sem** `organization_id` e só o `super_admin` lê. O visitante
+  anônimo consegue inserir apenas leads sem organização — não dá para plantar lead
+  dentro da clínica de outra pessoa.
+- Funções auxiliares: `minha_org()`, `meu_papel()`, `is_super_admin()`, `is_gestor()`,
+  `is_operacional()`.
 
 ---
 
@@ -105,9 +148,7 @@ de teste — elas respeitam o RLS e ficam vinculadas ao médico logado.
 
 1. Suba o repositório para o GitHub.
 2. Em https://vercel.com, **Add New → Project** e importe o repositório.
-3. Em **Environment Variables**, adicione as mesmas chaves do `.env.local`
-   (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
-   `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_WHATSAPP`, `NEXT_PUBLIC_EMAIL_CONTATO`).
+3. Em **Environment Variables**, adicione as mesmas chaves do `.env.local`.
 4. Em **Supabase → Authentication → URL Configuration**, adicione a URL da Vercel
    em *Site URL* e *Redirect URLs* (necessário para o reset de senha).
 5. Deploy. A cada `git push` a Vercel publica automaticamente.
@@ -118,45 +159,53 @@ de teste — elas respeitam o RLS e ficam vinculadas ao médico logado.
 
 ```
 app/
-  (marketing)/            → landing page pública (layout com Header + Footer)
+  (marketing)/            → site comercial (layout com Header + Footer)
     page.tsx              → seções da landing
-    privacidade/          → política de privacidade (placeholder)
-  login/                  → tela de login
-  app/                    → área logada (protegida por middleware + layout)
-    page.tsx              → dashboard
-    agenda/               → agenda (mês/semana/dia)
-    disponibilidade/      → horários + bloqueios
-    relatorios/ perfil/   → placeholders da Fase 2
+    privacidade/          → política de privacidade e cookies (placeholder)
+  login/                  → tela de login (com contas de demonstração)
+  app/                    → plataforma (protegida por middleware + layout + guard)
+    page.tsx              → início, adaptado ao papel
+    agenda/ disponibilidade/ perfil/          → módulos da Fase 1
+    crm/ clinicas/                            → Fase 2
+    atendimento/ retencao/                    → Fase 3
+    marketing/ indicadores/                   → Fase 4
+    academy/ financeiro/ configuracoes/       → Fase 5
+  sitemap.ts robots.ts    → SEO técnico
 components/
-  ui/                     → primitivos shadcn (button, card, dialog, accordion…)
-  marketing/              → seções da landing
-  app/                    → sidebar, calendário e diálogos da área logada
+  ui/                     → primitivos shadcn (button, card, dialog, select…)
+  marketing/              → seções da landing + mockup do painel
+  app/                    → sidebar, calendário, diálogos e placeholder de módulo
   auth/                   → formulário de login
 lib/
+  rbac.ts                 → módulos do painel e permissões por papel
+  acesso.ts               → guard das páginas (exigirModulo / exigirSessao)
+  demo.ts                 → modo demonstração (uma conta por papel)
   supabase/               → client (browser/server), middleware, tipos, queries
   actions/                → server actions (auth, leads, consultas, disponibilidade)
   agenda.ts, site.ts, conteudo.ts, utils.ts
-supabase/schema.sql       → tabelas + RLS + triggers
+supabase/schema.sql       → tabelas + RLS + funções + triggers
 middleware.ts             → refresh de sessão + proteção de /app
 tailwind.config.ts        → design tokens (paleta médica + fontes)
 ```
+
+**Para criar um módulo novo**: registre-o em `lib/rbac.ts` (label, rota, ícone,
+papéis, fase, grupo) e crie a página chamando `exigirModulo("id")`. A sidebar e o
+guard passam a respeitá-lo automaticamente.
 
 ---
 
 ## ✅ TODO / Decisões pendentes
 
+- [ ] **Provedor de WhatsApp** (Cloud API oficial) para a central de atendimento — Fase 3.
+- [ ] **Escopo final do Financeiro** (confirmar se entra) — Fase 5.
+- [ ] **Preços dos planos** em `lib/conteudo.ts` (hoje são placeholders).
+- [ ] **Números reais** de prova social (`numeros` em `lib/conteudo.ts`).
+- [ ] **Depoimentos reais** com foto e autorização de uso.
 - [ ] **Logo** oficial (hoje é logotipo textual em `components/logo.tsx`).
-- [ ] **Copy real** de depoimentos, métricas ("+120 médicos") e logos de parceiros.
-- [ ] Definir **planos com preço** vs. orçamento sob demanda (seção opcional).
-- [ ] **Compliance publicitário** (CFM/CRM) — revisar textos de marketing e FAQ.
-- [ ] **Fluxo de cadastro** do médico: convite por admin vs. autocadastro.
-- [ ] **Notificação de lead** por e-mail/WhatsApp ao receber formulário (Fase 2 —
-      ver `lib/actions/leads.ts`).
-- [ ] **Painel administrativo** interno (equipe cria consultas) — Fase 2.
-- [ ] **Relatórios** de Google/Meta Ads na área do médico — Fase 2 (layout pronto
-      em `app/app/relatorios`).
-- [ ] **Política de Privacidade** (LGPD) definitiva — hoje é placeholder.
+- [ ] **Compliance publicitário** (CFM) — revisar textos de marketing e FAQ.
+- [ ] **Política de Privacidade/Cookies** definitiva, revisada juridicamente.
 - [ ] **CNPJ, endereço e redes sociais** reais no `lib/site.ts`.
+- [ ] **Notificação de lead** por e-mail/WhatsApp ao receber formulário.
 - [ ] Configurar variáveis do Supabase e domínio final na Vercel.
 
 ---

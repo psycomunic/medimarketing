@@ -1,19 +1,21 @@
 -- =====================================================================
 -- Medi Marketing — Schema do banco (Supabase / Postgres)
+-- FASE 1: multi-tenant (organizations) + papéis + leads da landing
+--
 -- Execute no SQL Editor do Supabase (uma vez) ou via CLI:
 --   supabase db push
+--
+-- Este arquivo é IDEMPOTENTE: pode ser re-executado sobre uma base
+-- existente (versão single-tenant) sem perder dados.
 -- =====================================================================
 
--- Extensões úteis
 create extension if not exists "uuid-ossp";
 
 -- ---------------------------------------------------------------------
--- Tipos enumerados
+-- Tipos enumerados (agenda). O papel do usuário usa `text` + CHECK,
+-- porque enums não aceitam novos valores dentro da mesma transação —
+-- o que quebraria a evolução do produto a cada fase.
 -- ---------------------------------------------------------------------
-do $$ begin
-  create type role_usuario as enum ('medico', 'admin');
-exception when duplicate_object then null; end $$;
-
 do $$ begin
   create type status_consulta as enum ('pendente', 'confirmada', 'cancelada', 'realizada');
 exception when duplicate_object then null; end $$;
@@ -22,25 +24,70 @@ do $$ begin
   create type tipo_consulta as enum ('primeira', 'retorno', 'teleconsulta');
 exception when duplicate_object then null; end $$;
 
--- ---------------------------------------------------------------------
--- profiles — 1:1 com auth.users
--- ---------------------------------------------------------------------
-create table if not exists public.profiles (
-  id            uuid primary key references auth.users(id) on delete cascade,
-  nome          text,
+-- =====================================================================
+-- ORGANIZATIONS — cada clínica/consultório é um tenant
+-- =====================================================================
+create table if not exists public.organizations (
+  id            uuid primary key default uuid_generate_v4(),
+  nome          text not null,
+  slug          text unique,
   especialidade text,
-  crm           text,
+  plano         text not null default 'essencial'
+                  check (plano in ('essencial', 'performance', 'full')),
+  cidade        text,
   telefone      text,
-  foto_url      text,
-  role          role_usuario not null default 'medico',
+  email         text,
+  ativo         boolean not null default true,
   created_at    timestamptz not null default now()
 );
+
+-- ---------------------------------------------------------------------
+-- profiles — 1:1 com auth.users, sempre vinculado a uma organization
+-- ---------------------------------------------------------------------
+create table if not exists public.profiles (
+  id              uuid primary key references auth.users(id) on delete cascade,
+  organization_id uuid references public.organizations(id) on delete set null,
+  nome            text,
+  especialidade   text,
+  crm             text,
+  telefone        text,
+  foto_url        text,
+  role            text not null default 'medico',
+  ativo           boolean not null default true,
+  created_at      timestamptz not null default now()
+);
+
+alter table public.profiles add column if not exists organization_id uuid references public.organizations(id) on delete set null;
+alter table public.profiles add column if not exists ativo boolean not null default true;
+
+-- Converte `role` de enum para text (bases criadas na versão anterior)
+do $$ begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'profiles'
+      and column_name = 'role' and data_type = 'USER-DEFINED'
+  ) then
+    alter table public.profiles alter column role drop default;
+    alter table public.profiles alter column role type text using role::text;
+    alter table public.profiles alter column role set default 'medico';
+  end if;
+end $$;
+
+-- 'admin' da versão anterior vira 'super_admin' (equipe Medi Marketing)
+update public.profiles set role = 'super_admin' where role = 'admin';
+
+alter table public.profiles drop constraint if exists profiles_role_check;
+alter table public.profiles add constraint profiles_role_check
+  check (role in ('super_admin', 'gestor', 'secretaria', 'medico'));
+
+create index if not exists idx_profiles_org on public.profiles (organization_id);
 
 -- ---------------------------------------------------------------------
 -- consultas — núcleo da agenda
 -- ---------------------------------------------------------------------
 create table if not exists public.consultas (
   id                  uuid primary key default uuid_generate_v4(),
+  organization_id     uuid references public.organizations(id) on delete cascade,
   medico_id           uuid not null references public.profiles(id) on delete cascade,
   paciente_nome       text not null,
   paciente_telefone   text,
@@ -61,12 +108,16 @@ create index if not exists idx_consultas_medico_data
   on public.consultas (medico_id, data_hora);
 
 -- Colunas adicionais (para bases criadas antes desta versão)
+alter table public.consultas add column if not exists organization_id     uuid references public.organizations(id) on delete cascade;
 alter table public.consultas add column if not exists paciente_email      text;
 alter table public.consultas add column if not exists paciente_nascimento date;
 alter table public.consultas add column if not exists convenio            text;
 alter table public.consultas add column if not exists duracao_min         integer default 30;
 alter table public.consultas add column if not exists motivo              text;
 alter table public.consultas add column if not exists valor               numeric(10,2);
+
+create index if not exists idx_consultas_org_data
+  on public.consultas (organization_id, data_hora);
 
 -- ---------------------------------------------------------------------
 -- anexos — documentos das consultas (exames, encaminhamentos, receitas)
@@ -106,94 +157,259 @@ create table if not exists public.bloqueios (
 );
 
 -- ---------------------------------------------------------------------
--- leads — formulários da landing page
+-- leads — formulário de diagnóstico da landing + futuro CRM (Fase 2)
+--
+-- `organization_id` nulo  = lead comercial da própria Medi Marketing
+--                            (vindo do site institucional).
+-- `organization_id` preenchido = lead/paciente de uma clínica cliente.
 -- ---------------------------------------------------------------------
 create table if not exists public.leads (
-  id            uuid primary key default uuid_generate_v4(),
-  nome          text not null,
-  especialidade text,
-  whatsapp      text not null,
-  cidade        text,
-  origem        text default 'landing',
-  created_at    timestamptz not null default now()
+  id                   uuid primary key default uuid_generate_v4(),
+  organization_id      uuid references public.organizations(id) on delete cascade,
+  nome                 text not null,
+  especialidade        text,
+  whatsapp             text not null,
+  email                text,
+  cidade               text,
+  faturamento_medio    text,       -- faixa declarada no formulário
+  tem_equipe_comercial boolean,
+  mensagem             text,
+  origem               text default 'landing',
+  etapa_funil          text not null default 'novo'
+                         check (etapa_funil in ('novo','em_contato','agendado','compareceu','em_tratamento','perdido')),
+  status               text not null default 'aberto'
+                         check (status in ('aberto','ganho','perdido')),
+  consentimento_lgpd   boolean not null default false,
+  created_at           timestamptz not null default now()
 );
 
--- =====================================================================
--- ROW LEVEL SECURITY
--- =====================================================================
-alter table public.profiles       enable row level security;
-alter table public.consultas      enable row level security;
-alter table public.disponibilidade enable row level security;
-alter table public.bloqueios      enable row level security;
-alter table public.leads          enable row level security;
-alter table public.anexos         enable row level security;
+alter table public.leads add column if not exists organization_id      uuid references public.organizations(id) on delete cascade;
+alter table public.leads add column if not exists email                text;
+alter table public.leads add column if not exists faturamento_medio    text;
+alter table public.leads add column if not exists tem_equipe_comercial boolean;
+alter table public.leads add column if not exists mensagem             text;
+alter table public.leads add column if not exists etapa_funil          text not null default 'novo';
+alter table public.leads add column if not exists status               text not null default 'aberto';
+alter table public.leads add column if not exists consentimento_lgpd   boolean not null default false;
 
--- Função auxiliar: verifica se o usuário atual é admin
+alter table public.leads drop constraint if exists leads_etapa_funil_check;
+alter table public.leads add constraint leads_etapa_funil_check
+  check (etapa_funil in ('novo','em_contato','agendado','compareceu','em_tratamento','perdido'));
+
+alter table public.leads drop constraint if exists leads_status_check;
+alter table public.leads add constraint leads_status_check
+  check (status in ('aberto','ganho','perdido'));
+
+create index if not exists idx_leads_org_criado on public.leads (organization_id, created_at desc);
+
+-- =====================================================================
+-- FUNÇÕES AUXILIARES DE ACESSO
+-- security definer para não recursar nas policies da própria `profiles`.
+-- =====================================================================
+create or replace function public.meu_papel()
+returns text
+language sql stable security definer set search_path = public as $$
+  select role from public.profiles where id = auth.uid();
+$$;
+
+create or replace function public.minha_org()
+returns uuid
+language sql stable security definer set search_path = public as $$
+  select organization_id from public.profiles where id = auth.uid();
+$$;
+
+create or replace function public.is_super_admin()
+returns boolean
+language sql stable security definer set search_path = public as $$
+  select coalesce(public.meu_papel() = 'super_admin', false);
+$$;
+
+-- Mantida por compatibilidade com policies/consultas antigas
 create or replace function public.is_admin()
 returns boolean
 language sql stable security definer set search_path = public as $$
-  select exists (
-    select 1 from public.profiles
-    where id = auth.uid() and role = 'admin'
-  );
+  select public.is_super_admin();
 $$;
 
--- ---- profiles ----
+-- Gestor ou super admin: acesso amplo dentro da clínica
+create or replace function public.is_gestor()
+returns boolean
+language sql stable security definer set search_path = public as $$
+  select coalesce(public.meu_papel() in ('gestor', 'super_admin'), false);
+$$;
+
+-- Quem pode operar agenda/CRM da clínica (todos menos visitantes)
+create or replace function public.is_operacional()
+returns boolean
+language sql stable security definer set search_path = public as $$
+  select coalesce(public.meu_papel() in ('gestor', 'secretaria', 'super_admin'), false);
+$$;
+
+-- =====================================================================
+-- ROW LEVEL SECURITY
+-- Regra geral: super_admin vê tudo; os demais só a própria organization.
+-- =====================================================================
+alter table public.organizations   enable row level security;
+alter table public.profiles        enable row level security;
+alter table public.consultas       enable row level security;
+alter table public.disponibilidade enable row level security;
+alter table public.bloqueios       enable row level security;
+alter table public.leads           enable row level security;
+alter table public.anexos          enable row level security;
+
+-- ---- organizations ----
+drop policy if exists "org_select" on public.organizations;
+create policy "org_select" on public.organizations
+  for select using (id = public.minha_org() or public.is_super_admin());
+
+drop policy if exists "org_update" on public.organizations;
+create policy "org_update" on public.organizations
+  for update using (
+    (id = public.minha_org() and public.is_gestor()) or public.is_super_admin()
+  );
+
+drop policy if exists "org_insert" on public.organizations;
+create policy "org_insert" on public.organizations
+  for insert with check (public.is_super_admin());
+
+drop policy if exists "org_delete" on public.organizations;
+create policy "org_delete" on public.organizations
+  for delete using (public.is_super_admin());
+
+-- ---- profiles ---- (vejo a mim mesmo e os colegas da minha clínica)
 drop policy if exists "profiles_self_select" on public.profiles;
 create policy "profiles_self_select" on public.profiles
-  for select using (id = auth.uid() or public.is_admin());
+  for select using (
+    id = auth.uid()
+    or (organization_id is not null and organization_id = public.minha_org())
+    or public.is_super_admin()
+  );
 
 drop policy if exists "profiles_self_update" on public.profiles;
 create policy "profiles_self_update" on public.profiles
-  for update using (id = auth.uid() or public.is_admin());
+  for update using (
+    id = auth.uid()
+    or (organization_id = public.minha_org() and public.is_gestor())
+    or public.is_super_admin()
+  );
 
 drop policy if exists "profiles_admin_insert" on public.profiles;
 create policy "profiles_admin_insert" on public.profiles
-  for insert with check (id = auth.uid() or public.is_admin());
+  for insert with check (
+    id = auth.uid()
+    or (organization_id = public.minha_org() and public.is_gestor())
+    or public.is_super_admin()
+  );
 
--- ---- consultas ---- (médico vê/edita só as suas; admin vê tudo)
+-- ---- consultas ----
+-- Médico vê as próprias; secretária/gestor veem as da clínica inteira.
 drop policy if exists "consultas_select" on public.consultas;
 create policy "consultas_select" on public.consultas
-  for select using (medico_id = auth.uid() or public.is_admin());
+  for select using (
+    medico_id = auth.uid()
+    or (organization_id = public.minha_org() and public.is_operacional())
+    or public.is_super_admin()
+  );
 
 drop policy if exists "consultas_update" on public.consultas;
 create policy "consultas_update" on public.consultas
-  for update using (medico_id = auth.uid() or public.is_admin());
+  for update using (
+    medico_id = auth.uid()
+    or (organization_id = public.minha_org() and public.is_operacional())
+    or public.is_super_admin()
+  );
 
 drop policy if exists "consultas_insert" on public.consultas;
 create policy "consultas_insert" on public.consultas
-  for insert with check (medico_id = auth.uid() or public.is_admin());
+  for insert with check (
+    medico_id = auth.uid()
+    or (organization_id = public.minha_org() and public.is_operacional())
+    or public.is_super_admin()
+  );
 
 drop policy if exists "consultas_delete" on public.consultas;
 create policy "consultas_delete" on public.consultas
-  for delete using (public.is_admin());
+  for delete using (
+    (organization_id = public.minha_org() and public.is_gestor())
+    or public.is_super_admin()
+  );
 
--- ---- disponibilidade ---- (médico gerencia a própria)
+-- ---- disponibilidade ---- (médico gerencia a própria; equipe da clínica lê)
 drop policy if exists "disp_all" on public.disponibilidade;
 create policy "disp_all" on public.disponibilidade
-  for all using (medico_id = auth.uid() or public.is_admin())
-  with check (medico_id = auth.uid() or public.is_admin());
+  for all using (
+    medico_id = auth.uid()
+    or public.is_super_admin()
+    or (public.is_operacional() and exists (
+      select 1 from public.profiles p
+      where p.id = disponibilidade.medico_id and p.organization_id = public.minha_org()
+    ))
+  )
+  with check (
+    medico_id = auth.uid()
+    or public.is_super_admin()
+    or (public.is_operacional() and exists (
+      select 1 from public.profiles p
+      where p.id = disponibilidade.medico_id and p.organization_id = public.minha_org()
+    ))
+  );
 
--- ---- bloqueios ---- (médico gerencia os próprios)
+-- ---- bloqueios ---- (mesma regra da disponibilidade)
 drop policy if exists "bloq_all" on public.bloqueios;
 create policy "bloq_all" on public.bloqueios
-  for all using (medico_id = auth.uid() or public.is_admin())
-  with check (medico_id = auth.uid() or public.is_admin());
+  for all using (
+    medico_id = auth.uid()
+    or public.is_super_admin()
+    or (public.is_operacional() and exists (
+      select 1 from public.profiles p
+      where p.id = bloqueios.medico_id and p.organization_id = public.minha_org()
+    ))
+  )
+  with check (
+    medico_id = auth.uid()
+    or public.is_super_admin()
+    or (public.is_operacional() and exists (
+      select 1 from public.profiles p
+      where p.id = bloqueios.medico_id and p.organization_id = public.minha_org()
+    ))
+  );
 
--- ---- leads ---- (INSERT público via anon; leitura só admin)
+-- ---- leads ----
+-- Visitante anônimo do site só consegue inserir lead SEM organization_id
+-- (lead comercial da Medi Marketing). Não consegue plantar lead em clínica.
 drop policy if exists "leads_public_insert" on public.leads;
 create policy "leads_public_insert" on public.leads
-  for insert with check (true);
+  for insert to anon
+  with check (organization_id is null and origem is not null);
+
+drop policy if exists "leads_auth_insert" on public.leads;
+create policy "leads_auth_insert" on public.leads
+  for insert to authenticated
+  with check (
+    organization_id is null
+    or (organization_id = public.minha_org() and public.is_operacional())
+    or public.is_super_admin()
+  );
 
 drop policy if exists "leads_admin_select" on public.leads;
 create policy "leads_admin_select" on public.leads
-  for select using (public.is_admin());
+  for select using (
+    (organization_id is not null and organization_id = public.minha_org() and public.is_operacional())
+    or public.is_super_admin()
+  );
+
+drop policy if exists "leads_update" on public.leads;
+create policy "leads_update" on public.leads
+  for update using (
+    (organization_id = public.minha_org() and public.is_operacional())
+    or public.is_super_admin()
+  );
 
 -- ---- anexos ---- (médico gerencia os anexos das próprias consultas)
 drop policy if exists "anexos_all" on public.anexos;
 create policy "anexos_all" on public.anexos
-  for all using (medico_id = auth.uid() or public.is_admin())
-  with check (medico_id = auth.uid() or public.is_admin());
+  for all using (medico_id = auth.uid() or public.is_super_admin())
+  with check (medico_id = auth.uid() or public.is_super_admin());
 
 -- =====================================================================
 -- STORAGE: bucket privado "anexos" para documentos das consultas
@@ -227,16 +443,25 @@ create policy "anexos_storage_delete" on storage.objects
 
 -- =====================================================================
 -- TRIGGER: cria profile automaticamente ao registrar um usuário
+-- O papel e a clínica podem vir nos metadados do convite.
 -- =====================================================================
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql security definer set search_path = public as $$
+declare
+  papel text;
 begin
-  insert into public.profiles (id, nome, role)
+  papel := coalesce(new.raw_user_meta_data->>'role', 'medico');
+  if papel not in ('super_admin', 'gestor', 'secretaria', 'medico') then
+    papel := 'medico';
+  end if;
+
+  insert into public.profiles (id, nome, role, organization_id)
   values (
     new.id,
     coalesce(new.raw_user_meta_data->>'nome', new.email),
-    'medico'
+    papel,
+    (new.raw_user_meta_data->>'organization_id')::uuid
   )
   on conflict (id) do nothing;
   return new;
@@ -247,3 +472,28 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
+
+-- =====================================================================
+-- BACKFILL: bases single-tenant ganham uma organization padrão
+-- =====================================================================
+do $$
+declare
+  org_id uuid;
+begin
+  if exists (select 1 from public.profiles where organization_id is null) then
+    select id into org_id from public.organizations where slug = 'clinica-padrao';
+    if org_id is null then
+      insert into public.organizations (nome, slug, plano)
+      values ('Clínica padrão', 'clinica-padrao', 'essencial')
+      returning id into org_id;
+    end if;
+
+    update public.profiles set organization_id = org_id
+      where organization_id is null and role <> 'super_admin';
+  end if;
+
+  update public.consultas c
+    set organization_id = p.organization_id
+    from public.profiles p
+    where c.medico_id = p.id and c.organization_id is null;
+end $$;
