@@ -103,32 +103,43 @@ Alterações não são persistidas nesse modo.
 ## 🗄️ Configurando o Supabase
 
 1. Crie um projeto em https://supabase.com.
-2. Em **Project Settings → API**, copie a `URL`, a `anon key` e a `service_role key`.
+2. Em **Project Settings → API**, copie a `URL` e a chave publicável
+   (`sb_publishable_…`, a sucessora da `anon key`) para o `.env.local`.
 3. Em **SQL Editor**, cole e execute [`supabase/schema.sql`](./supabase/schema.sql).
    O script é **idempotente**: pode ser re-executado sobre uma base existente
    (inclusive a versão single-tenant anterior, que ganha uma organização padrão e
    tem os dados migrados automaticamente).
+4. Em seguida, execute [`supabase/seed.sql`](./supabase/seed.sql) — a carga
+   inicial. Ajuste o bloco da clínica no topo do arquivo antes de rodar.
 
-O script cria `organizations`, `profiles`, `consultas`, `anexos`, `disponibilidade`,
-`bloqueios` e `leads`, as funções de acesso, as políticas de **RLS**, o bucket
-privado `anexos` e o trigger que cria o `profile` a cada novo usuário.
+O `schema.sql` cria as 21 tabelas (agenda, CRM, atendimento, retenção, marketing,
+financeiro, Academy e indicadores), as funções de acesso, as 44 políticas de
+**RLS**, o bucket privado `anexos` e o trigger que cria o `profile` a cada novo
+usuário. O `seed.sql` publica as trilhas da Academy, cria as réguas de retenção
+padrão (desligadas) e registra as integrações como não conectadas.
 
 ### Criando a primeira clínica e o time
+A clínica já vem do `seed.sql`. Para cada pessoa da equipe:
+
+1. Crie o usuário em **Authentication → Users → Add user** (o trigger cria o
+   `profile` como `medico`, sem organização).
+2. Vincule à clínica com a função instalada pelo seed:
+
 ```sql
--- 1. a clínica
-insert into public.organizations (nome, slug, especialidade, plano)
-values ('Clínica Exemplo', 'clinica-exemplo', 'Dermatologia', 'performance');
-
--- 2. crie os usuários em Authentication → Users → Add user
---    (o trigger cria o profile como 'medico' sem organização)
-
--- 3. vincule cada um à clínica e ao papel correto
-update public.profiles
-   set organization_id = 'UUID-DA-ORGANIZATION', role = 'gestor'
- where id = 'UUID-DO-USUARIO';
+select public.vincular_a_clinica('gestor@clinica.com.br', 'gestor');
+select public.vincular_a_clinica('recepcao@clinica.com.br', 'secretaria');
+select public.vincular_a_clinica('equipe@medimarketing.com.br', 'super_admin');
 
 -- papéis válidos: 'super_admin' | 'gestor' | 'secretaria' | 'medico'
 ```
+
+> `super_admin` é a equipe Medi Marketing: não pertence a clínica nenhuma e
+> enxerga a carteira inteira.
+>
+> A função é `security definer` e concede papéis, então o seed **revoga** a
+> execução de `anon` e `authenticated` — só o SQL Editor a chama. Sem isso,
+> qualquer usuário logado poderia se promover a `super_admin` via RPC.
+>
 > No convite pelo Supabase, dá para já passar `role` e `organization_id` em
 > *user metadata* — o trigger `handle_new_user` respeita ambos.
 

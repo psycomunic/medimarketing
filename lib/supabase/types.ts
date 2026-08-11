@@ -48,6 +48,16 @@ export type Organization = {
   telefone: string | null;
   email: string | null;
   ativo: boolean;
+  /* Dados preenchidos em Configurações */
+  cnpj: string | null;
+  endereco: string | null;
+  responsavel: string | null;
+  site: string | null;
+  instagram: string | null;
+  /** Texto do lembrete de consulta enviado ao paciente. */
+  mensagem_lembrete: string | null;
+  /** Quantas horas antes o lembrete dispara. */
+  antecedencia_lembrete_h: number;
   created_at: string;
 };
 
@@ -132,7 +142,222 @@ export type Lead = {
   etapa_funil: EtapaFunil;
   status: StatusLead;
   consentimento_lgpd: boolean;
+  /** Quem da equipe cuida deste lead. */
+  responsavel_id: string | null;
+  /** Quanto o tratamento pode valer, para priorizar o funil. */
+  valor_estimado: number | null;
+  tags: string[];
+  /** Data combinada para o próximo toque (ISO). */
+  proximo_contato: string | null;
+  ultimo_contato: string | null;
+  motivo_perda: string | null;
   created_at: string;
+};
+
+/* ------------------------------------------------------------------ */
+/* CRM — histórico de relacionamento                                   */
+/* ------------------------------------------------------------------ */
+
+export type CanalContato =
+  | "whatsapp"
+  | "instagram"
+  | "facebook"
+  | "telefone"
+  | "email"
+  | "presencial";
+
+export type TipoInteracao = "nota" | "mensagem" | "ligacao" | "tarefa";
+
+/** Uma linha do histórico do lead: nota, contato feito ou tarefa agendada. */
+export type LeadInteracao = {
+  id: string;
+  lead_id: string;
+  organization_id: string;
+  autor_id: string | null;
+  tipo: TipoInteracao;
+  canal: CanalContato | null;
+  conteudo: string;
+  /** Só faz sentido em `tipo = "tarefa"`. */
+  concluida: boolean;
+  vence_em: string | null;
+  created_at: string;
+};
+
+/** Lead com o que a tela do funil precisa mostrar junto. */
+export type LeadComContexto = Lead & {
+  responsavel_nome: string | null;
+  interacoes: number;
+  ultima_interacao: string | null;
+  tarefas_abertas: number;
+};
+
+/* ------------------------------------------------------------------ */
+/* Atendimento — caixa de entrada dos canais                           */
+/* ------------------------------------------------------------------ */
+
+export type CanalConversa = "whatsapp" | "instagram" | "facebook";
+export type StatusConversa = "aberta" | "pendente" | "resolvida";
+
+export type Conversa = {
+  id: string;
+  organization_id: string;
+  lead_id: string | null;
+  canal: CanalConversa;
+  contato_nome: string;
+  /** Telefone no WhatsApp, @ nas redes. */
+  contato_identificador: string;
+  status: StatusConversa;
+  atribuido_a: string | null;
+  nao_lidas: number;
+  ultima_mensagem: string | null;
+  ultima_mensagem_em: string;
+  created_at: string;
+};
+
+export type Mensagem = {
+  id: string;
+  conversa_id: string;
+  /** "entrada" = paciente falou; "saida" = a clínica respondeu. */
+  direcao: "entrada" | "saida";
+  autor_id: string | null;
+  autor_nome: string | null;
+  conteudo: string;
+  created_at: string;
+};
+
+export type ConversaComContexto = Conversa & {
+  atribuido_nome: string | null;
+  etapa_funil: EtapaFunil | null;
+};
+
+/* ------------------------------------------------------------------ */
+/* Retenção — réguas de reabordagem                                    */
+/* ------------------------------------------------------------------ */
+
+export type TipoRegua =
+  | "reabordagem"
+  | "no_show"
+  | "reativacao"
+  | "recall"
+  | "pos_consulta";
+
+/** Cadência automática disparada por um evento do funil ou da agenda. */
+export type Regua = {
+  id: string;
+  organization_id: string;
+  tipo: TipoRegua;
+  nome: string;
+  descricao: string | null;
+  ativa: boolean;
+  created_at: string;
+};
+
+export type ReguaPasso = {
+  id: string;
+  regua_id: string;
+  ordem: number;
+  /** Espera desde o gatilho (ou desde o passo anterior, na leitura da tela). */
+  atraso_horas: number;
+  canal: CanalContato;
+  mensagem: string;
+};
+
+export type StatusExecucao = "enviado" | "respondido" | "convertido" | "cancelado";
+
+export type ReguaExecucao = {
+  id: string;
+  regua_id: string;
+  organization_id: string;
+  lead_id: string | null;
+  passo: number;
+  status: StatusExecucao;
+  executado_em: string;
+};
+
+/** Régua com os passos e o desempenho dos últimos 90 dias. */
+export type ReguaComDesempenho = Regua & {
+  passos: ReguaPasso[];
+  enviados: number;
+  respondidos: number;
+  convertidos: number;
+};
+
+/* ------------------------------------------------------------------ */
+/* Marketing — campanhas de mídia paga                                 */
+/* ------------------------------------------------------------------ */
+
+export type PlataformaAds = "meta" | "google" | "organico" | "outro";
+export type StatusCampanha = "ativa" | "pausada" | "encerrada";
+
+export type Campanha = {
+  id: string;
+  organization_id: string;
+  plataforma: PlataformaAds;
+  nome: string;
+  objetivo: string | null;
+  status: StatusCampanha;
+  inicio: string; // "YYYY-MM-DD"
+  fim: string | null;
+  investimento: number;
+  impressoes: number;
+  cliques: number;
+  leads: number;
+  agendamentos: number;
+  created_at: string;
+};
+
+/* ------------------------------------------------------------------ */
+/* Financeiro                                                          */
+/* ------------------------------------------------------------------ */
+
+export type FormaPagamento =
+  | "pix"
+  | "dinheiro"
+  | "cartao_credito"
+  | "cartao_debito"
+  | "convenio"
+  | "boleto";
+
+export type StatusLancamento = "previsto" | "recebido" | "atrasado" | "cancelado";
+
+/** Receita de um procedimento. O custo direto entra para calcular a margem. */
+export type Lancamento = {
+  id: string;
+  organization_id: string;
+  consulta_id: string | null;
+  paciente_nome: string;
+  procedimento: string;
+  categoria: string | null;
+  valor: number;
+  /** Material, laboratório, repasse — o que sai do valor cheio. */
+  custo: number;
+  forma_pagamento: FormaPagamento;
+  status: StatusLancamento;
+  data_competencia: string; // "YYYY-MM-DD"
+  data_recebimento: string | null;
+  observacao: string | null;
+  created_at: string;
+};
+
+/* ------------------------------------------------------------------ */
+/* Configurações — integrações da clínica                              */
+/* ------------------------------------------------------------------ */
+
+export type ProvedorIntegracao =
+  | "meta_ads"
+  | "google_ads"
+  | "ga4"
+  | "whatsapp"
+  | "instagram";
+
+export type Integracao = {
+  id: string;
+  organization_id: string;
+  provedor: ProvedorIntegracao;
+  conectado: boolean;
+  /** ID da conta de anúncios, número do WhatsApp, @ do perfil... */
+  identificador: string | null;
+  atualizado_em: string;
 };
 
 /* ------------------------------------------------------------------ */
@@ -248,11 +473,35 @@ export interface Database {
       >;
       leads: Tabela<
         Lead,
-        Omit<Lead, "id" | "created_at" | "etapa_funil" | "status"> & {
-          id?: string;
-          etapa_funil?: EtapaFunil;
-          status?: StatusLead;
-        },
+        // Os campos de trabalho do funil têm default no banco: quem insere
+        // (formulário do site, importação) não precisa informá-los.
+        Omit<
+          Lead,
+          | "id"
+          | "created_at"
+          | "etapa_funil"
+          | "status"
+          | "responsavel_id"
+          | "valor_estimado"
+          | "tags"
+          | "proximo_contato"
+          | "ultimo_contato"
+          | "motivo_perda"
+        > &
+          Partial<
+            Pick<
+              Lead,
+              | "id"
+              | "etapa_funil"
+              | "status"
+              | "responsavel_id"
+              | "valor_estimado"
+              | "tags"
+              | "proximo_contato"
+              | "ultimo_contato"
+              | "motivo_perda"
+            >
+          >,
         Partial<Lead>
       >;
       anexos: Tabela<
@@ -290,6 +539,63 @@ export interface Database {
           atualizado_em?: string;
         },
         Partial<IndicadorMensal>
+      >;
+      lead_interacoes: Tabela<
+        LeadInteracao,
+        Omit<LeadInteracao, "id" | "created_at" | "concluida"> & {
+          id?: string;
+          concluida?: boolean;
+        },
+        Partial<LeadInteracao>
+      >;
+      conversas: Tabela<
+        Conversa,
+        Omit<Conversa, "id" | "created_at" | "nao_lidas"> & {
+          id?: string;
+          nao_lidas?: number;
+        },
+        Partial<Conversa>
+      >;
+      mensagens: Tabela<
+        Mensagem,
+        Omit<Mensagem, "id" | "created_at"> & { id?: string },
+        Partial<Mensagem>
+      >;
+      reguas: Tabela<
+        Regua,
+        Omit<Regua, "id" | "created_at"> & { id?: string },
+        Partial<Regua>
+      >;
+      regua_passos: Tabela<
+        ReguaPasso,
+        Omit<ReguaPasso, "id"> & { id?: string },
+        Partial<ReguaPasso>
+      >;
+      regua_execucoes: Tabela<
+        ReguaExecucao,
+        Omit<ReguaExecucao, "id" | "executado_em"> & {
+          id?: string;
+          executado_em?: string;
+        },
+        Partial<ReguaExecucao>
+      >;
+      campanhas: Tabela<
+        Campanha,
+        Omit<Campanha, "id" | "created_at"> & { id?: string },
+        Partial<Campanha>
+      >;
+      lancamentos: Tabela<
+        Lancamento,
+        Omit<Lancamento, "id" | "created_at"> & { id?: string },
+        Partial<Lancamento>
+      >;
+      integracoes: Tabela<
+        Integracao,
+        Omit<Integracao, "id" | "atualizado_em"> & {
+          id?: string;
+          atualizado_em?: string;
+        },
+        Partial<Integracao>
       >;
     };
     // Empty-key form (não use Record<string, never>: isso faria keyof = string

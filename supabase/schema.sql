@@ -680,3 +680,281 @@ create policy "indicadores_write" on public.indicadores_mensais
     (organization_id = public.minha_org() and public.is_gestor())
     or public.is_super_admin()
   );
+
+-- =====================================================================
+-- FASE 3 — CRM, atendimento, retenção, marketing, financeiro e ajustes
+-- Todas as tabelas abaixo são por clínica (organization_id obrigatório)
+-- e isoladas por RLS. Super admin enxerga a carteira inteira.
+-- =====================================================================
+
+-- ---------------------------------------------------------------------
+-- organizations: campos preenchidos na tela de Configurações
+-- ---------------------------------------------------------------------
+alter table public.organizations add column if not exists cnpj                    text;
+alter table public.organizations add column if not exists endereco                text;
+alter table public.organizations add column if not exists responsavel             text;
+alter table public.organizations add column if not exists site                    text;
+alter table public.organizations add column if not exists instagram               text;
+alter table public.organizations add column if not exists mensagem_lembrete       text;
+alter table public.organizations add column if not exists antecedencia_lembrete_h integer not null default 24;
+
+-- ---------------------------------------------------------------------
+-- leads: campos de trabalho do funil
+-- ---------------------------------------------------------------------
+alter table public.leads add column if not exists responsavel_id  uuid references public.profiles(id) on delete set null;
+alter table public.leads add column if not exists valor_estimado  numeric(12,2);
+alter table public.leads add column if not exists tags            text[] not null default '{}';
+alter table public.leads add column if not exists proximo_contato timestamptz;
+alter table public.leads add column if not exists ultimo_contato  timestamptz;
+alter table public.leads add column if not exists motivo_perda    text;
+
+create index if not exists idx_leads_etapa on public.leads (organization_id, etapa_funil);
+
+-- ---------------------------------------------------------------------
+-- lead_interacoes — histórico e tarefas de cada lead
+-- ---------------------------------------------------------------------
+create table if not exists public.lead_interacoes (
+  id              uuid primary key default uuid_generate_v4(),
+  lead_id         uuid not null references public.leads(id) on delete cascade,
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  autor_id        uuid references public.profiles(id) on delete set null,
+  tipo            text not null default 'nota'
+                    check (tipo in ('nota','mensagem','ligacao','tarefa')),
+  canal           text check (canal in ('whatsapp','instagram','facebook','telefone','email','presencial')),
+  conteudo        text not null check (length(trim(conteudo)) > 0),
+  concluida       boolean not null default false,
+  vence_em        timestamptz,
+  created_at      timestamptz not null default now()
+);
+create index if not exists idx_interacoes_lead on public.lead_interacoes (lead_id, created_at desc);
+
+-- ---------------------------------------------------------------------
+-- conversas / mensagens — caixa de entrada dos canais
+-- ---------------------------------------------------------------------
+create table if not exists public.conversas (
+  id                    uuid primary key default uuid_generate_v4(),
+  organization_id       uuid not null references public.organizations(id) on delete cascade,
+  lead_id               uuid references public.leads(id) on delete set null,
+  canal                 text not null check (canal in ('whatsapp','instagram','facebook')),
+  contato_nome          text not null,
+  contato_identificador text not null,
+  status                text not null default 'aberta'
+                          check (status in ('aberta','pendente','resolvida')),
+  atribuido_a           uuid references public.profiles(id) on delete set null,
+  nao_lidas             integer not null default 0,
+  ultima_mensagem       text,
+  ultima_mensagem_em    timestamptz not null default now(),
+  created_at            timestamptz not null default now()
+);
+create index if not exists idx_conversas_org on public.conversas (organization_id, ultima_mensagem_em desc);
+
+create table if not exists public.mensagens (
+  id          uuid primary key default uuid_generate_v4(),
+  conversa_id uuid not null references public.conversas(id) on delete cascade,
+  direcao     text not null check (direcao in ('entrada','saida')),
+  autor_id    uuid references public.profiles(id) on delete set null,
+  autor_nome  text,
+  conteudo    text not null check (length(trim(conteudo)) > 0),
+  created_at  timestamptz not null default now()
+);
+create index if not exists idx_mensagens_conversa on public.mensagens (conversa_id, created_at);
+
+-- ---------------------------------------------------------------------
+-- reguas / regua_passos / regua_execucoes — retenção
+-- ---------------------------------------------------------------------
+create table if not exists public.reguas (
+  id              uuid primary key default uuid_generate_v4(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  tipo            text not null
+                    check (tipo in ('reabordagem','no_show','reativacao','recall','pos_consulta')),
+  nome            text not null,
+  descricao       text,
+  ativa           boolean not null default false,
+  created_at      timestamptz not null default now()
+);
+create index if not exists idx_reguas_org on public.reguas (organization_id);
+
+create table if not exists public.regua_passos (
+  id            uuid primary key default uuid_generate_v4(),
+  regua_id      uuid not null references public.reguas(id) on delete cascade,
+  ordem         integer not null default 1,
+  atraso_horas  integer not null default 24,
+  canal         text not null default 'whatsapp'
+                  check (canal in ('whatsapp','instagram','facebook','telefone','email','presencial')),
+  mensagem      text not null check (length(trim(mensagem)) > 0)
+);
+create index if not exists idx_passos_regua on public.regua_passos (regua_id, ordem);
+
+create table if not exists public.regua_execucoes (
+  id              uuid primary key default uuid_generate_v4(),
+  regua_id        uuid not null references public.reguas(id) on delete cascade,
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  lead_id         uuid references public.leads(id) on delete set null,
+  passo           integer not null default 1,
+  status          text not null default 'enviado'
+                    check (status in ('enviado','respondido','convertido','cancelado')),
+  executado_em    timestamptz not null default now()
+);
+create index if not exists idx_execucoes_regua on public.regua_execucoes (regua_id, executado_em desc);
+
+-- ---------------------------------------------------------------------
+-- campanhas — mídia paga (Meta e Google), lançamento manual até a Fase 4
+-- ---------------------------------------------------------------------
+create table if not exists public.campanhas (
+  id              uuid primary key default uuid_generate_v4(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  plataforma      text not null check (plataforma in ('meta','google','organico','outro')),
+  nome            text not null,
+  objetivo        text,
+  status          text not null default 'ativa'
+                    check (status in ('ativa','pausada','encerrada')),
+  inicio          date not null default current_date,
+  fim             date,
+  investimento    numeric(12,2) not null default 0,
+  impressoes      bigint not null default 0,
+  cliques         integer not null default 0,
+  leads           integer not null default 0,
+  agendamentos    integer not null default 0,
+  created_at      timestamptz not null default now()
+);
+create index if not exists idx_campanhas_org on public.campanhas (organization_id, inicio desc);
+
+-- ---------------------------------------------------------------------
+-- lancamentos — receita por procedimento
+-- ---------------------------------------------------------------------
+create table if not exists public.lancamentos (
+  id               uuid primary key default uuid_generate_v4(),
+  organization_id  uuid not null references public.organizations(id) on delete cascade,
+  consulta_id      uuid references public.consultas(id) on delete set null,
+  paciente_nome    text not null,
+  procedimento     text not null,
+  categoria        text,
+  valor            numeric(12,2) not null default 0,
+  custo            numeric(12,2) not null default 0,
+  forma_pagamento  text not null default 'pix'
+                     check (forma_pagamento in ('pix','dinheiro','cartao_credito','cartao_debito','convenio','boleto')),
+  status           text not null default 'previsto'
+                     check (status in ('previsto','recebido','atrasado','cancelado')),
+  data_competencia date not null default current_date,
+  data_recebimento date,
+  observacao       text,
+  created_at       timestamptz not null default now()
+);
+create index if not exists idx_lancamentos_org_data
+  on public.lancamentos (organization_id, data_competencia desc);
+
+-- ---------------------------------------------------------------------
+-- integracoes — estado das conexões externas da clínica
+-- ---------------------------------------------------------------------
+create table if not exists public.integracoes (
+  id              uuid primary key default uuid_generate_v4(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  provedor        text not null
+                    check (provedor in ('meta_ads','google_ads','ga4','whatsapp','instagram')),
+  conectado       boolean not null default false,
+  identificador   text,
+  atualizado_em   timestamptz not null default now(),
+  unique (organization_id, provedor)
+);
+
+-- ---------------------------------------------------------------------
+-- RLS dos módulos da Fase 3
+-- Padrão: leitura e escrita para quem é da clínica e é operacional;
+-- super admin passa por cima. Médico não mexe em CRM nem em financeiro.
+-- ---------------------------------------------------------------------
+alter table public.lead_interacoes  enable row level security;
+alter table public.conversas        enable row level security;
+alter table public.mensagens        enable row level security;
+alter table public.reguas           enable row level security;
+alter table public.regua_passos     enable row level security;
+alter table public.regua_execucoes  enable row level security;
+alter table public.campanhas        enable row level security;
+alter table public.lancamentos      enable row level security;
+alter table public.integracoes      enable row level security;
+
+drop policy if exists "interacoes_all" on public.lead_interacoes;
+create policy "interacoes_all" on public.lead_interacoes
+  for all to authenticated
+  using ((organization_id = public.minha_org() and public.is_operacional()) or public.is_super_admin())
+  with check ((organization_id = public.minha_org() and public.is_operacional()) or public.is_super_admin());
+
+drop policy if exists "conversas_all" on public.conversas;
+create policy "conversas_all" on public.conversas
+  for all to authenticated
+  using ((organization_id = public.minha_org() and public.is_operacional()) or public.is_super_admin())
+  with check ((organization_id = public.minha_org() and public.is_operacional()) or public.is_super_admin());
+
+-- Mensagem não tem organization_id: o acesso é herdado da conversa.
+drop policy if exists "mensagens_all" on public.mensagens;
+create policy "mensagens_all" on public.mensagens
+  for all to authenticated
+  using (exists (
+    select 1 from public.conversas c
+    where c.id = mensagens.conversa_id
+      and ((c.organization_id = public.minha_org() and public.is_operacional()) or public.is_super_admin())
+  ))
+  with check (exists (
+    select 1 from public.conversas c
+    where c.id = mensagens.conversa_id
+      and ((c.organization_id = public.minha_org() and public.is_operacional()) or public.is_super_admin())
+  ));
+
+drop policy if exists "reguas_all" on public.reguas;
+create policy "reguas_all" on public.reguas
+  for all to authenticated
+  using ((organization_id = public.minha_org() and public.is_operacional()) or public.is_super_admin())
+  with check ((organization_id = public.minha_org() and public.is_operacional()) or public.is_super_admin());
+
+drop policy if exists "passos_all" on public.regua_passos;
+create policy "passos_all" on public.regua_passos
+  for all to authenticated
+  using (exists (
+    select 1 from public.reguas r
+    where r.id = regua_passos.regua_id
+      and ((r.organization_id = public.minha_org() and public.is_operacional()) or public.is_super_admin())
+  ))
+  with check (exists (
+    select 1 from public.reguas r
+    where r.id = regua_passos.regua_id
+      and ((r.organization_id = public.minha_org() and public.is_operacional()) or public.is_super_admin())
+  ));
+
+drop policy if exists "execucoes_all" on public.regua_execucoes;
+create policy "execucoes_all" on public.regua_execucoes
+  for all to authenticated
+  using ((organization_id = public.minha_org() and public.is_operacional()) or public.is_super_admin())
+  with check ((organization_id = public.minha_org() and public.is_operacional()) or public.is_super_admin());
+
+-- Campanhas e financeiro: leitura da clínica inteira, escrita só do gestor.
+drop policy if exists "campanhas_select" on public.campanhas;
+create policy "campanhas_select" on public.campanhas
+  for select to authenticated
+  using (organization_id = public.minha_org() or public.is_super_admin());
+
+drop policy if exists "campanhas_write" on public.campanhas;
+create policy "campanhas_write" on public.campanhas
+  for all to authenticated
+  using ((organization_id = public.minha_org() and public.is_gestor()) or public.is_super_admin())
+  with check ((organization_id = public.minha_org() and public.is_gestor()) or public.is_super_admin());
+
+drop policy if exists "lancamentos_select" on public.lancamentos;
+create policy "lancamentos_select" on public.lancamentos
+  for select to authenticated
+  using (organization_id = public.minha_org() or public.is_super_admin());
+
+drop policy if exists "lancamentos_write" on public.lancamentos;
+create policy "lancamentos_write" on public.lancamentos
+  for all to authenticated
+  using ((organization_id = public.minha_org() and public.is_gestor()) or public.is_super_admin())
+  with check ((organization_id = public.minha_org() and public.is_gestor()) or public.is_super_admin());
+
+drop policy if exists "integracoes_select" on public.integracoes;
+create policy "integracoes_select" on public.integracoes
+  for select to authenticated
+  using (organization_id = public.minha_org() or public.is_super_admin());
+
+drop policy if exists "integracoes_write" on public.integracoes;
+create policy "integracoes_write" on public.integracoes
+  for all to authenticated
+  using ((organization_id = public.minha_org() and public.is_gestor()) or public.is_super_admin())
+  with check ((organization_id = public.minha_org() and public.is_gestor()) or public.is_super_admin());

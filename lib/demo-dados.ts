@@ -11,7 +11,7 @@ import type {
   Lesson,
   Organization,
 } from "@/lib/supabase/types";
-import { DEMO_ORG_ID, demoOrganization, CONTAS_DEMO } from "@/lib/demo";
+import { DEMO_ORG_ID, DEMO_ORGANIZACOES, CONTAS_DEMO } from "@/lib/demo";
 
 // Vídeo público usado só para o player funcionar na demonstração
 const VIDEO_DEMO =
@@ -335,78 +335,23 @@ export type ClienteResumo = Organization & {
   faturamento_mes: number;
 };
 
+/** Uso da plataforma no mês, por clínica da carteira fictícia. */
+const USO: Record<string, Omit<ClienteResumo, keyof Organization>> = {
+  [DEMO_ORG_ID]: { usuarios: 3, consultas_mes: 81, leads_mes: 118, faturamento_mes: 90390 },
+  "org-2": { usuarios: 7, consultas_mes: 164, leads_mes: 231, faturamento_mes: 187400 },
+  "org-3": { usuarios: 2, consultas_mes: 43, leads_mes: 61, faturamento_mes: 25800 },
+  "org-4": { usuarios: 5, consultas_mes: 96, leads_mes: 143, faturamento_mes: 132500 },
+  "org-5": { usuarios: 4, consultas_mes: 0, leads_mes: 0, faturamento_mes: 0 },
+};
+
 export function demoClientes(): ClienteResumo[] {
-  return [
-    {
-      ...demoOrganization,
-      usuarios: 3,
-      consultas_mes: 81,
-      leads_mes: 118,
-      faturamento_mes: 90390,
-    },
-    {
-      id: "org-2",
-      nome: "Odonto Sorriso Real",
-      slug: "sorriso-real",
-      especialidade: "Odontologia",
-      plano: "full",
-      cidade: "Curitiba, PR",
-      telefone: "(41) 3222-1010",
-      email: "contato@sorrisoreal.com.br",
-      ativo: true,
-      created_at: dias(420),
-      usuarios: 7,
-      consultas_mes: 164,
-      leads_mes: 231,
-      faturamento_mes: 187400,
-    },
-    {
-      id: "org-3",
-      nome: "Instituto Nutrir",
-      slug: "instituto-nutrir",
-      especialidade: "Nutrição",
-      plano: "essencial",
-      cidade: "Recife, PE",
-      telefone: "(81) 3444-2020",
-      email: "contato@nutrir.com.br",
-      ativo: true,
-      created_at: dias(95),
-      usuarios: 2,
-      consultas_mes: 43,
-      leads_mes: 61,
-      faturamento_mes: 25800,
-    },
-    {
-      id: "org-4",
-      nome: "Clínica Longevità",
-      slug: "longevita",
-      especialidade: "Longevidade",
-      plano: "performance",
-      cidade: "Florianópolis, SC",
-      telefone: "(48) 3555-3030",
-      email: "contato@longevita.com.br",
-      ativo: true,
-      created_at: dias(210),
-      usuarios: 5,
-      consultas_mes: 96,
-      leads_mes: 143,
-      faturamento_mes: 132500,
-    },
-    {
-      id: "org-5",
-      nome: "Núcleo Ortopédico Campinas",
-      slug: "nucleo-ortopedico",
-      especialidade: "Ortopedia",
-      plano: "performance",
-      cidade: "Campinas, SP",
-      telefone: "(19) 3777-4040",
-      email: "contato@nucleoortopedico.com.br",
-      ativo: false,
-      created_at: dias(520),
-      usuarios: 4,
-      consultas_mes: 0,
-      leads_mes: 0,
-      faturamento_mes: 0,
-    },
-  ];
+  const idade: Record<string, number> = {
+    [DEMO_ORG_ID]: 570, "org-2": 420, "org-3": 95, "org-4": 210, "org-5": 520,
+  };
+
+  return DEMO_ORGANIZACOES.map((org) => ({
+    ...org,
+    created_at: dias(idade[org.id] ?? 300),
+    ...(USO[org.id] ?? { usuarios: 0, consultas_mes: 0, leads_mes: 0, faturamento_mes: 0 }),
+  }));
 }

@@ -24,8 +24,10 @@ import {
   Stethoscope,
   ShieldCheck,
   Phone,
+  Building2,
+  UserRound,
 } from "lucide-react";
-import type { Consulta } from "@/lib/supabase/types";
+import type { ConsultaComContexto, OpcoesAgenda } from "@/lib/supabase/queries";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -38,14 +40,23 @@ import {
 import { cn } from "@/lib/utils";
 import { ConsultaDialog } from "@/components/app/consulta-dialog";
 import { NovaConsultaDialog } from "@/components/app/nova-consulta-dialog";
+import {
+  AgendaFiltros,
+  FILTROS_VAZIOS,
+  aplicarFiltros,
+  type FiltrosAgenda,
+} from "@/components/app/agenda-filtros";
 
 type Visao = "mes" | "semana" | "dia";
+type Consulta = ConsultaComContexto;
 
 export function AgendaCalendar({
   consultasIniciais,
+  opcoes,
   demo = false,
 }: {
-  consultasIniciais: Consulta[];
+  consultasIniciais: ConsultaComContexto[];
+  opcoes: OpcoesAgenda;
   demo?: boolean;
 }) {
   const [visao, setVisao] = useState<Visao>("mes");
@@ -53,18 +64,27 @@ export function AgendaCalendar({
   const [selecionada, setSelecionada] = useState<Consulta | null>(null);
   const [novaAberta, setNovaAberta] = useState(false);
   const [dataNova, setDataNova] = useState<Date | null>(null);
+  const [filtros, setFiltros] = useState<FiltrosAgenda>(FILTROS_VAZIOS);
+
+  const consultas = useMemo(
+    () => aplicarFiltros(consultasIniciais, filtros),
+    [consultasIniciais, filtros]
+  );
+
+  // Quem enxerga mais de uma clínica precisa ver de qual é cada consulta
+  const multiClinica = opcoes.clinicas.length > 1;
 
   // Agrupa consultas por dia (yyyy-MM-dd)
   const porDia = useMemo(() => {
     const mapa = new Map<string, Consulta[]>();
-    for (const c of consultasIniciais) {
+    for (const c of consultas) {
       const chave = format(new Date(c.data_hora), "yyyy-MM-dd");
       const arr = mapa.get(chave) ?? [];
       arr.push(c);
       mapa.set(chave, arr);
     }
     return mapa;
-  }, [consultasIniciais]);
+  }, [consultas]);
 
   const consultasDoDia = (d: Date) =>
     (porDia.get(format(d, "yyyy-MM-dd")) ?? []).sort((a, b) =>
@@ -105,8 +125,19 @@ export function AgendaCalendar({
         </Button>
       </header>
 
+      {/* Filtros */}
+      <div className="mt-6">
+        <AgendaFiltros
+          filtros={filtros}
+          onChange={setFiltros}
+          opcoes={opcoes}
+          total={consultasIniciais.length}
+          visiveis={consultas.length}
+        />
+      </div>
+
       {/* Barra de controle */}
-      <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <button
             onClick={() => navegar(-1)}
@@ -177,6 +208,7 @@ export function AgendaCalendar({
           <DayView
             cursor={cursor}
             consultas={consultasDoDia(cursor)}
+            multiClinica={multiClinica}
             onConsulta={setSelecionada}
             onNova={() => abrirNova(cursor)}
           />
@@ -377,11 +409,13 @@ function WeekView({
 function DayView({
   cursor,
   consultas,
+  multiClinica,
   onConsulta,
   onNova,
 }: {
   cursor: Date;
   consultas: Consulta[];
+  multiClinica: boolean;
   onConsulta: (c: Consulta) => void;
   onNova: () => void;
 }) {
@@ -462,6 +496,18 @@ function DayView({
                         {c.paciente_nome}
                       </p>
                       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-cinza-suave">
+                        {multiClinica && c.organizacao_nome && (
+                          <span className="flex items-center gap-1 font-medium text-azul-medico">
+                            <Building2 className="size-3.5 text-teal" />
+                            {c.organizacao_nome}
+                          </span>
+                        )}
+                        {c.medico_nome && (
+                          <span className="flex items-center gap-1">
+                            <UserRound className="size-3.5 text-teal" />
+                            {c.medico_nome}
+                          </span>
+                        )}
                         <span className="flex items-center gap-1">
                           <Stethoscope className="size-3.5 text-teal" />
                           {rotuloTipo[c.tipo]}

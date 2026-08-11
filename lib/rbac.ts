@@ -100,7 +100,7 @@ export const MODULOS: readonly Modulo[] = [
     href: "/app/crm",
     icone: Users,
     papeis: OPERACAO,
-    fase: 2,
+    fase: 1,
     grupo: "operacao",
     resumo:
       "Leads e pacientes num funil visual: do primeiro contato ao tratamento.",
@@ -111,7 +111,7 @@ export const MODULOS: readonly Modulo[] = [
     href: "/app/atendimento",
     icone: MessagesSquare,
     papeis: OPERACAO,
-    fase: 3,
+    fase: 1,
     grupo: "operacao",
     resumo:
       "Caixa de entrada única de WhatsApp, Instagram e Facebook, ligada ao CRM.",
@@ -122,7 +122,7 @@ export const MODULOS: readonly Modulo[] = [
     href: "/app/retencao",
     icone: Repeat,
     papeis: OPERACAO,
-    fase: 3,
+    fase: 1,
     grupo: "crescimento",
     resumo:
       "Réguas de reabordagem, no-show, reativação de base e recall de retorno.",
@@ -133,7 +133,7 @@ export const MODULOS: readonly Modulo[] = [
     href: "/app/marketing",
     icone: Megaphone,
     papeis: GESTAO,
-    fase: 4,
+    fase: 1,
     grupo: "crescimento",
     resumo:
       "Campanhas de Google e Meta Ads: investimento, leads, custo por lead e ROI.",
@@ -166,7 +166,7 @@ export const MODULOS: readonly Modulo[] = [
     href: "/app/financeiro",
     icone: Wallet,
     papeis: GESTAO,
-    fase: 5,
+    fase: 1,
     grupo: "crescimento",
     resumo:
       "Faturamento por procedimento, ticket médio e valor do paciente ao longo do tempo.",
@@ -207,7 +207,7 @@ export const MODULOS: readonly Modulo[] = [
     href: "/app/configuracoes",
     icone: Settings,
     papeis: GESTAO,
-    fase: 5,
+    fase: 1,
     grupo: "conta",
     resumo: "Dados da clínica, usuários, papéis e integrações.",
   },

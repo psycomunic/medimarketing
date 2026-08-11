@@ -1,73 +1,124 @@
-import { User, Stethoscope, Phone, IdCard } from "lucide-react";
-import { getSessao } from "@/lib/supabase/queries";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
+import Image from "next/image";
+import { Building2, CalendarDays, ShieldCheck } from "lucide-react";
+import { FormPerfil, FormSenha } from "@/components/app/perfil/form-perfil";
+import { exigirSessao } from "@/lib/acesso";
+import { emModoDemo } from "@/lib/supabase/queries";
+import { rotuloPapel, modulosDoPapel } from "@/lib/rbac";
 
-export const metadata = { title: "Perfil" };
+export const metadata = { title: "Meu perfil" };
 
-// FASE 2: edição de perfil (nome, especialidade, CRM, telefone, foto).
-// Campos exibidos em modo leitura; a persistência será conectada na Fase 2.
 export default async function PerfilPage() {
-  const { profile } = await getSessao();
+  const { profile, organizacao, role } = await exigirSessao();
+  const demo = await emModoDemo();
 
-  const campos = [
-    { id: "nome", label: "Nome", icon: User, valor: profile?.nome ?? "", ph: "Seu nome" },
-    { id: "especialidade", label: "Especialidade", icon: Stethoscope, valor: profile?.especialidade ?? "", ph: "Ex.: Dermatologia" },
-    { id: "crm", label: "CRM", icon: IdCard, valor: profile?.crm ?? "", ph: "CRM/UF 000000" },
-    { id: "telefone", label: "Telefone", icon: Phone, valor: profile?.telefone ?? "", ph: "(11) 99999-9999" },
-  ];
+  const modulos = modulosDoPapel(role);
+  const desde = new Date(profile.created_at).toLocaleDateString("pt-BR", {
+    month: "long",
+    year: "numeric",
+  });
 
   return (
-    <div className="mx-auto max-w-2xl px-5 py-8 md:px-8 md:py-10">
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl md:text-3xl">Meu perfil</h1>
-          <p className="mt-1 text-cinza-suave">Seus dados profissionais.</p>
-        </div>
-        <span className="rounded-full bg-alerta/12 px-3 py-1 text-xs font-semibold text-alerta">
-          Edição em breve
-        </span>
+    <div className="mx-auto max-w-3xl px-5 py-8 md:px-8 md:py-10">
+      <header>
+        <h1 className="text-2xl md:text-3xl">Meu perfil</h1>
+        <p className="mt-1 text-cinza-suave">
+          Seus dados, seu acesso e a senha da conta.
+        </p>
       </header>
 
-      <div className="mt-8 rounded-lg border border-border bg-white p-6 shadow-soft">
-        <div className="mb-6 flex items-center gap-4">
-          <span className="grid size-16 place-items-center rounded-full bg-azul-medico text-xl font-semibold text-white">
-            {(profile?.nome ?? "M").charAt(0).toUpperCase()}
-          </span>
-          <div>
+      {/* Cartão de identificação */}
+      <section className="mt-8 rounded-lg border border-border bg-white p-6 shadow-soft">
+        <div className="flex flex-wrap items-center gap-4">
+          {profile.foto_url ? (
+            <Image
+              src={profile.foto_url}
+              alt=""
+              width={64}
+              height={64}
+              className="size-16 shrink-0 rounded-full object-cover"
+              unoptimized
+            />
+          ) : (
+            <span className="grid size-16 shrink-0 place-items-center rounded-full bg-azul-medico text-xl font-semibold text-white">
+              {(profile.nome ?? "?").charAt(0).toUpperCase()}
+            </span>
+          )}
+
+          <div className="min-w-0 flex-1">
             <p className="font-heading text-lg font-semibold text-azul-medico">
-              {profile?.nome || "Médico(a)"}
+              {profile.nome || "Sem nome"}
             </p>
             <p className="text-sm text-cinza-suave">
-              {profile?.especialidade || "Especialidade não informada"}
+              {profile.especialidade || "Especialidade não informada"}
+              {profile.crm && ` · ${profile.crm}`}
             </p>
           </div>
+
+          <span className="rounded-full bg-verde-menta px-3 py-1.5 text-xs font-semibold text-azul-medico">
+            {rotuloPapel(role)}
+          </span>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          {campos.map((c) => (
-            <div key={c.id} className="grid gap-1.5">
-              <Label htmlFor={c.id}>{c.label}</Label>
-              <div className="relative">
-                <c.icon className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-cinza-suave" />
-                <Input
-                  id={c.id}
-                  defaultValue={c.valor}
-                  placeholder={c.ph}
-                  className="pl-10"
-                  disabled
-                />
-              </div>
-            </div>
+        <dl className="mt-5 grid gap-3 border-t border-border pt-5 sm:grid-cols-3">
+          <Info
+            icone={Building2}
+            rotulo="Clínica"
+            valor={organizacao?.nome ?? "Todas as clínicas"}
+          />
+          <Info
+            icone={ShieldCheck}
+            rotulo="Módulos liberados"
+            valor={`${modulos.length} do painel`}
+          />
+          <Info icone={CalendarDays} rotulo="Na plataforma desde" valor={desde} />
+        </dl>
+      </section>
+
+      <div className="mt-6">
+        <FormPerfil profile={profile} demo={demo} />
+      </div>
+
+      <FormSenha demo={demo} />
+
+      {/* O que este papel pode acessar */}
+      <section className="mt-6 rounded-lg border border-border bg-white p-6 shadow-soft">
+        <h2 className="text-lg font-semibold text-azul-medico">Seu acesso</h2>
+        <p className="mt-1 text-sm text-cinza-suave">
+          Como {rotuloPapel(role).toLowerCase()}, você enxerga estes módulos.
+          Quem muda isso é o gestor da clínica, em Configurações.
+        </p>
+
+        <ul className="mt-4 flex flex-wrap gap-2">
+          {modulos.map((m) => (
+            <li
+              key={m.id}
+              className="inline-flex items-center gap-1.5 rounded-full bg-branco-clinico px-3 py-1.5 text-xs text-cinza-suave"
+            >
+              <m.icone className="size-3.5 text-teal" />
+              {m.label}
+            </li>
           ))}
-        </div>
+        </ul>
+      </section>
+    </div>
+  );
+}
 
-        <div className="mt-6 flex justify-end">
-          <Button variant="marca" disabled>
-            Salvar alterações
-          </Button>
-        </div>
+function Info({
+  icone: Icone,
+  rotulo,
+  valor,
+}: {
+  icone: typeof Building2;
+  rotulo: string;
+  valor: string;
+}) {
+  return (
+    <div className="flex items-start gap-2.5">
+      <Icone className="mt-0.5 size-4 shrink-0 text-teal" />
+      <div className="min-w-0">
+        <dt className="text-xs text-cinza-suave">{rotulo}</dt>
+        <dd className="truncate text-sm font-medium text-cinza-texto">{valor}</dd>
       </div>
     </div>
   );
