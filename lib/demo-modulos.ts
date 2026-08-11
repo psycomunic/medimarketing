@@ -8,6 +8,7 @@
  */
 import type {
   Campanha,
+  ConfirmacaoComConsulta,
   Conversa,
   Integracao,
   Lancamento,
@@ -17,7 +18,13 @@ import type {
   ReguaComDesempenho,
   ReguaPasso,
 } from "@/lib/supabase/types";
-import { CONTAS_DEMO, DEMO_ORG_ID } from "@/lib/demo";
+import {
+  CONTAS_DEMO,
+  DEMO_ORG_ID,
+  demoConsultas,
+  demoNomeMedico,
+} from "@/lib/demo";
+import { calcularDisparo } from "@/lib/lembretes";
 
 const SECRETARIA = CONTAS_DEMO[1].profile;
 const GESTOR = CONTAS_DEMO[2].profile;
@@ -429,6 +436,89 @@ export function demoLancamentos(): Lancamento[] {
   }
 
   return lista.sort((a, b) => b.data_competencia.localeCompare(a.data_competencia));
+}
+
+/* ------------------------------------------------------------------ */
+/* Confirmações de consulta                                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Uma confirmação por consulta futura da clínica de demonstração, em
+ * estágios diferentes: o que ainda não saiu, o que foi enviado e está
+ * esperando, e as respostas que já chegaram.
+ */
+export function demoConfirmacoes(): ConfirmacaoComConsulta[] {
+  const futuras = demoConsultas()
+    .filter(
+      (c) =>
+        c.organization_id === DEMO_ORG_ID &&
+        // Cancelada não precisa confirmar; realizada já aconteceu. Mesmo
+        // critério que gerarPendentes() usa no banco.
+        (c.status === "pendente" || c.status === "confirmada") &&
+        new Date(c.data_hora).getTime() > Date.now()
+    )
+    .sort((a, b) => a.data_hora.localeCompare(b.data_hora));
+
+  // Sequência que cobre todos os estados da fila. `atrasado` força um
+  // disparo vencido: é o caso que a recepção resolve todo dia e o único
+  // que aparece na aba "precisam de ação" logo ao abrir.
+  const roteiro: {
+    status: ConfirmacaoComConsulta["status"];
+    enviado?: number;
+    respondido?: number;
+    atrasado?: boolean;
+  }[] = [
+    { status: "confirmado", enviado: 20, respondido: 18 },
+    { status: "enviado", enviado: 19 },
+    { status: "pendente", atrasado: true },
+    { status: "reagendar", enviado: 17, respondido: 15 },
+    { status: "confirmado", enviado: 18, respondido: 4 },
+    { status: "enviado", enviado: 2 },
+    { status: "pendente", atrasado: true },
+    { status: "recusado", enviado: 26, respondido: 24 },
+  ];
+
+  // Quem não tem telefone não teria como receber a mensagem. Só o
+  // primeiro fica pendente — para a tela mostrar o aviso de cadastro
+  // incompleto —, e o roteiro é reservado a quem dá para enviar.
+  let semTelefoneVistos = 0;
+  let proximo = 0;
+
+  return futuras.map((c) => {
+    const r = c.paciente_telefone
+      ? roteiro[proximo++ % roteiro.length]
+      : semTelefoneVistos++ === 0
+        ? { status: "pendente" as const, atrasado: true }
+        : { status: "confirmado" as const, enviado: 30, respondido: 28 };
+
+    const disparo = r.atrasado
+      ? new Date(Date.now() - 3 * 3600_000)
+      : calcularDisparo(new Date(c.data_hora), 1, 9);
+
+    return {
+      id: `conf-${c.id}`,
+      consulta_id: c.id,
+      organization_id: DEMO_ORG_ID,
+      token: `demo-token-${c.id}`,
+      agendado_para: disparo.toISOString(),
+      enviado_em: r.enviado ? h(r.enviado) : null,
+      canal: r.enviado ? "whatsapp" : null,
+      status: r.status,
+      respondido_em: r.respondido ? h(r.respondido) : null,
+      observacao:
+        r.status === "reagendar"
+          ? "Paciente pediu para remarcar: viagem a trabalho."
+          : null,
+      tentativas: r.enviado ? 1 : 0,
+      created_at: h(48),
+      paciente_nome: c.paciente_nome,
+      paciente_telefone: c.paciente_telefone,
+      data_hora: c.data_hora,
+      medico_nome: demoNomeMedico(c.medico_id),
+      tipo: c.tipo,
+      status_consulta: c.status,
+    };
+  });
 }
 
 /* ------------------------------------------------------------------ */

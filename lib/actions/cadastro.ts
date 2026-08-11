@@ -139,6 +139,9 @@ export async function cadastrar(input: CadastroInput): Promise<CadastroResult> {
         instagram: null,
         mensagem_lembrete: null,
         antecedencia_lembrete_h: 24,
+        lembrete_dias_uteis: 1,
+        lembrete_hora: 9,
+        lembrete_ativo: true,
       })
       .select("id")
       .single();

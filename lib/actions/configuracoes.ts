@@ -41,7 +41,9 @@ const clinicaSchema = z.object({
   site: z.string().trim().url("Endereço de site inválido.").optional().or(z.literal("")),
   instagram: z.string().trim().max(60).optional().or(z.literal("")),
   mensagemLembrete: z.string().trim().max(600).optional().or(z.literal("")),
-  antecedenciaLembreteH: z.number().int().min(1).max(168),
+  lembreteAtivo: z.boolean(),
+  lembreteDiasUteis: z.number().int().min(1).max(10),
+  lembreteHora: z.number().int().min(0).max(23),
 });
 
 export type ClinicaInput = z.input<typeof clinicaSchema>;
@@ -74,7 +76,9 @@ export async function salvarClinica(input: ClinicaInput): Promise<ActionResult> 
       site: d.site || null,
       instagram: d.instagram || null,
       mensagem_lembrete: d.mensagemLembrete || null,
-      antecedencia_lembrete_h: d.antecedenciaLembreteH,
+      lembrete_ativo: d.lembreteAtivo,
+      lembrete_dias_uteis: d.lembreteDiasUteis,
+      lembrete_hora: d.lembreteHora,
     })
     .eq("id", orgId);
 

@@ -39,7 +39,10 @@ import {
 } from "@/lib/agenda";
 import { cn } from "@/lib/utils";
 import { ConsultaDialog } from "@/components/app/consulta-dialog";
-import { NovaConsultaDialog } from "@/components/app/nova-consulta-dialog";
+import {
+  NovaConsultaDialog,
+  type OpcaoProfissional,
+} from "@/components/app/nova-consulta-dialog";
 import {
   AgendaFiltros,
   FILTROS_VAZIOS,
@@ -53,10 +56,18 @@ type Consulta = ConsultaComContexto;
 export function AgendaCalendar({
   consultasIniciais,
   opcoes,
+  profissionais = [],
+  clinicas = [],
+  usuarioId,
+  organizationId,
   demo = false,
 }: {
   consultasIniciais: ConsultaComContexto[];
   opcoes: OpcoesAgenda;
+  profissionais?: OpcaoProfissional[];
+  clinicas?: { id: string; nome: string }[];
+  usuarioId?: string;
+  organizationId?: string | null;
   demo?: boolean;
 }) {
   const [visao, setVisao] = useState<Visao>("mes");
@@ -242,6 +253,10 @@ export function AgendaCalendar({
         aberto={novaAberta}
         data={dataNova}
         onOpenChange={setNovaAberta}
+        profissionais={profissionais}
+        clinicas={clinicas}
+        usuarioId={usuarioId}
+        organizationId={organizationId}
       />
     </div>
   );

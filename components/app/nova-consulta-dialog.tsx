@@ -37,14 +37,31 @@ const DURACOES = [15, 20, 30, 40, 45, 60, 90];
 const selectClass =
   "flex h-11 w-full rounded-md border border-input bg-white px-4 text-sm text-cinza-texto shadow-sm focus-visible:border-teal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40";
 
+export type OpcaoProfissional = {
+  id: string;
+  nome: string;
+  organization_id: string | null;
+};
+
 export function NovaConsultaDialog({
   aberto,
   data,
   onOpenChange,
+  profissionais = [],
+  clinicas = [],
+  usuarioId,
+  organizationId,
 }: {
   aberto: boolean;
   data: Date | null;
   onOpenChange: (aberto: boolean) => void;
+  /** Equipe que pode atender. Vazio = só quem está criando. */
+  profissionais?: OpcaoProfissional[];
+  /** Só tem mais de uma para o super admin. */
+  clinicas?: { id: string; nome: string }[];
+  usuarioId?: string;
+  /** Clínica de quem está criando; nula para o super admin. */
+  organizationId?: string | null;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -63,6 +80,23 @@ export function NovaConsultaDialog({
   const [motivo, setMotivo] = useState("");
   const [valor, setValor] = useState("");
   const [observacao, setObservacao] = useState("");
+  const [clinicaId, setClinicaId] = useState(organizationId ?? clinicas[0]?.id ?? "");
+  // Só pré-seleciona a si mesmo quem de fato atende na clínica
+  const [medicoId, setMedicoId] = useState(
+    profissionais.some((p) => p.id === usuarioId) ? usuarioId ?? "" : ""
+  );
+
+  // Trocar de clínica invalida um profissional de outra
+  const daClinica = profissionais.filter(
+    (p) => !clinicaId || p.organization_id === clinicaId
+  );
+  const precisaEscolherClinica = clinicas.length > 1;
+  const souProfissionalDaqui = daClinica.some((p) => p.id === usuarioId);
+
+  // O bloco só some quando não há nada a decidir: uma clínica só e o
+  // próprio usuário como único profissional (o médico marcando encaixe).
+  const precisaEscolherAtendimento =
+    precisaEscolherClinica || daClinica.length > 1 || !souProfissionalDaqui;
 
   // Reinicia o formulário ao abrir, preenchendo a data escolhida
   useEffect(() => {
@@ -109,6 +143,8 @@ export function NovaConsultaDialog({
         motivo,
         observacao,
         valor: Number.isFinite(valorNum) ? valorNum : undefined,
+        medico_id: medicoId || undefined,
+        organization_id: clinicaId || undefined,
       });
       if (res.ok) {
         limpar();
@@ -130,6 +166,81 @@ export function NovaConsultaDialog({
         </DialogHeader>
 
         <form onSubmit={onSubmit} className="grid gap-5">
+          {/* ---------- Bloco: Atendimento ----------
+              Vem primeiro porque define o resto: a clínica determina
+              quais profissionais aparecem, e é ela que liga a consulta
+              ao financeiro, aos indicadores e à confirmação. */}
+          {precisaEscolherAtendimento && (
+            <fieldset className="grid gap-4 sm:grid-cols-2">
+              <legend className="mb-1 text-xs font-semibold uppercase tracking-wide text-teal">
+                Atendimento
+              </legend>
+
+              {precisaEscolherClinica && (
+                <div className="grid gap-1.5">
+                  <Label htmlFor="clinica">
+                    Clínica <span className="text-coral">*</span>
+                  </Label>
+                  <select
+                    id="clinica"
+                    className={selectClass}
+                    value={clinicaId}
+                    onChange={(e) => {
+                      setClinicaId(e.target.value);
+                      // O profissional escolhido pode não ser desta clínica
+                      const aindaVale = profissionais.some(
+                        (p) => p.id === medicoId && p.organization_id === e.target.value
+                      );
+                      if (!aindaVale) setMedicoId("");
+                    }}
+                  >
+                    <option value="">Selecione…</option>
+                    {clinicas.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.nome}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {clinicaId && daClinica.length === 0 ? (
+                <p className="rounded-md border border-dashed border-alerta/40 bg-alerta/5 px-3 py-2.5 text-xs text-cinza-suave sm:col-span-2">
+                  Esta clínica ainda não tem nenhum profissional cadastrado.
+                  Crie o acesso do médico em{" "}
+                  <a
+                    href="/app/admin/usuarios"
+                    className="font-semibold text-teal hover:underline"
+                  >
+                    Usuários
+                  </a>{" "}
+                  antes de marcar a consulta — é ele que aparece na agenda e
+                  na mensagem enviada ao paciente.
+                </p>
+              ) : (
+                <div className="grid gap-1.5">
+                  <Label htmlFor="profissional">
+                    Profissional <span className="text-coral">*</span>
+                  </Label>
+                  <select
+                    id="profissional"
+                    className={selectClass}
+                    value={medicoId}
+                    onChange={(e) => setMedicoId(e.target.value)}
+                  >
+                    <option value="">Selecione…</option>
+                    {daClinica.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.nome}
+                        {p.id === usuarioId ? " (você)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </fieldset>
+          )}
+
           {/* ---------- Bloco: Paciente ---------- */}
           <fieldset className="grid gap-4">
             <legend className="mb-1 text-xs font-semibold uppercase tracking-wide text-teal">

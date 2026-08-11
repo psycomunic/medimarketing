@@ -56,8 +56,13 @@ export type Organization = {
   instagram: string | null;
   /** Texto do lembrete de consulta enviado ao paciente. */
   mensagem_lembrete: string | null;
-  /** Quantas horas antes o lembrete dispara. */
+  /** @deprecated Substituído por `lembrete_dias_uteis`. */
   antecedencia_lembrete_h: number;
+  /** Quantos dias úteis antes o lembrete sai. */
+  lembrete_dias_uteis: number;
+  /** Hora do dia (0–23) em que o disparo acontece. */
+  lembrete_hora: number;
+  lembrete_ativo: boolean;
   created_at: string;
 };
 
@@ -346,6 +351,55 @@ export type Lancamento = {
 };
 
 /* ------------------------------------------------------------------ */
+/* Confirmação de consulta                                             */
+/* ------------------------------------------------------------------ */
+
+export type StatusConfirmacao =
+  /** Ainda não saiu: esperando a data de disparo. */
+  | "pendente"
+  /** Mensagem enviada, aguardando o paciente responder. */
+  | "enviado"
+  | "confirmado"
+  /** Paciente pediu outro horário. */
+  | "reagendar"
+  /** Paciente avisou que não vem. */
+  | "recusado"
+  | "cancelado";
+
+export type CanalEnvio = "whatsapp" | "manual" | "email";
+
+/**
+ * Pedido de confirmação de uma consulta.
+ *
+ * O `token` é a credencial do paciente: com ele a página pública abre
+ * sem login. Uma linha por consulta.
+ */
+export type Confirmacao = {
+  id: string;
+  consulta_id: string;
+  organization_id: string;
+  token: string;
+  agendado_para: string;
+  enviado_em: string | null;
+  canal: CanalEnvio | null;
+  status: StatusConfirmacao;
+  respondido_em: string | null;
+  observacao: string | null;
+  tentativas: number;
+  created_at: string;
+};
+
+/** Confirmação com os dados da consulta que a tela precisa mostrar. */
+export type ConfirmacaoComConsulta = Confirmacao & {
+  paciente_nome: string;
+  paciente_telefone: string | null;
+  data_hora: string;
+  medico_nome: string | null;
+  tipo: TipoConsulta;
+  status_consulta: StatusConsulta;
+};
+
+/* ------------------------------------------------------------------ */
 /* Configurações — integrações da clínica                              */
 /* ------------------------------------------------------------------ */
 
@@ -602,6 +656,15 @@ export interface Database {
           atualizado_em?: string;
         },
         Partial<Integracao>
+      >;
+      confirmacoes: Tabela<
+        Confirmacao,
+        Omit<Confirmacao, "id" | "created_at" | "status" | "tentativas"> & {
+          id?: string;
+          status?: StatusConfirmacao;
+          tentativas?: number;
+        },
+        Partial<Confirmacao>
       >;
     };
     // Empty-key form (não use Record<string, never>: isso faria keyof = string

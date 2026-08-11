@@ -8,6 +8,7 @@
 import {
   LayoutDashboard,
   CalendarDays,
+  CalendarCheck,
   Clock,
   Users,
   MessagesSquare,
@@ -29,6 +30,7 @@ import type { Role } from "@/lib/supabase/types";
 export type ModuloId =
   | "dashboard"
   | "agenda"
+  | "confirmacoes"
   | "disponibilidade"
   | "crm"
   | "atendimento"
@@ -85,6 +87,17 @@ export const MODULOS: readonly Modulo[] = [
     fase: 1,
     grupo: "operacao",
     resumo: "Consultas por mês, semana e dia, com status e confirmação.",
+  },
+  {
+    id: "confirmacoes",
+    label: "Confirmações",
+    href: "/app/confirmacoes",
+    icone: CalendarCheck,
+    papeis: OPERACAO,
+    fase: 1,
+    grupo: "operacao",
+    resumo:
+      "Lembrete um dia útil antes e o paciente confirmando a presença pelo link.",
   },
   {
     id: "disponibilidade",

@@ -52,9 +52,11 @@ function org(
     responsavel: null,
     site: null,
     instagram: `@${slug.replace(/-/g, "")}`,
-    mensagem_lembrete:
-      "Olá, {paciente}! Passando para confirmar sua consulta em {data} às {hora} na {clinica}. Pode confirmar, por favor?",
+    mensagem_lembrete: null,
     antecedencia_lembrete_h: 24,
+    lembrete_dias_uteis: 1,
+    lembrete_hora: 9,
+    lembrete_ativo: true,
     created_at: new Date("2024-01-15").toISOString(),
     ...extras,
   };

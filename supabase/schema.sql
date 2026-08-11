@@ -969,3 +969,66 @@ create policy "integracoes_write" on public.integracoes
   for all to authenticated
   using ((organization_id = public.minha_org() and public.is_gestor()) or public.is_super_admin())
   with check ((organization_id = public.minha_org() and public.is_gestor()) or public.is_super_admin());
+
+-- =====================================================================
+-- CONFIRMAÇÃO DE CONSULTA
+--
+-- O paciente recebe um link único e confirma a presença sem precisar de
+-- conta. O disparo sai 1 dia útil antes, no horário escolhido pela
+-- clínica.
+-- =====================================================================
+
+-- Preferências de disparo (a antecedencia_lembrete_h vira legado: passou
+-- a ser contada em dias úteis, e não em horas corridas, porque consulta
+-- de segunda precisa avisar na sexta)
+alter table public.organizations add column if not exists lembrete_dias_uteis integer not null default 1;
+alter table public.organizations add column if not exists lembrete_hora       integer not null default 9
+  check (lembrete_hora between 0 and 23);
+alter table public.organizations add column if not exists lembrete_ativo      boolean not null default true;
+
+create table if not exists public.confirmacoes (
+  id              uuid primary key default uuid_generate_v4(),
+  consulta_id     uuid not null unique references public.consultas(id) on delete cascade,
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+
+  -- Segredo que abre a página pública. Gerado no servidor com bytes
+  -- aleatórios: é a única credencial do paciente, então precisa ser
+  -- longo o bastante para não ser adivinhado.
+  token           text not null unique,
+
+  -- Quando o lembrete deve sair (1 dia útil antes, no horário da clínica)
+  agendado_para   timestamptz not null,
+  enviado_em      timestamptz,
+  canal           text check (canal in ('whatsapp','manual','email')),
+
+  status          text not null default 'pendente'
+                    check (status in ('pendente','enviado','confirmado','reagendar','recusado','cancelado')),
+  respondido_em   timestamptz,
+  observacao      text,
+  -- Quantas vezes a mensagem saiu, para não insistir sem limite
+  tentativas      integer not null default 0,
+  created_at      timestamptz not null default now()
+);
+
+create index if not exists idx_confirmacoes_envio
+  on public.confirmacoes (organization_id, agendado_para)
+  where status = 'pendente';
+
+create index if not exists idx_confirmacoes_consulta
+  on public.confirmacoes (consulta_id);
+
+-- ---------------------------------------------------------------------
+-- RLS
+--
+-- A página do paciente NÃO passa por aqui: ela roda no servidor com a
+-- service role e busca pelo token exato. É de propósito — liberar select
+-- para `anon` deixaria qualquer visitante varrer a agenda inteira das
+-- clínicas, e um filtro por token no client não impede isso.
+-- ---------------------------------------------------------------------
+alter table public.confirmacoes enable row level security;
+
+drop policy if exists "confirmacoes_all" on public.confirmacoes;
+create policy "confirmacoes_all" on public.confirmacoes
+  for all to authenticated
+  using ((organization_id = public.minha_org() and public.is_operacional()) or public.is_super_admin())
+  with check ((organization_id = public.minha_org() and public.is_operacional()) or public.is_super_admin());

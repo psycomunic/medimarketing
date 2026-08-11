@@ -139,7 +139,9 @@ function FormClinica({ organizacao: o }: { organizacao: Organization }) {
     site: o.site ?? "",
     instagram: o.instagram ?? "",
     mensagemLembrete: o.mensagem_lembrete ?? "",
-    antecedenciaLembreteH: String(o.antecedencia_lembrete_h),
+    lembreteAtivo: o.lembrete_ativo ?? true,
+    lembreteDiasUteis: String(o.lembrete_dias_uteis ?? 1),
+    lembreteHora: String(o.lembrete_hora ?? 9),
   });
   const [erro, setErro] = useState<string | null>(null);
   const [salvo, setSalvo] = useState(false);
@@ -152,7 +154,8 @@ function FormClinica({ organizacao: o }: { organizacao: Organization }) {
       const res = await salvarClinica({
         organizationId: o.id,
         ...v,
-        antecedenciaLembreteH: Number(v.antecedenciaLembreteH || 24),
+        lembreteDiasUteis: Number(v.lembreteDiasUteis || 1),
+        lembreteHora: Number(v.lembreteHora || 9),
       });
       if (!res.ok) {
         setErro(res.erro);
@@ -235,17 +238,54 @@ function FormClinica({ organizacao: o }: { organizacao: Organization }) {
               placeholder="Olá, {paciente}! Confirmando sua consulta em {data} às {hora}."
             />
           </div>
-          <div className="grid max-w-xs gap-1.5">
-            <Label htmlFor="antecedencia">Enviar quantas horas antes</Label>
-            <Input
-              id="antecedencia"
-              type="number"
-              min={1}
-              max={168}
-              value={v.antecedenciaLembreteH}
-              onChange={(e) => setV({ ...v, antecedenciaLembreteH: e.target.value })}
-            />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-1.5">
+              <Label htmlFor="dias-uteis">Enviar quantos dias úteis antes</Label>
+              <Input
+                id="dias-uteis"
+                type="number"
+                min={1}
+                max={10}
+                value={v.lembreteDiasUteis}
+                onChange={(e) => setV({ ...v, lembreteDiasUteis: e.target.value })}
+              />
+              <p className="text-xs text-cinza-suave">
+                Em dias úteis, e não em horas: consulta de segunda avisa na
+                sexta, senão a mensagem cai no sábado.
+              </p>
+            </div>
+
+            <div className="grid gap-1.5">
+              <Label htmlFor="hora-envio">Horário do disparo</Label>
+              <Select
+                id="hora-envio"
+                value={v.lembreteHora}
+                onChange={(e) => setV({ ...v, lembreteHora: e.target.value })}
+              >
+                {Array.from({ length: 24 }, (_, h) => (
+                  <option key={h} value={String(h)}>
+                    {String(h).padStart(2, "0")}:00
+                  </option>
+                ))}
+              </Select>
+            </div>
           </div>
+
+          <label className="flex items-start gap-2.5 rounded-md border border-border bg-branco-clinico px-4 py-3">
+            <input
+              type="checkbox"
+              checked={v.lembreteAtivo}
+              onChange={(e) => setV({ ...v, lembreteAtivo: e.target.checked })}
+              className="mt-0.5 size-4 accent-teal"
+            />
+            <span className="text-sm text-cinza-texto">
+              Enviar lembretes automaticamente
+              <span className="mt-0.5 block text-xs text-cinza-suave">
+                Desligado, os pedidos continuam sendo criados e ficam na fila
+                de Confirmações para envio manual.
+              </span>
+            </span>
+          </label>
         </div>
       </section>
 
