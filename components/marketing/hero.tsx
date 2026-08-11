@@ -99,7 +99,7 @@ export function Hero() {
       */}
       <div className="relative aspect-[3/2] w-full lg:absolute lg:inset-0 lg:z-0 lg:aspect-auto">
         <Image
-          src="/BANNER-FUNDO-HERO.jpg"
+          src="/BANNER-FUNDO-HEROok.jpg"
           alt="Notebook exibindo a agenda de consultas da plataforma Medi Marketing"
           fill
           sizes="100vw"
