@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createAdminClient, adminDisponivel } from "@/lib/supabase/admin";
+import { notificar } from "@/lib/supabase/notificacoes";
 import type { StatusConfirmacao } from "@/lib/supabase/types";
 
 export type RespostaPaciente = "confirmado" | "reagendar" | "recusado";
@@ -37,7 +38,7 @@ export async function responderConfirmacao(
 
   const { data: conf } = await admin
     .from("confirmacoes")
-    .select("id,consulta_id,status")
+    .select("id,consulta_id,status,organization_id")
     .eq("token", token)
     .maybeSingle();
 
@@ -48,7 +49,7 @@ export async function responderConfirmacao(
 
   const { data: consulta } = await admin
     .from("consultas")
-    .select("data_hora,status")
+    .select("data_hora,status,paciente_nome,paciente_telefone")
     .eq("id", conf.consulta_id)
     .maybeSingle();
 
@@ -87,9 +88,53 @@ export async function responderConfirmacao(
       .eq("id", conf.consulta_id);
   }
 
+  // Avisa a equipe. O pedido de reagendamento entra como prioridade
+  // alta: é o único caso em que alguém precisa ligar de volta, e quanto
+  // mais cedo, maior a chance de salvar o horário.
+  const quando = new Date(consulta.data_hora).toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const contato = consulta.paciente_telefone
+    ? ` · ${consulta.paciente_telefone}`
+    : "";
+
+  const avisos = {
+    reagendar: {
+      tipo: "reagendamento" as const,
+      prioridade: "alta" as const,
+      titulo: `${consulta.paciente_nome} pediu para reagendar`,
+      descricao: `Consulta de ${quando}${contato}. O horário segue reservado — combine o novo o quanto antes.`,
+    },
+    recusado: {
+      tipo: "cancelamento" as const,
+      prioridade: "alta" as const,
+      titulo: `${consulta.paciente_nome} não vai comparecer`,
+      descricao: `A consulta de ${quando} foi cancelada${contato}. O horário está livre para encaixe.`,
+    },
+    confirmado: {
+      tipo: "confirmacao" as const,
+      prioridade: "normal" as const,
+      titulo: `${consulta.paciente_nome} confirmou a presença`,
+      descricao: `Consulta de ${quando}.`,
+    },
+  };
+
+  const aviso = avisos[resposta];
+  await notificar({
+    organizationId: conf.organization_id,
+    entidadeId: conf.consulta_id,
+    href: "/app/confirmacoes",
+    ...aviso,
+  });
+
   revalidatePath(`/confirmar/${token}`);
   revalidatePath("/app/confirmacoes");
   revalidatePath("/app/agenda");
+  revalidatePath("/app/notificacoes");
+  revalidatePath("/app", "layout");
 
   return { ok: true, status: resposta };
 }

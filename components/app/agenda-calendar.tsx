@@ -26,7 +26,9 @@ import {
   Phone,
   Building2,
   UserRound,
+  MessageCircle,
 } from "lucide-react";
+import { linkWhatsApp } from "@/lib/lembretes";
 import type { ConsultaComContexto, OpcoesAgenda } from "@/lib/supabase/queries";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -206,6 +208,7 @@ export function AgendaCalendar({
           <MonthView
             cursor={cursor}
             consultasDoDia={consultasDoDia}
+            confirmacoes={confirmacoes}
             onDia={(d) => {
               setCursor(d);
               setVisao("dia");
@@ -217,6 +220,7 @@ export function AgendaCalendar({
           <WeekView
             cursor={cursor}
             consultasDoDia={consultasDoDia}
+            confirmacoes={confirmacoes}
             onConsulta={setSelecionada}
             onNova={abrirNova}
           />
@@ -226,6 +230,7 @@ export function AgendaCalendar({
             cursor={cursor}
             consultas={consultasDoDia(cursor)}
             multiClinica={multiClinica}
+            confirmacoes={confirmacoes}
             onConsulta={setSelecionada}
             onNova={() => abrirNova(cursor)}
           />
@@ -271,14 +276,26 @@ export function AgendaCalendar({
 }
 
 /* ------------------------- Visão de mês ------------------------- */
+/** Cor do pontinho de confirmação usado nas visões compactas. */
+const corConfirmacao: Record<string, string> = {
+  pendente: "bg-cinza-suave/40",
+  enviado: "bg-alerta",
+  confirmado: "bg-sucesso",
+  reagendar: "bg-coral",
+  recusado: "bg-coral",
+  cancelado: "bg-cinza-suave/40",
+};
+
 function MonthView({
   cursor,
   consultasDoDia,
+  confirmacoes,
   onDia,
   onConsulta,
 }: {
   cursor: Date;
   consultasDoDia: (d: Date) => Consulta[];
+  confirmacoes: Record<string, ConfirmacaoDaConsulta>;
   onDia: (d: Date) => void;
   onConsulta: (c: Consulta) => void;
 }) {
@@ -337,6 +354,16 @@ function MonthView({
                     <span className="truncate">
                       {format(new Date(c.data_hora), "HH:mm")} {c.paciente_nome}
                     </span>
+                    {/* Segundo ponto: como está a confirmação do paciente */}
+                    {confirmacoes[c.id] && (
+                      <span
+                        className={cn(
+                          "ml-auto size-1.5 shrink-0 rounded-full",
+                          corConfirmacao[confirmacoes[c.id].status]
+                        )}
+                        title={`Confirmação: ${confirmacoes[c.id].status}`}
+                      />
+                    )}
                   </div>
                 ))}
                 {consultas.length > 3 && (
@@ -357,11 +384,13 @@ function MonthView({
 function WeekView({
   cursor,
   consultasDoDia,
+  confirmacoes,
   onConsulta,
   onNova,
 }: {
   cursor: Date;
   consultasDoDia: (d: Date) => Consulta[];
+  confirmacoes: Record<string, ConfirmacaoDaConsulta>;
   onConsulta: (c: Consulta) => void;
   onNova: (d: Date) => void;
 }) {
@@ -403,23 +432,55 @@ function WeekView({
               {consultas.length === 0 && (
                 <p className="py-2 text-center text-xs text-cinza-suave/70">—</p>
               )}
-              {consultas.map((c) => (
-                <button
-                  key={c.id}
-                  onClick={() => onConsulta(c)}
-                  className="flex w-full items-center gap-2 rounded-md border border-border bg-branco-clinico px-2 py-1.5 text-left hover:border-teal-claro"
-                >
-                  <span className={cn("size-2 shrink-0 rounded-full", corStatus[c.status])} />
-                  <span className="min-w-0">
-                    <span className="block text-xs font-semibold text-azul-medico">
-                      {format(new Date(c.data_hora), "HH:mm")}
-                    </span>
-                    <span className="block truncate text-xs text-cinza-suave">
-                      {c.paciente_nome}
-                    </span>
-                  </span>
-                </button>
-              ))}
+              {consultas.map((c) => {
+                const conf = confirmacoes[c.id];
+                return (
+                  <div
+                    key={c.id}
+                    className={cn(
+                      "flex items-center gap-1 rounded-md border bg-branco-clinico pr-1",
+                      conf?.status === "reagendar"
+                        ? "border-coral/40"
+                        : "border-border hover:border-teal-claro"
+                    )}
+                  >
+                    <button
+                      onClick={() => onConsulta(c)}
+                      className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left"
+                    >
+                      <span
+                        className={cn("size-2 shrink-0 rounded-full", corStatus[c.status])}
+                      />
+                      <span className="min-w-0">
+                        <span className="block text-xs font-semibold text-azul-medico">
+                          {format(new Date(c.data_hora), "HH:mm")}
+                        </span>
+                        <span className="block truncate text-xs text-cinza-suave">
+                          {c.paciente_nome}
+                        </span>
+                      </span>
+                    </button>
+
+                    {conf && c.paciente_telefone && (
+                      <a
+                        href={linkWhatsApp(c.paciente_telefone, conf.mensagem)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={cn(
+                          "grid size-7 shrink-0 place-items-center rounded",
+                          conf.status === "pendente"
+                            ? "text-sucesso hover:bg-sucesso/12"
+                            : "text-cinza-suave/60 hover:bg-verde-menta hover:text-teal"
+                        )}
+                        title="Enviar confirmação pelo WhatsApp"
+                        aria-label={`Enviar confirmação para ${c.paciente_nome}`}
+                      >
+                        <MessageCircle className="size-3.5" />
+                      </a>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         );
@@ -428,17 +489,51 @@ function WeekView({
   );
 }
 
+/** Selo curto do estado da confirmação, para caber ao lado da consulta. */
+function SeloConfirmacao({
+  confirmacao,
+}: {
+  confirmacao?: ConfirmacaoDaConsulta;
+}) {
+  if (!confirmacao) return null;
+
+  const mapa: Record<string, { texto: string; classe: string }> = {
+    pendente: { texto: "a enviar", classe: "bg-verde-menta text-cinza-suave" },
+    enviado: { texto: "aguardando", classe: "bg-alerta/12 text-alerta" },
+    confirmado: { texto: "confirmou", classe: "bg-sucesso/12 text-sucesso" },
+    reagendar: { texto: "quer remarcar", classe: "bg-coral/12 text-coral" },
+    recusado: { texto: "não vem", classe: "bg-coral/12 text-coral" },
+    cancelado: { texto: "cancelada", classe: "bg-verde-menta text-cinza-suave" },
+  };
+
+  const s = mapa[confirmacao.status];
+  if (!s) return null;
+
+  return (
+    <span
+      className={cn(
+        "hidden whitespace-nowrap rounded-full px-2 py-1 text-[10px] font-semibold sm:inline",
+        s.classe
+      )}
+    >
+      {s.texto}
+    </span>
+  );
+}
+
 /* ------------------------- Visão de dia ------------------------- */
 function DayView({
   cursor,
   consultas,
   multiClinica,
+  confirmacoes,
   onConsulta,
   onNova,
 }: {
   cursor: Date;
   consultas: Consulta[];
   multiClinica: boolean;
+  confirmacoes: Record<string, ConfirmacaoDaConsulta>;
   onConsulta: (c: Consulta) => void;
   onNova: () => void;
 }) {
@@ -483,17 +578,27 @@ function DayView({
               ? new Date(inicio.getTime() + c.duracao_min * 60000)
               : null;
             const cancelada = c.status === "cancelada";
+            const conf = confirmacoes[c.id];
             return (
               <li key={c.id}>
-                <button
-                  onClick={() => onConsulta(c)}
+                {/* Linha em div, e não em button: o atalho do WhatsApp é um
+                    link, e link dentro de botão é HTML inválido. */}
+                <div
                   className={cn(
-                    "group flex w-full overflow-hidden rounded-xl border border-border bg-white text-left transition-all hover:border-teal-claro hover:shadow-soft",
+                    "group flex w-full overflow-hidden rounded-xl border bg-white text-left transition-all hover:shadow-soft",
+                    conf?.status === "reagendar"
+                      ? "border-alerta/50"
+                      : "border-border hover:border-teal-claro",
                     cancelada && "opacity-70"
                   )}
                 >
                   {/* Barra de status */}
                   <span className={cn("w-1.5 shrink-0", corStatus[c.status])} />
+
+                  <button
+                    onClick={() => onConsulta(c)}
+                    className="flex min-w-0 flex-1 text-left"
+                  >
 
                   {/* Faixa de horário */}
                   <div className="flex w-[4.5rem] shrink-0 flex-col items-center justify-center border-r border-border bg-branco-clinico py-3">
@@ -555,10 +660,38 @@ function DayView({
                       )}
                     </div>
 
-                    <Badge variant={c.status}>{rotuloStatus[c.status]}</Badge>
+                      <Badge variant={c.status}>{rotuloStatus[c.status]}</Badge>
+                    </div>
+                  </button>
+
+                  {/* Confirmação à vista, sem precisar abrir a ficha */}
+                  <div className="flex shrink-0 items-center gap-1.5 border-l border-border px-3">
+                    <SeloConfirmacao confirmacao={conf} />
+                    {conf && c.paciente_telefone && (
+                      <a
+                        href={linkWhatsApp(c.paciente_telefone, conf.mensagem)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className={cn(
+                          "grid size-9 place-items-center rounded-md transition-colors",
+                          conf.status === "pendente"
+                            ? "bg-sucesso/12 text-sucesso hover:bg-sucesso/20"
+                            : "text-cinza-suave hover:bg-verde-menta hover:text-teal"
+                        )}
+                        title={
+                          conf.status === "pendente"
+                            ? "Enviar confirmação pelo WhatsApp"
+                            : "Reenviar pelo WhatsApp"
+                        }
+                        aria-label={`Enviar confirmação para ${c.paciente_nome} no WhatsApp`}
+                      >
+                        <MessageCircle className="size-4" />
+                      </a>
+                    )}
                     <ChevronRight className="size-4 shrink-0 text-cinza-suave/40 transition-colors group-hover:text-teal" />
                   </div>
-                </button>
+                </div>
               </li>
             );
           })}

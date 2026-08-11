@@ -193,6 +193,75 @@ export async function registrarResposta(
 }
 
 /**
+ * Move a consulta para um novo horário e reabre a confirmação.
+ *
+ * É a saída do pedido de reagendamento: em vez de o atendente ir à
+ * agenda, cancelar e recriar, ele resolve na mesma tela onde viu o
+ * pedido. O token é mantido de propósito — a pessoa ainda tem a
+ * mensagem antiga no WhatsApp, e abrir o mesmo link mostra a data nova.
+ */
+export async function reagendarConsulta(
+  confirmacaoId: string,
+  novaDataHora: string
+): Promise<ActionResult> {
+  const r = await autorizar(confirmacaoId);
+  if ("erro" in r) return r.erro;
+
+  const quando = new Date(novaDataHora);
+  if (Number.isNaN(quando.getTime())) {
+    return { ok: false, erro: "Data inválida." };
+  }
+  if (quando.getTime() <= Date.now()) {
+    return { ok: false, erro: "Escolha um horário no futuro." };
+  }
+
+  const { error: erroConsulta } = await r.admin
+    .from("consultas")
+    .update({ data_hora: quando.toISOString(), status: "pendente" })
+    .eq("id", r.conf.consulta_id);
+
+  if (erroConsulta) {
+    console.error("[confirmacoes] Erro ao reagendar:", erroConsulta.message);
+    return { ok: false, erro: "Não foi possível mudar o horário." };
+  }
+
+  const { data: org } = await r.admin
+    .from("organizations")
+    .select("lembrete_dias_uteis,lembrete_hora")
+    .eq("id", r.conf.organization_id)
+    .maybeSingle();
+
+  // A confirmação volta à estaca zero: horário novo, lembrete novo.
+  const { error } = await r.admin
+    .from("confirmacoes")
+    .update({
+      status: "pendente",
+      agendado_para: calcularDisparo(
+        quando,
+        org?.lembrete_dias_uteis ?? 1,
+        org?.lembrete_hora ?? 9
+      ).toISOString(),
+      enviado_em: null,
+      respondido_em: null,
+      canal: null,
+      tentativas: 0,
+      observacao: `Reagendada em ${new Date().toLocaleDateString("pt-BR")} a pedido do paciente.`,
+    })
+    .eq("id", confirmacaoId);
+
+  if (error) {
+    return {
+      ok: false,
+      erro: "Horário alterado, mas o lembrete não foi reprogramado.",
+    };
+  }
+
+  revalidar();
+  revalidatePath("/app/notificacoes");
+  return { ok: true };
+}
+
+/**
  * Cria a confirmação de uma consulta que ainda não tem.
  *
  * Serve para o caso de a consulta ter sido marcada depois da última

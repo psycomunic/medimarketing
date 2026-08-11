@@ -14,9 +14,11 @@ import type {
   Lancamento,
   LeadInteracao,
   Mensagem,
+  NotificacaoComLeitura,
   Regua,
   ReguaComDesempenho,
   ReguaPasso,
+  Role,
 } from "@/lib/supabase/types";
 import {
   CONTAS_DEMO,
@@ -519,6 +521,78 @@ export function demoConfirmacoes(): ConfirmacaoComConsulta[] {
       status_consulta: c.status,
     };
   });
+}
+
+/* ------------------------------------------------------------------ */
+/* Notificações                                                        */
+/* ------------------------------------------------------------------ */
+
+/** Fila de avisos fictícia, filtrada pelo papel de quem está olhando. */
+export function demoNotificacoes(role: Role): NotificacaoComLeitura[] {
+  const n = (
+    id: string,
+    tipo: NotificacaoComLeitura["tipo"],
+    prioridade: "alta" | "normal",
+    titulo: string,
+    descricao: string,
+    href: string,
+    horas: number,
+    lida: boolean,
+    papeis: Role[] = ["gestor", "secretaria"],
+    organizationId: string | null = DEMO_ORG_ID
+  ): NotificacaoComLeitura => ({
+    id,
+    organization_id: organizationId,
+    papeis,
+    tipo,
+    prioridade,
+    titulo,
+    descricao,
+    href,
+    entidade_id: null,
+    created_at: h(horas),
+    lida,
+  });
+
+  const todas: NotificacaoComLeitura[] = [
+    n("nt1", "reagendamento", "alta",
+      "Juliana Faria pediu para reagendar",
+      "Consulta de hoje às 10:00 · (11) 99333-4455. O horário segue reservado — combine o novo o quanto antes.",
+      "/app/confirmacoes", 0.6, false),
+
+    n("nt2", "mensagem_nova", "alta",
+      "Renata Prado mandou 2 mensagens",
+      "Perguntou sobre parcelamento no WhatsApp e ainda não teve resposta.",
+      "/app/atendimento", 0.4, false),
+
+    n("nt3", "confirmacao", "normal",
+      "Rafael Costa confirmou a presença",
+      "Consulta de amanhã às 09:00.",
+      "/app/confirmacoes", 3, false),
+
+    n("nt4", "lembrete_atrasado", "alta",
+      "2 lembretes não foram enviados",
+      "Passaram do horário programado. Envie pelo painel para não perder a véspera.",
+      "/app/confirmacoes", 5, false),
+
+    n("nt5", "lead_novo", "normal",
+      "Novo lead: Marcela Antunes",
+      "Chegou pelo Instagram interessada em skincare.",
+      "/app/crm", 22, true),
+
+    n("nt6", "cancelamento", "alta",
+      "Eduardo Nunes não vai comparecer",
+      "A teleconsulta de amanhã foi cancelada. O horário está livre para encaixe.",
+      "/app/confirmacoes", 26, true),
+
+    n("nt7", "cadastro_pendente", "alta",
+      "Espaço Derma Niterói se cadastrou",
+      "Dra. Letícia Vasconcelos · A conta não entra até você definir o papel.",
+      "/app/admin/usuarios", 9, false, ["super_admin"], null),
+  ];
+
+  // Mesma regra da RLS: super admin vê tudo; os demais, só o próprio papel
+  return todas.filter((x) => role === "super_admin" || x.papeis.includes(role));
 }
 
 /* ------------------------------------------------------------------ */

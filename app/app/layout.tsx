@@ -2,6 +2,7 @@ import { Info } from "lucide-react";
 import { Sidebar } from "@/components/app/sidebar";
 import { exigirSessao } from "@/lib/acesso";
 import { emModoDemo } from "@/lib/supabase/queries";
+import { contarNaoLidas } from "@/lib/supabase/notificacoes";
 
 export const metadata = {
   title: "Plataforma",
@@ -14,7 +15,10 @@ export default async function AppLayout({
   children: React.ReactNode;
 }) {
   const { profile, organizacao, role } = await exigirSessao();
-  const demo = await emModoDemo();
+  const [demo, naoLidas] = await Promise.all([
+    emModoDemo(),
+    contarNaoLidas(profile),
+  ]);
 
   return (
     <div className="flex min-h-screen flex-col bg-branco-clinico lg:flex-row">
@@ -22,6 +26,7 @@ export default async function AppLayout({
         nome={profile.nome || "Usuário"}
         role={role}
         organizacao={organizacao?.nome ?? null}
+        naoLidas={naoLidas}
       />
       <main className="min-w-0 flex-1 overflow-x-hidden">
         {demo && (

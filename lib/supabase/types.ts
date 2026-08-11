@@ -400,6 +400,49 @@ export type ConfirmacaoComConsulta = Confirmacao & {
 };
 
 /* ------------------------------------------------------------------ */
+/* Notificações                                                        */
+/* ------------------------------------------------------------------ */
+
+export type TipoNotificacao =
+  | "reagendamento"
+  | "confirmacao"
+  | "cancelamento"
+  | "lembrete_atrasado"
+  | "lead_novo"
+  | "mensagem_nova"
+  | "cadastro_pendente"
+  | "sistema";
+
+/**
+ * Aviso endereçado a papéis dentro de uma clínica.
+ *
+ * Não é endereçado a uma pessoa porque quem resolve é quem estiver de
+ * plantão. `organization_id` nulo é aviso da plataforma, só para a
+ * equipe Medi Marketing.
+ */
+export type Notificacao = {
+  id: string;
+  organization_id: string | null;
+  papeis: Role[];
+  tipo: TipoNotificacao;
+  prioridade: "alta" | "normal";
+  titulo: string;
+  descricao: string | null;
+  href: string | null;
+  entidade_id: string | null;
+  created_at: string;
+};
+
+export type NotificacaoLeitura = {
+  notificacao_id: string;
+  user_id: string;
+  lida_em: string;
+};
+
+/** Notificação já resolvida para o usuário que está olhando. */
+export type NotificacaoComLeitura = Notificacao & { lida: boolean };
+
+/* ------------------------------------------------------------------ */
 /* Configurações — integrações da clínica                              */
 /* ------------------------------------------------------------------ */
 
@@ -665,6 +708,20 @@ export interface Database {
           tentativas?: number;
         },
         Partial<Confirmacao>
+      >;
+      notificacoes: Tabela<
+        Notificacao,
+        Omit<Notificacao, "id" | "created_at" | "prioridade" | "papeis"> & {
+          id?: string;
+          prioridade?: "alta" | "normal";
+          papeis?: Role[];
+        },
+        Partial<Notificacao>
+      >;
+      notificacao_leituras: Tabela<
+        NotificacaoLeitura,
+        Omit<NotificacaoLeitura, "lida_em"> & { lida_em?: string },
+        Partial<NotificacaoLeitura>
       >;
     };
     // Empty-key form (não use Record<string, never>: isso faria keyof = string

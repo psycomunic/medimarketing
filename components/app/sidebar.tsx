@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogOut, Menu, X, Building2 } from "lucide-react";
+import { LogOut, Menu, X, Building2, Bell } from "lucide-react";
 import { Logo } from "@/components/logo";
 import { logout } from "@/lib/actions/auth";
 import { cn } from "@/lib/utils";
@@ -14,16 +14,20 @@ export function Sidebar({
   nome,
   role,
   organizacao,
+  naoLidas = 0,
 }: {
   nome: string;
   role: Role;
   organizacao: string | null;
+  /** Notificações não lidas, para o contador do sino. */
+  naoLidas?: number;
 }) {
   const pathname = usePathname();
   const [aberto, setAberto] = useState(false);
 
   // Só aparece o que o papel pode acessar
   const modulos = modulosDoPapel(role);
+  const emNotificacoes = pathname.startsWith("/app/notificacoes");
 
   const conteudo = (
     <div className="flex h-full flex-col">
@@ -36,6 +40,33 @@ export function Sidebar({
             {organizacao ?? "Todas as clínicas"}
           </span>
         </div>
+
+        {/* Notificações fora dos grupos: é o que se olha primeiro */}
+        <Link
+          href="/app/notificacoes"
+          onClick={() => setAberto(false)}
+          className={cn(
+            "mt-2 flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+            emNotificacoes
+              ? "bg-verde-menta text-azul-medico"
+              : naoLidas > 0
+                ? "bg-coral/8 text-coral hover:bg-coral/12"
+                : "text-cinza-suave hover:bg-verde-menta/60 hover:text-azul-medico"
+          )}
+        >
+          <span className="relative">
+            <Bell className="size-5 shrink-0" />
+            {naoLidas > 0 && (
+              <span className="absolute -right-1.5 -top-1 size-2 rounded-full bg-coral" />
+            )}
+          </span>
+          <span className="truncate">Notificações</span>
+          {naoLidas > 0 && (
+            <span className="ml-auto shrink-0 rounded-full bg-coral px-1.5 py-0.5 text-[10px] font-bold text-white">
+              {naoLidas > 99 ? "99+" : naoLidas}
+            </span>
+          )}
+        </Link>
       </div>
 
       <nav className="flex-1 space-y-5 overflow-y-auto px-3 pb-4">
@@ -109,14 +140,31 @@ export function Sidebar({
       {/* Topbar mobile */}
       <div className="sticky top-0 z-40 flex items-center justify-between border-b border-border bg-white px-4 py-3 lg:hidden">
         <Logo href="/app" />
-        <button
-          type="button"
-          onClick={() => setAberto(true)}
-          className="grid size-10 place-items-center rounded-md text-azul-medico"
-          aria-label="Abrir menu"
-        >
-          <Menu />
-        </button>
+        <div className="flex items-center gap-1">
+          {/* No celular o sino fica no topo: é o atalho mais usado */}
+          <Link
+            href="/app/notificacoes"
+            className="relative grid size-10 place-items-center rounded-md text-azul-medico"
+            aria-label={
+              naoLidas > 0 ? `${naoLidas} notificações não lidas` : "Notificações"
+            }
+          >
+            <Bell className="size-5" />
+            {naoLidas > 0 && (
+              <span className="absolute right-1.5 top-1.5 grid min-w-4 place-items-center rounded-full bg-coral px-1 text-[9px] font-bold text-white">
+                {naoLidas > 9 ? "9+" : naoLidas}
+              </span>
+            )}
+          </Link>
+          <button
+            type="button"
+            onClick={() => setAberto(true)}
+            className="grid size-10 place-items-center rounded-md text-azul-medico"
+            aria-label="Abrir menu"
+          >
+            <Menu />
+          </button>
+        </div>
       </div>
 
       {/* Sidebar desktop */}

@@ -128,3 +128,93 @@ create policy "confirmacoes_all" on public.confirmacoes
   for all to authenticated
   using ((organization_id = public.minha_org() and public.is_operacional()) or public.is_super_admin())
   with check ((organization_id = public.minha_org() and public.is_operacional()) or public.is_super_admin());
+
+
+-- ---------------------------------------------------------------------
+-- 2026-08-11 (2) — Notificações
+--
+-- Rode para habilitar a aba de notificações e os alertas de
+-- reagendamento.
+-- ---------------------------------------------------------------------
+
+-- =====================================================================
+-- NOTIFICAÇÕES
+--
+-- Avisa a equipe do que aconteceu sem que ninguém precise abrir tela por
+-- tela. Uma notificação é endereçada a papéis dentro de uma clínica (ou
+-- à equipe Medi Marketing, quando a organização é nula), e não a uma
+-- pessoa: quem responde é quem estiver de plantão.
+--
+-- Por isso a leitura fica numa tabela à parte — a mesma notificação pode
+-- estar lida para a secretária e não lida para a gestora.
+-- =====================================================================
+
+create table if not exists public.notificacoes (
+  id              uuid primary key default uuid_generate_v4(),
+  -- Nulo = notificação da plataforma, só para o super admin
+  organization_id uuid references public.organizations(id) on delete cascade,
+  -- Quem enxerga. Super admin enxerga tudo, independente desta lista.
+  papeis          text[] not null default '{gestor,secretaria}',
+
+  tipo            text not null
+                    check (tipo in (
+                      'reagendamento','confirmacao','cancelamento',
+                      'lembrete_atrasado','lead_novo','mensagem_nova',
+                      'cadastro_pendente','sistema'
+                    )),
+  prioridade      text not null default 'normal'
+                    check (prioridade in ('alta','normal')),
+  titulo          text not null,
+  descricao       text,
+  -- Para onde o clique leva
+  href            text,
+  -- Id do registro que originou (consulta, lead, conversa...)
+  entidade_id     uuid,
+  created_at      timestamptz not null default now()
+);
+
+create index if not exists idx_notificacoes_org
+  on public.notificacoes (organization_id, created_at desc);
+
+create table if not exists public.notificacao_leituras (
+  notificacao_id uuid not null references public.notificacoes(id) on delete cascade,
+  user_id        uuid not null references public.profiles(id) on delete cascade,
+  lida_em        timestamptz not null default now(),
+  primary key (notificacao_id, user_id)
+);
+
+create index if not exists idx_leituras_user
+  on public.notificacao_leituras (user_id);
+
+-- ---------------------------------------------------------------------
+-- RLS
+-- ---------------------------------------------------------------------
+alter table public.notificacoes        enable row level security;
+alter table public.notificacao_leituras enable row level security;
+
+-- Leitura: da minha clínica e endereçada ao meu papel. O super admin vê
+-- tudo, inclusive as da plataforma (organization_id nulo).
+drop policy if exists "notificacoes_select" on public.notificacoes;
+create policy "notificacoes_select" on public.notificacoes
+  for select to authenticated
+  using (
+    public.is_super_admin()
+    or (organization_id = public.minha_org() and public.meu_papel() = any(papeis))
+  );
+
+-- A criação acontece pelos caminhos de servidor (service role). Deixamos
+-- a porta aberta para a própria clínica registrar avisos internos.
+drop policy if exists "notificacoes_insert" on public.notificacoes;
+create policy "notificacoes_insert" on public.notificacoes
+  for insert to authenticated
+  with check (
+    public.is_super_admin()
+    or (organization_id = public.minha_org() and public.is_operacional())
+  );
+
+-- Cada um controla apenas as próprias leituras
+drop policy if exists "leituras_all" on public.notificacao_leituras;
+create policy "leituras_all" on public.notificacao_leituras
+  for all to authenticated
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());

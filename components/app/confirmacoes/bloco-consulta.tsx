@@ -17,6 +17,7 @@ import {
   criarParaConsulta,
   enviarAgora,
   marcarEnviado,
+  reagendarConsulta,
 } from "@/lib/actions/confirmacoes";
 import { formatarData, formatarHora, linkWhatsApp } from "@/lib/lembretes";
 import { tempoRelativo } from "@/lib/rotulos";
@@ -73,6 +74,7 @@ export function BlocoConfirmacao({
   const router = useRouter();
   const [erro, setErro] = useState<string | null>(null);
   const [copiado, setCopiado] = useState(false);
+  const [novoHorario, setNovoHorario] = useState("");
   const [pending, startTransition] = useTransition();
 
   function agir(fn: () => Promise<{ ok: boolean; erro?: string }>) {
@@ -147,16 +149,46 @@ export function BlocoConfirmacao({
   const Icone = r.icone;
   const whats = telefone ? linkWhatsApp(telefone, confirmacao.mensagem) : null;
   const aguardando = confirmacao.status === "pendente";
+  const pediuReagendar = confirmacao.status === "reagendar";
+
+  // Quanto tempo o paciente está esperando retorno. Vira urgência real
+  // depois de duas horas: a chance de salvar o horário cai rápido.
+  const esperandoHa = confirmacao.respondidoEm
+    ? (Date.now() - new Date(confirmacao.respondidoEm).getTime()) / 3600_000
+    : 0;
+  const urgente = pediuReagendar && esperandoHa >= 2;
 
   return (
     <div className="border-t border-border pt-4">
       {titulo}
 
-      <div className="mt-2 rounded-lg border border-border bg-branco-clinico p-3">
+      <div
+        className={cn(
+          "mt-2 rounded-lg border p-3",
+          pediuReagendar
+            ? urgente
+              ? "border-coral/50 bg-coral/5"
+              : "border-alerta/50 bg-alerta/5"
+            : "border-border bg-branco-clinico"
+        )}
+      >
         <p className={cn("flex items-center gap-2 text-sm font-semibold", r.cor)}>
           <Icone className="size-4" />
           {r.texto}
         </p>
+
+        {pediuReagendar && (
+          <p
+            className={cn(
+              "mt-1 text-xs font-medium",
+              urgente ? "text-coral" : "text-alerta"
+            )}
+          >
+            {urgente
+              ? `Esperando retorno há ${Math.round(esperandoHa)} h — ligue agora para não perder o horário.`
+              : "Entre em contato para combinar o novo horário. A vaga segue reservada."}
+          </p>
+        )}
 
         <p className="mt-1 text-xs text-cinza-suave">
           {aguardando
@@ -170,6 +202,38 @@ export function BlocoConfirmacao({
 
         {confirmacao.observacao && (
           <p className="mt-1.5 text-xs text-cinza-suave">{confirmacao.observacao}</p>
+        )}
+
+        {/* Reagendar sem sair da ficha: é o que resolve o pedido */}
+        {pediuReagendar && (
+          <div className="mt-3 rounded-md border border-border bg-white p-3">
+            <p className="text-xs font-semibold text-azul-medico">
+              Novo horário
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <input
+                type="datetime-local"
+                value={novoHorario}
+                onChange={(e) => setNovoHorario(e.target.value)}
+                className="h-10 flex-1 rounded-md border border-input bg-white px-3 text-sm text-cinza-texto shadow-sm focus-visible:border-teal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+              />
+              <Button
+                variant="marca"
+                size="sm"
+                disabled={pending || demo || !novoHorario}
+                onClick={() =>
+                  agir(() => reagendarConsulta(confirmacao.id, novoHorario))
+                }
+              >
+                {pending && <Loader2 className="size-4 animate-spin" />}
+                Reagendar
+              </Button>
+            </div>
+            <p className="mt-1.5 text-xs text-cinza-suave">
+              Muda o horário da consulta e reprograma o lembrete. O paciente
+              pode reabrir o mesmo link para ver a data nova.
+            </p>
+          </div>
         )}
 
         <div className="mt-3 flex flex-wrap items-center gap-2">

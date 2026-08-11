@@ -4,6 +4,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient, adminDisponivel } from "@/lib/supabase/admin";
 import { supabaseConfigurado } from "@/lib/supabase/queries";
+import { notificar } from "@/lib/supabase/notificacoes";
 import type { ActionResult } from "@/lib/actions/contexto";
 
 /**
@@ -178,6 +179,19 @@ export async function cadastrar(input: CadastroInput): Promise<CadastroResult> {
       erro: "Conta criada, mas houve um erro no cadastro. Fale com a equipe Medi Marketing.",
     };
   }
+
+  // Avisa a equipe Medi Marketing: sem organização, a notificação é da
+  // plataforma e só o super admin enxerga.
+  await notificar({
+    organizationId: null,
+    tipo: "cadastro_pendente",
+    prioridade: "alta",
+    titulo: `${d.clinica} se cadastrou`,
+    descricao: `${d.nome} · ${d.email} · ${d.telefone}. A conta não entra até você definir o papel.`,
+    href: "/app/admin/usuarios",
+    entidadeId: cadastro.user.id,
+    papeis: ["super_admin"],
+  });
 
   // Sessão presente = o projeto está com confirmação de e-mail desligada
   return { ok: true, precisaConfirmarEmail: !cadastro.session };
