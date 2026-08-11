@@ -13,16 +13,16 @@ export function Hero() {
   );
 
   return (
-    <section className="relative overflow-hidden pt-28 md:pt-36">
-      {/* Fundo decorativo suave */}
-      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
-        <div className="absolute -right-24 -top-24 size-[420px] rounded-full bg-teal-claro/20 blur-3xl" />
-        <div className="absolute -left-32 top-40 size-[360px] rounded-full bg-verde-menta blur-3xl" />
-      </div>
+    <section className="relative overflow-hidden bg-branco-clinico lg:flex lg:min-h-screen lg:items-center">
+      {/* Brilho suave atrás do texto (só onde não atrapalha a imagem) */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -left-32 top-40 -z-10 size-[360px] rounded-full bg-verde-menta blur-3xl"
+      />
 
-      <div className="container grid items-center gap-12 pb-20 lg:grid-cols-[1.05fr_0.95fr] lg:pb-24">
-        {/* Coluna de texto */}
-        <div>
+      {/* Coluna de texto */}
+      <div className="container relative z-10 pb-16 pt-28 md:pt-36 lg:pb-24 lg:pt-24">
+        <div className="lg:max-w-2xl">
           <Reveal>
             <span className="eyebrow">
               <ShieldCheck className="size-4" />
@@ -86,23 +86,32 @@ export function Hero() {
             </div>
           </Reveal>
         </div>
+      </div>
 
-        {/* Coluna visual: banner com a agenda real da plataforma */}
-        <Reveal delay={0.15}>
-          {/* Sangra para fora do container no desktop: o banner tem margem
-              própria e fica pequeno demais se respeitar a coluna */}
-          <div className="relative lg:-mr-12 xl:-mr-24">
-            <Image
-              src="/BANNER-FUNDO-HERO.jpg"
-              alt="Notebook exibindo a agenda de consultas da plataforma Medi Marketing"
-              width={2000}
-              height={1333}
-              sizes="(max-width: 1024px) 100vw, 55vw"
-              priority
-              className="h-auto w-full"
-            />
-          </div>
-        </Reveal>
+      {/*
+        Banner com a agenda real da plataforma.
+        No desktop ele cobre a seção inteira, ancorado à direita; como o fundo
+        do arquivo (#F7FBFC) é o mesmo branco-clínico do site, a imagem se
+        funde com a página e não aparece emenda. `object-contain` evita cortar
+        a tela do notebook em telas muito largas.
+        No mobile o mesmo elemento vira um bloco abaixo do texto — um único
+        <Image> para o navegador não baixar o arquivo duas vezes.
+      */}
+      <div className="relative aspect-[3/2] w-full lg:absolute lg:inset-0 lg:z-0 lg:aspect-auto">
+        <Image
+          src="/BANNER-FUNDO-HERO.jpg"
+          alt="Notebook exibindo a agenda de consultas da plataforma Medi Marketing"
+          fill
+          sizes="100vw"
+          priority
+          className="object-contain object-right"
+        />
+        {/* Véu que garante leitura do texto caso o notebook avance para a
+            esquerda em proporções de tela incomuns */}
+        <div
+          aria-hidden
+          className="absolute inset-y-0 left-0 hidden w-3/5 bg-gradient-to-r from-branco-clinico via-branco-clinico/85 to-transparent lg:block"
+        />
       </div>
     </section>
   );
