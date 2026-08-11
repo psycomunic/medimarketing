@@ -19,6 +19,8 @@ import {
   Building2,
   Settings,
   User,
+  LibraryBig,
+  MessageSquareReply,
   type LucideIcon,
 } from "lucide-react";
 import type { Role } from "@/lib/supabase/types";
@@ -35,6 +37,8 @@ export type ModuloId =
   | "indicadores"
   | "financeiro"
   | "clinicas"
+  | "admin-academy"
+  | "admin-comentarios"
   | "configuracoes"
   | "perfil";
 
@@ -50,7 +54,7 @@ export type Modulo = {
   papeis: readonly Role[];
   fase: Fase;
   /** Agrupamento visual na sidebar. */
-  grupo: "operacao" | "crescimento" | "conta";
+  grupo: "operacao" | "crescimento" | "admin" | "conta";
   /** Descrição curta usada na tela de "em construção". */
   resumo: string;
 };
@@ -140,7 +144,7 @@ export const MODULOS: readonly Modulo[] = [
     href: "/app/indicadores",
     icone: BarChart3,
     papeis: TODOS,
-    fase: 4,
+    fase: 1,
     grupo: "crescimento",
     resumo:
       "Do investimento ao faturamento: leads, agendamentos, comparecimento e ROI.",
@@ -151,7 +155,7 @@ export const MODULOS: readonly Modulo[] = [
     href: "/app/academy",
     icone: GraduationCap,
     papeis: TODOS,
-    fase: 5,
+    fase: 1,
     grupo: "crescimento",
     resumo:
       "Trilhas de treinamento em vídeo para a secretária, o comercial e a gestão.",
@@ -169,13 +173,33 @@ export const MODULOS: readonly Modulo[] = [
   },
   {
     id: "clinicas",
-    label: "Clínicas",
+    label: "Clientes",
     href: "/app/clinicas",
     icone: Building2,
     papeis: ["super_admin"],
-    fase: 2,
-    grupo: "conta",
-    resumo: "Todas as clínicas atendidas pela Medi Marketing (uso interno).",
+    fase: 1,
+    grupo: "admin",
+    resumo: "Todas as clínicas atendidas pela Medi Marketing.",
+  },
+  {
+    id: "admin-academy",
+    label: "Conteúdo Academy",
+    href: "/app/admin/academy",
+    icone: LibraryBig,
+    papeis: ["super_admin"],
+    fase: 1,
+    grupo: "admin",
+    resumo: "Criar trilhas, cadastrar aulas e publicar os vídeos.",
+  },
+  {
+    id: "admin-comentarios",
+    label: "Dúvidas dos alunos",
+    href: "/app/admin/comentarios",
+    icone: MessageSquareReply,
+    papeis: ["super_admin"],
+    fase: 1,
+    grupo: "admin",
+    resumo: "Responder às perguntas feitas nas aulas da Academy.",
   },
   {
     id: "configuracoes",
@@ -227,5 +251,6 @@ export function rotuloPapel(role: Role): string {
 export const GRUPOS: { id: Modulo["grupo"]; label: string }[] = [
   { id: "operacao", label: "Operação" },
   { id: "crescimento", label: "Crescimento" },
+  { id: "admin", label: "Administração" },
   { id: "conta", label: "Conta" },
 ];

@@ -135,6 +135,84 @@ export type Lead = {
   created_at: string;
 };
 
+/* ------------------------------------------------------------------ */
+/* Academy                                                             */
+/* ------------------------------------------------------------------ */
+
+export type NivelTrilha = "essencial" | "intermediario" | "avancado";
+
+/** Trilha de treinamento. Conteúdo global, produzido pela Medi Marketing. */
+export type Course = {
+  id: string;
+  slug: string;
+  titulo: string;
+  resumo: string | null;
+  descricao: string | null;
+  nivel: NivelTrilha;
+  /** Papéis que enxergam a trilha. */
+  papeis: Role[];
+  ordem: number;
+  publicado: boolean;
+  created_at: string;
+};
+
+export type Lesson = {
+  id: string;
+  course_id: string;
+  slug: string;
+  titulo: string;
+  descricao: string | null;
+  video_url: string | null;
+  material_url: string | null;
+  duracao_min: number | null;
+  ordem: number;
+  publicado: boolean;
+  created_at: string;
+};
+
+export type LessonProgress = {
+  id: string;
+  lesson_id: string;
+  user_id: string;
+  concluida: boolean;
+  concluida_em: string;
+};
+
+export type LessonComment = {
+  id: string;
+  lesson_id: string;
+  user_id: string;
+  organization_id: string | null;
+  parent_id: string | null;
+  conteudo: string;
+  created_at: string;
+};
+
+/** Comentário já enriquecido com autor e respostas, para exibição. */
+export type ComentarioComAutor = LessonComment & {
+  autor_nome: string;
+  autor_papel: Role;
+  respostas?: ComentarioComAutor[];
+};
+
+/* ------------------------------------------------------------------ */
+/* Indicadores                                                         */
+/* ------------------------------------------------------------------ */
+
+/** Números do mês de uma clínica. Lançados à mão até as APIs de Ads entrarem. */
+export type IndicadorMensal = {
+  id: string;
+  organization_id: string;
+  mes: string; // "YYYY-MM-01"
+  investimento: number;
+  leads: number;
+  agendamentos: number;
+  comparecimentos: number;
+  faturamento: number;
+  observacao: string | null;
+  atualizado_em: string;
+};
+
 // Cada tabela precisa expor Relationships para o supabase-js inferir os tipos.
 type Tabela<Row, Insert, Update> = {
   Row: Row;
@@ -181,6 +259,37 @@ export interface Database {
         Anexo,
         Omit<Anexo, "id" | "created_at"> & { id?: string },
         Partial<Anexo>
+      >;
+      courses: Tabela<
+        Course,
+        Omit<Course, "id" | "created_at"> & { id?: string },
+        Partial<Course>
+      >;
+      lessons: Tabela<
+        Lesson,
+        Omit<Lesson, "id" | "created_at"> & { id?: string },
+        Partial<Lesson>
+      >;
+      lesson_progress: Tabela<
+        LessonProgress,
+        Omit<LessonProgress, "id" | "concluida_em"> & {
+          id?: string;
+          concluida_em?: string;
+        },
+        Partial<LessonProgress>
+      >;
+      lesson_comments: Tabela<
+        LessonComment,
+        Omit<LessonComment, "id" | "created_at"> & { id?: string },
+        Partial<LessonComment>
+      >;
+      indicadores_mensais: Tabela<
+        IndicadorMensal,
+        Omit<IndicadorMensal, "id" | "atualizado_em"> & {
+          id?: string;
+          atualizado_em?: string;
+        },
+        Partial<IndicadorMensal>
       >;
     };
     // Empty-key form (não use Record<string, never>: isso faria keyof = string

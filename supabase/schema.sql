@@ -497,3 +497,186 @@ begin
     from public.profiles p
     where c.medico_id = p.id and c.organization_id is null;
 end $$;
+
+-- =====================================================================
+-- ACADEMY — trilhas, aulas, progresso e comentários
+-- Conteúdo é global (produzido pela Medi Marketing) e consumido por
+-- todas as clínicas. Só o super admin cria e edita.
+-- =====================================================================
+create table if not exists public.courses (
+  id          uuid primary key default uuid_generate_v4(),
+  slug        text unique not null,
+  titulo      text not null,
+  resumo      text,
+  descricao   text,
+  nivel       text not null default 'essencial'
+                check (nivel in ('essencial', 'intermediario', 'avancado')),
+  -- Papéis que enxergam a trilha (ex.: trilha de gestão só para gestor)
+  papeis      text[] not null default '{gestor,secretaria,medico}',
+  ordem       integer not null default 0,
+  publicado   boolean not null default false,
+  created_at  timestamptz not null default now()
+);
+
+create table if not exists public.lessons (
+  id           uuid primary key default uuid_generate_v4(),
+  course_id    uuid not null references public.courses(id) on delete cascade,
+  slug         text not null,
+  titulo       text not null,
+  descricao    text,
+  -- Link do vídeo: YouTube, Vimeo ou arquivo direto (mp4)
+  video_url    text,
+  material_url text,
+  duracao_min  integer,
+  ordem        integer not null default 0,
+  publicado    boolean not null default true,
+  created_at   timestamptz not null default now(),
+  unique (course_id, slug)
+);
+create index if not exists idx_lessons_course on public.lessons (course_id, ordem);
+
+create table if not exists public.lesson_progress (
+  id           uuid primary key default uuid_generate_v4(),
+  lesson_id    uuid not null references public.lessons(id) on delete cascade,
+  user_id      uuid not null references public.profiles(id) on delete cascade,
+  concluida    boolean not null default true,
+  concluida_em timestamptz not null default now(),
+  unique (lesson_id, user_id)
+);
+create index if not exists idx_progress_user on public.lesson_progress (user_id);
+
+create table if not exists public.lesson_comments (
+  id              uuid primary key default uuid_generate_v4(),
+  lesson_id       uuid not null references public.lessons(id) on delete cascade,
+  user_id         uuid not null references public.profiles(id) on delete cascade,
+  -- Guarda a clínica do autor para o isolamento entre tenants.
+  -- Na resposta do super admin, herda a organização do comentário original.
+  organization_id uuid references public.organizations(id) on delete cascade,
+  parent_id       uuid references public.lesson_comments(id) on delete cascade,
+  conteudo        text not null check (length(trim(conteudo)) > 0),
+  created_at      timestamptz not null default now()
+);
+create index if not exists idx_comments_lesson on public.lesson_comments (lesson_id, created_at);
+
+-- =====================================================================
+-- INDICADORES — lançamento mensal por clínica
+-- Enquanto as integrações de Ads não estão conectadas (Fase 4), os
+-- números entram manualmente. As APIs vão alimentar esta mesma tabela.
+-- =====================================================================
+create table if not exists public.indicadores_mensais (
+  id              uuid primary key default uuid_generate_v4(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  mes             date not null,                    -- sempre o dia 1 do mês
+  investimento    numeric(12,2) not null default 0, -- em marketing
+  leads           integer not null default 0,
+  agendamentos    integer not null default 0,
+  comparecimentos integer not null default 0,
+  faturamento     numeric(12,2) not null default 0,
+  observacao      text,
+  atualizado_em   timestamptz not null default now(),
+  unique (organization_id, mes)
+);
+create index if not exists idx_indicadores_org_mes
+  on public.indicadores_mensais (organization_id, mes desc);
+
+-- ---------------------------------------------------------------------
+-- RLS da Academy e dos indicadores
+-- ---------------------------------------------------------------------
+alter table public.courses             enable row level security;
+alter table public.lessons             enable row level security;
+alter table public.lesson_progress     enable row level security;
+alter table public.lesson_comments     enable row level security;
+alter table public.indicadores_mensais enable row level security;
+
+-- ---- courses ---- (todo mundo lê o que está publicado e é do seu papel)
+drop policy if exists "courses_select" on public.courses;
+create policy "courses_select" on public.courses
+  for select to authenticated
+  using (
+    public.is_super_admin()
+    or (publicado and public.meu_papel() = any(papeis))
+  );
+
+drop policy if exists "courses_admin_write" on public.courses;
+create policy "courses_admin_write" on public.courses
+  for all to authenticated
+  using (public.is_super_admin())
+  with check (public.is_super_admin());
+
+-- ---- lessons ----
+drop policy if exists "lessons_select" on public.lessons;
+create policy "lessons_select" on public.lessons
+  for select to authenticated
+  using (
+    public.is_super_admin()
+    or (publicado and exists (
+      select 1 from public.courses c
+      where c.id = lessons.course_id
+        and c.publicado
+        and public.meu_papel() = any(c.papeis)
+    ))
+  );
+
+drop policy if exists "lessons_admin_write" on public.lessons;
+create policy "lessons_admin_write" on public.lessons
+  for all to authenticated
+  using (public.is_super_admin())
+  with check (public.is_super_admin());
+
+-- ---- lesson_progress ---- (cada um controla o próprio progresso)
+drop policy if exists "progress_all" on public.lesson_progress;
+create policy "progress_all" on public.lesson_progress
+  for all to authenticated
+  using (user_id = auth.uid() or public.is_super_admin())
+  with check (user_id = auth.uid() or public.is_super_admin());
+
+-- ---- lesson_comments ----
+-- A dúvida de uma clínica não aparece para outra: a leitura é limitada à
+-- própria organização (mais as respostas da equipe, que herdam a org).
+drop policy if exists "comments_select" on public.lesson_comments;
+create policy "comments_select" on public.lesson_comments
+  for select to authenticated
+  using (
+    public.is_super_admin()
+    or user_id = auth.uid()
+    or (organization_id is not null and organization_id = public.minha_org())
+  );
+
+drop policy if exists "comments_insert" on public.lesson_comments;
+create policy "comments_insert" on public.lesson_comments
+  for insert to authenticated
+  with check (
+    user_id = auth.uid()
+    and (
+      public.is_super_admin()
+      or (organization_id is not null and organization_id = public.minha_org())
+    )
+  );
+
+drop policy if exists "comments_update" on public.lesson_comments;
+create policy "comments_update" on public.lesson_comments
+  for update to authenticated
+  using (user_id = auth.uid() or public.is_super_admin());
+
+drop policy if exists "comments_delete" on public.lesson_comments;
+create policy "comments_delete" on public.lesson_comments
+  for delete to authenticated
+  using (user_id = auth.uid() or public.is_super_admin());
+
+-- ---- indicadores_mensais ---- (a clínica inteira lê; gestor e equipe lançam)
+drop policy if exists "indicadores_select" on public.indicadores_mensais;
+create policy "indicadores_select" on public.indicadores_mensais
+  for select to authenticated
+  using (organization_id = public.minha_org() or public.is_super_admin());
+
+drop policy if exists "indicadores_write" on public.indicadores_mensais;
+create policy "indicadores_write" on public.indicadores_mensais
+  for all to authenticated
+  using (
+    (organization_id = public.minha_org() and public.is_gestor())
+    or public.is_super_admin()
+  )
+  with check (
+    (organization_id = public.minha_org() and public.is_gestor())
+    or public.is_super_admin()
+  );
