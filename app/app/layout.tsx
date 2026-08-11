@@ -26,6 +26,7 @@ export default async function AppLayout({
         nome={profile.nome || "Usuário"}
         role={role}
         organizacao={organizacao?.nome ?? null}
+        logoUrl={organizacao?.logo_url ?? null}
         naoLidas={naoLidas}
       />
       <main className="min-w-0 flex-1 overflow-x-hidden">

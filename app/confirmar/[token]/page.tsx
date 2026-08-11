@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { CalendarDays, Clock, MapPin, Stethoscope, UserRound } from "lucide-react";
-import { Logo } from "@/components/logo";
+import { MarcaClinica } from "@/components/marca-clinica";
 import { PainelPaciente } from "@/components/confirmacao/painel-paciente";
 import { getConfirmacaoPorToken } from "@/lib/supabase/confirmacoes";
 import { diaDaSemana, formatarData, formatarHora } from "@/lib/lembretes";
@@ -35,8 +35,15 @@ export default async function ConfirmarPage({
   return (
     <main className="min-h-screen bg-branco-clinico px-5 py-10">
       <div className="mx-auto w-full max-w-md">
+        {/* Para o paciente, quem atende é a clínica: é a marca dela que
+            precisa estar aqui, não a da plataforma. */}
         <div className="flex justify-center">
-          <Logo />
+          <MarcaClinica
+            nome={c.clinica}
+            logoUrl={c.logoClinica}
+            tamanho="lg"
+            soImagem={!!c.logoClinica}
+          />
         </div>
 
         <div className="mt-8 overflow-hidden rounded-lg border border-border bg-white shadow-card">
@@ -75,6 +82,9 @@ export default async function ConfirmarPage({
 
         <p className="mt-6 text-center text-xs text-cinza-suave">
           Este link é pessoal e vale só para esta consulta.
+        </p>
+        <p className="mt-1 text-center text-[11px] text-cinza-suave/70">
+          Agenda gerenciada com Medi Marketing
         </p>
       </div>
     </main>

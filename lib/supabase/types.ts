@@ -52,6 +52,8 @@ export type Organization = {
   cnpj: string | null;
   endereco: string | null;
   responsavel: string | null;
+  /** Logo da clínica, no bucket público `logos`. */
+  logo_url: string | null;
   site: string | null;
   instagram: string | null;
   /** Texto do lembrete de consulta enviado ao paciente. */

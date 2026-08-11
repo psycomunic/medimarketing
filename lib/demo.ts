@@ -50,6 +50,7 @@ function org(
     cnpj: null,
     endereco: null,
     responsavel: null,
+    logo_url: null,
     site: null,
     instagram: `@${slug.replace(/-/g, "")}`,
     mensagem_lembrete: null,

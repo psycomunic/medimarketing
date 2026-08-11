@@ -129,6 +129,38 @@ export function AgendaCalendar({
     setNovaAberta(true);
   }
 
+  // Resumo do que está visível: responde "como está esse período?" sem
+  // obrigar a contar cartão por cartão.
+  const doPeriodo = useMemo(() => {
+    const dentro =
+      visao === "mes"
+        ? consultas.filter((c) => isSameMonth(new Date(c.data_hora), cursor))
+        : visao === "semana"
+          ? consultas.filter((c) => {
+              const d = new Date(c.data_hora);
+              return (
+                d >= startOfWeek(cursor, { weekStartsOn: 0 }) &&
+                d <= endOfWeek(cursor, { weekStartsOn: 0 })
+              );
+            })
+          : consultas.filter((c) => isSameDay(new Date(c.data_hora), cursor));
+
+    const ativas = dentro.filter((c) => c.status !== "cancelada");
+
+    return {
+      total: dentro.length,
+      confirmadas: dentro.filter((c) => c.status === "confirmada").length,
+      pendentes: dentro.filter((c) => c.status === "pendente").length,
+      canceladas: dentro.filter((c) => c.status === "cancelada").length,
+      // Só o que ainda pode acontecer entra na previsão de receita
+      previsto: ativas.reduce((s, c) => s + Number(c.valor ?? 0), 0),
+      aguardandoConfirmacao: ativas.filter((c) => {
+        const conf = confirmacoes[c.id];
+        return conf && (conf.status === "pendente" || conf.status === "enviado");
+      }).length,
+    };
+  }, [consultas, confirmacoes, cursor, visao]);
+
   return (
     <div>
       {/* Cabeçalho */}
@@ -201,6 +233,38 @@ export function AgendaCalendar({
           ))}
         </div>
       </div>
+
+      {/* Resumo do período visível */}
+      {doPeriodo.total > 0 && (
+        <dl className="mt-4 grid gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-3 lg:grid-cols-5">
+          {[
+            { r: "consultas", v: String(doPeriodo.total), cor: "text-azul-medico" },
+            { r: "confirmadas", v: String(doPeriodo.confirmadas), cor: "text-sucesso" },
+            { r: "pendentes", v: String(doPeriodo.pendentes), cor: "text-alerta" },
+            {
+              r: "sem resposta",
+              v: String(doPeriodo.aguardandoConfirmacao),
+              cor: "text-cinza-suave",
+            },
+            {
+              r: "previsto",
+              v: doPeriodo.previsto
+                ? doPeriodo.previsto.toLocaleString("pt-BR", {
+                    style: "currency",
+                    currency: "BRL",
+                    maximumFractionDigits: 0,
+                  })
+                : "—",
+              cor: "text-teal",
+            },
+          ].map((c) => (
+            <div key={c.r} className="bg-white px-4 py-2.5">
+              <dd className={cn("font-heading text-lg font-bold", c.cor)}>{c.v}</dd>
+              <dt className="text-[11px] text-cinza-suave">{c.r}</dt>
+            </div>
+          ))}
+        </dl>
+      )}
 
       {/* Corpo */}
       <div className="mt-5">
@@ -319,29 +383,53 @@ function MonthView({
         {dias.map((d) => {
           const doMes = isSameMonth(d, cursor);
           const consultas = consultasDoDia(d);
+          const fimDeSemana = d.getDay() === 0 || d.getDay() === 6;
+          // Quantos precisam de atenção: pediram remarcação
+          const remarcar = consultas.filter(
+            (c) => confirmacoes[c.id]?.status === "reagendar"
+          ).length;
+
           return (
             <button
               key={d.toISOString()}
               onClick={() => onDia(d)}
               className={cn(
-                "min-h-[92px] border-b border-r border-border p-1.5 text-left transition-colors hover:bg-verde-menta/30 focus:outline-none",
-                !doMes && "bg-branco-clinico/60"
+                "min-h-[112px] border-b border-r border-border p-1.5 text-left transition-colors hover:bg-verde-menta/30 focus:outline-none",
+                !doMes && "bg-branco-clinico/60",
+                doMes && fimDeSemana && "bg-branco-clinico/40"
               )}
             >
-              <span
-                className={cn(
-                  "inline-grid size-6 place-items-center rounded-full text-xs font-medium",
-                  isToday(d)
-                    ? "bg-teal text-white"
-                    : doMes
-                      ? "text-cinza-texto"
-                      : "text-cinza-suave/50"
+              <span className="flex items-center justify-between gap-1">
+                <span
+                  className={cn(
+                    "inline-grid size-6 place-items-center rounded-full text-xs font-medium",
+                    isToday(d)
+                      ? "bg-teal text-white"
+                      : doMes
+                        ? "text-cinza-texto"
+                        : "text-cinza-suave/50"
+                  )}
+                >
+                  {format(d, "d")}
+                </span>
+
+                {/* Quantas consultas o dia tem, sem precisar contar */}
+                {consultas.length > 0 && (
+                  <span className="flex items-center gap-1">
+                    {remarcar > 0 && (
+                      <span
+                        className="size-1.5 rounded-full bg-coral"
+                        title={`${remarcar} pediu para remarcar`}
+                      />
+                    )}
+                    <span className="rounded-full bg-verde-menta px-1.5 text-[10px] font-bold text-azul-medico">
+                      {consultas.length}
+                    </span>
+                  </span>
                 )}
-              >
-                {format(d, "d")}
               </span>
               <div className="mt-1 space-y-1">
-                {consultas.slice(0, 3).map((c) => (
+                {consultas.slice(0, 4).map((c) => (
                   <div
                     key={c.id}
                     onClick={(e) => {
@@ -366,9 +454,9 @@ function MonthView({
                     )}
                   </div>
                 ))}
-                {consultas.length > 3 && (
+                {consultas.length > 4 && (
                   <span className="pl-1 text-[11px] font-medium text-teal">
-                    +{consultas.length - 3} mais
+                    +{consultas.length - 4} mais
                   </span>
                 )}
               </div>
@@ -381,6 +469,18 @@ function MonthView({
 }
 
 /* ------------------------- Visão de semana ------------------------- */
+
+/**
+ * Grade de horários da semana.
+ *
+ * Substitui a lista de cartões por dia: numa agenda o que importa é ver
+ * o vazio tanto quanto o cheio — onde dá para encaixar, onde a manhã
+ * está sobrecarregada. Isso só aparece quando o tempo vira eixo.
+ *
+ * A faixa de horas se ajusta ao que existe na semana, com um mínimo de
+ * 8h às 19h, para uma clínica que atende à noite não ficar com metade da
+ * agenda fora da tela.
+ */
 function WeekView({
   cursor,
   consultasDoDia,
@@ -395,96 +495,148 @@ function WeekView({
   onNova: (d: Date) => void;
 }) {
   const inicio = startOfWeek(cursor, { weekStartsOn: 0 });
-  const dias = eachDayOfInterval({ start: inicio, end: endOfWeek(cursor, { weekStartsOn: 0 }) });
+  const dias = eachDayOfInterval({
+    start: inicio,
+    end: endOfWeek(cursor, { weekStartsOn: 0 }),
+  });
+
+  const todas = dias.flatMap((d) => consultasDoDia(d));
+  const horas = todas.map((c) => new Date(c.data_hora).getHours());
+  const primeira = Math.min(8, ...(horas.length ? horas : [8]));
+  const ultima = Math.max(19, ...(horas.length ? horas.map((h) => h + 1) : [19]));
+  const faixa = Array.from({ length: ultima - primeira }, (_, i) => primeira + i);
+
+  const ALTURA = 56; // px por hora
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-7">
-      {dias.map((d) => {
-        const consultas = consultasDoDia(d);
-        return (
-          <div
+    <div className="overflow-hidden rounded-lg border border-border bg-white shadow-soft">
+      {/* Cabeçalho dos dias */}
+      <div className="grid grid-cols-[3.5rem_repeat(7,1fr)] border-b border-border bg-verde-menta/40">
+        <div />
+        {dias.map((d) => (
+          <button
             key={d.toISOString()}
-            className="rounded-lg border border-border bg-white p-3 shadow-soft"
+            onClick={() => onNova(d)}
+            className="group border-l border-border py-2 text-center transition-colors hover:bg-verde-menta"
+            title="Marcar consulta neste dia"
           >
-            <div className="mb-2 flex items-center justify-between">
-              <div>
-                <p className="text-xs uppercase text-cinza-suave">
-                  {format(d, "EEE", { locale: ptBR })}
-                </p>
-                <p
-                  className={cn(
-                    "font-heading text-lg font-semibold",
-                    isToday(d) ? "text-teal" : "text-azul-medico"
-                  )}
-                >
-                  {format(d, "dd")}
-                </p>
-              </div>
-              <button
-                onClick={() => onNova(d)}
-                className="grid size-6 place-items-center rounded-md text-cinza-suave hover:text-teal"
-                aria-label="Nova consulta"
-              >
-                <Plus className="size-4" />
-              </button>
-            </div>
-            <div className="space-y-1.5">
-              {consultas.length === 0 && (
-                <p className="py-2 text-center text-xs text-cinza-suave/70">—</p>
+            <p className="text-[10px] uppercase tracking-wide text-cinza-suave">
+              {format(d, "EEE", { locale: ptBR })}
+            </p>
+            <p
+              className={cn(
+                "mx-auto mt-0.5 grid size-7 place-items-center rounded-full font-heading text-sm font-bold",
+                isToday(d) ? "bg-teal text-white" : "text-azul-medico"
               )}
-              {consultas.map((c) => {
-                const conf = confirmacoes[c.id];
-                return (
-                  <div
-                    key={c.id}
-                    className={cn(
-                      "flex items-center gap-1 rounded-md border bg-branco-clinico pr-1",
-                      conf?.status === "reagendar"
-                        ? "border-coral/40"
-                        : "border-border hover:border-teal-claro"
-                    )}
-                  >
+            >
+              {format(d, "dd")}
+            </p>
+          </button>
+        ))}
+      </div>
+
+      {/* Grade */}
+      <div className="relative max-h-[560px] overflow-y-auto">
+        <div className="grid grid-cols-[3.5rem_repeat(7,1fr)]">
+          {/* Coluna das horas */}
+          <div>
+            {faixa.map((h) => (
+              <div
+                key={h}
+                style={{ height: ALTURA }}
+                className="relative border-b border-border/60"
+              >
+                <span className="absolute -top-2 right-2 text-[10px] text-cinza-suave">
+                  {String(h).padStart(2, "0")}:00
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* Uma coluna por dia */}
+          {dias.map((d) => {
+            const doDia = consultasDoDia(d);
+            const fimDeSemana = d.getDay() === 0 || d.getDay() === 6;
+
+            return (
+              <div
+                key={d.toISOString()}
+                className={cn(
+                  "relative border-l border-border",
+                  fimDeSemana && "bg-branco-clinico/60"
+                )}
+              >
+                {/* Linhas de hora, que também servem de alvo para marcar */}
+                {faixa.map((h) => (
+                  <button
+                    key={h}
+                    onClick={() => {
+                      const alvo = new Date(d);
+                      alvo.setHours(h, 0, 0, 0);
+                      onNova(alvo);
+                    }}
+                    style={{ height: ALTURA }}
+                    className="block w-full border-b border-border/60 transition-colors hover:bg-verde-menta/50"
+                    aria-label={`Marcar consulta ${format(d, "dd/MM")} às ${h}:00`}
+                  />
+                ))}
+
+                {/* Consultas posicionadas pelo horário */}
+                {doDia.map((c) => {
+                  const d0 = new Date(c.data_hora);
+                  const minutos =
+                    (d0.getHours() - primeira) * 60 + d0.getMinutes();
+                  const altura = Math.max(
+                    ((c.duracao_min ?? 30) / 60) * ALTURA,
+                    22
+                  );
+                  const conf = confirmacoes[c.id];
+                  const cancelada = c.status === "cancelada";
+
+                  return (
                     <button
+                      key={c.id}
                       onClick={() => onConsulta(c)}
-                      className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left"
+                      style={{
+                        top: (minutos / 60) * ALTURA,
+                        height: altura,
+                      }}
+                      className={cn(
+                        "absolute inset-x-1 overflow-hidden rounded-md border-l-4 bg-white px-1.5 py-0.5 text-left shadow-sm transition-all hover:z-10 hover:shadow-soft",
+                        cancelada && "opacity-60 line-through",
+                        conf?.status === "reagendar"
+                          ? "border-l-coral ring-1 ring-coral/30"
+                          : "border-l-transparent"
+                      )}
+                      title={`${format(d0, "HH:mm")} · ${c.paciente_nome}`}
                     >
-                      <span
-                        className={cn("size-2 shrink-0 rounded-full", corStatus[c.status])}
-                      />
-                      <span className="min-w-0">
-                        <span className="block text-xs font-semibold text-azul-medico">
-                          {format(new Date(c.data_hora), "HH:mm")}
-                        </span>
-                        <span className="block truncate text-xs text-cinza-suave">
-                          {c.paciente_nome}
+                      <span className="flex items-center gap-1">
+                        <span
+                          className={cn(
+                            "size-1.5 shrink-0 rounded-full",
+                            corStatus[c.status]
+                          )}
+                        />
+                        <span className="truncate text-[10px] font-semibold text-azul-medico">
+                          {format(d0, "HH:mm")}
                         </span>
                       </span>
+                      <span className="block truncate text-[10px] leading-tight text-cinza-suave">
+                        {c.paciente_nome}
+                      </span>
                     </button>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
-                    {conf && c.paciente_telefone && (
-                      <a
-                        href={linkWhatsApp(c.paciente_telefone, conf.mensagem)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={cn(
-                          "grid size-7 shrink-0 place-items-center rounded",
-                          conf.status === "pendente"
-                            ? "text-sucesso hover:bg-sucesso/12"
-                            : "text-cinza-suave/60 hover:bg-verde-menta hover:text-teal"
-                        )}
-                        title="Enviar confirmação pelo WhatsApp"
-                        aria-label={`Enviar confirmação para ${c.paciente_nome}`}
-                      >
-                        <MessageCircle className="size-3.5" />
-                      </a>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })}
+      <p className="border-t border-border px-4 py-2 text-[11px] text-cinza-suave">
+        Clique num horário vazio para marcar. Barra vermelha à esquerda =
+        paciente pediu para reagendar.
+      </p>
     </div>
   );
 }

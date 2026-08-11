@@ -24,6 +24,7 @@ import type { UsuarioGerenciavel } from "@/lib/supabase/usuarios";
 import { salvarClinica, salvarIntegracao } from "@/lib/actions/configuracoes";
 import { descricaoProvedor, rotuloProvedor } from "@/lib/rotulos";
 import { GestaoUsuarios } from "@/components/app/admin/gestao-usuarios";
+import { FormLogo } from "@/components/app/configuracoes/form-logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -103,7 +104,7 @@ export function PainelConfiguracoes({
       </div>
 
       <div className="mt-6">
-        {aba === "clinica" && <FormClinica organizacao={organizacao} />}
+        {aba === "clinica" && <FormClinica organizacao={organizacao} demo={demo} />}
         {aba === "equipe" && (
           <GestaoUsuarios
             usuarios={equipe}
@@ -125,7 +126,13 @@ export function PainelConfiguracoes({
 
 /* --------------------------- Dados da clínica --------------------------- */
 
-function FormClinica({ organizacao: o }: { organizacao: Organization }) {
+function FormClinica({
+  organizacao: o,
+  demo,
+}: {
+  organizacao: Organization;
+  demo: boolean;
+}) {
   const router = useRouter();
   const [v, setV] = useState({
     nome: o.nome,
@@ -181,6 +188,13 @@ function FormClinica({ organizacao: o }: { organizacao: Organization }) {
 
   return (
     <div className="space-y-6">
+      <FormLogo
+        organizationId={o.id}
+        nome={o.nome}
+        logoUrl={o.logo_url}
+        demo={demo}
+      />
+
       <section className="rounded-lg border border-border bg-white p-6 shadow-soft">
         <h2 className="text-lg font-semibold text-azul-medico">Dados cadastrais</h2>
         <p className="mt-1 text-sm text-cinza-suave">

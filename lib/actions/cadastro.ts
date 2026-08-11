@@ -136,6 +136,7 @@ export async function cadastrar(input: CadastroInput): Promise<CadastroResult> {
         cnpj: null,
         endereco: null,
         responsavel: d.nome,
+        logo_url: null,
         site: null,
         instagram: null,
         mensagem_lembrete: null,

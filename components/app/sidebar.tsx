@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LogOut, Menu, X, Building2, Bell } from "lucide-react";
 import { Logo } from "@/components/logo";
+import { MarcaClinica } from "@/components/marca-clinica";
 import { logout } from "@/lib/actions/auth";
 import { cn } from "@/lib/utils";
 import { GRUPOS, modulosDoPapel, rotuloPapel } from "@/lib/rbac";
@@ -14,11 +15,14 @@ export function Sidebar({
   nome,
   role,
   organizacao,
+  logoUrl = null,
   naoLidas = 0,
 }: {
   nome: string;
   role: Role;
   organizacao: string | null;
+  /** Logo da clínica; sem ela, cai no monograma. */
+  logoUrl?: string | null;
   /** Notificações não lidas, para o contador do sino. */
   naoLidas?: number;
 }) {
@@ -32,14 +36,22 @@ export function Sidebar({
   const conteudo = (
     <div className="flex h-full flex-col">
       <div className="p-6 pb-4">
-        <Logo href="/app" />
-        {/* Clínica ativa — super admin não pertence a nenhuma */}
-        <div className="mt-4 flex items-center gap-2 rounded-lg bg-verde-menta px-3 py-2">
-          <Building2 className="size-4 shrink-0 text-teal" />
-          <span className="truncate text-xs font-semibold text-azul-medico">
-            {organizacao ?? "Todas as clínicas"}
-          </span>
-        </div>
+        {/* A marca da clínica manda no painel dela. A da plataforma vira
+            assinatura no rodapé. Sem clínica (super admin), o contrário. */}
+        {organizacao ? (
+          <MarcaClinica nome={organizacao} logoUrl={logoUrl} href="/app" />
+        ) : (
+          <Logo href="/app" />
+        )}
+
+        {!organizacao && (
+          <div className="mt-4 flex items-center gap-2 rounded-lg bg-verde-menta px-3 py-2">
+            <Building2 className="size-4 shrink-0 text-teal" />
+            <span className="truncate text-xs font-semibold text-azul-medico">
+              Todas as clínicas
+            </span>
+          </div>
+        )}
 
         {/* Notificações fora dos grupos: é o que se olha primeiro */}
         <Link
@@ -131,6 +143,13 @@ export function Sidebar({
             <LogOut className="size-5" /> Sair
           </button>
         </form>
+
+        {/* Assinatura discreta: o painel é da clínica, a plataforma é nossa */}
+        {organizacao && (
+          <p className="px-3 pt-2 text-[10px] text-cinza-suave/70">
+            Plataforma <span className="font-semibold">Medi Marketing</span>
+          </p>
+        )}
       </div>
     </div>
   );
@@ -139,7 +158,11 @@ export function Sidebar({
     <>
       {/* Topbar mobile */}
       <div className="sticky top-0 z-40 flex items-center justify-between border-b border-border bg-white px-4 py-3 lg:hidden">
-        <Logo href="/app" />
+        {organizacao ? (
+          <MarcaClinica nome={organizacao} logoUrl={logoUrl} href="/app" tamanho="sm" />
+        ) : (
+          <Logo href="/app" />
+        )}
         <div className="flex items-center gap-1">
           {/* No celular o sino fica no topo: é o atalho mais usado */}
           <Link

@@ -218,3 +218,83 @@ create policy "leituras_all" on public.notificacao_leituras
   for all to authenticated
   using (user_id = auth.uid())
   with check (user_id = auth.uid());
+
+
+-- ---------------------------------------------------------------------
+-- 2026-08-11 (3) — Logo da clínica
+--
+-- Rode para habilitar o upload da logo e a personalização do painel
+-- e da página de confirmação do paciente.
+-- ---------------------------------------------------------------------
+
+-- =====================================================================
+-- IDENTIDADE DA CLÍNICA
+--
+-- A logo aparece no painel da equipe e, principalmente, na página que o
+-- paciente abre para confirmar. Para o paciente, quem atende é a
+-- clínica — a plataforma não precisa aparecer ali.
+-- =====================================================================
+
+alter table public.organizations add column if not exists logo_url text;
+
+-- ---------------------------------------------------------------------
+-- Bucket público de logos
+--
+-- Público de propósito: o link de confirmação é aberto por quem não tem
+-- conta, muitas vezes dentro do WhatsApp, onde não há sessão para
+-- assinar uma URL. O que vai aqui é material de marca, feito para ser
+-- visto — diferente do bucket `anexos`, que é privado porque guarda
+-- documento clínico.
+-- ---------------------------------------------------------------------
+insert into storage.buckets (id, name, public)
+values ('logos', 'logos', true)
+on conflict (id) do update set public = true;
+
+-- Qualquer um lê (é o que torna a logo visível ao paciente)
+drop policy if exists "logos_leitura_publica" on storage.objects;
+create policy "logos_leitura_publica" on storage.objects
+  for select using (bucket_id = 'logos');
+
+-- Escrita restrita: só gestor ou super admin, e apenas na pasta da
+-- própria clínica. O path é {organization_id}/arquivo.
+drop policy if exists "logos_escrita" on storage.objects;
+create policy "logos_escrita" on storage.objects
+  for insert to authenticated
+  with check (
+    bucket_id = 'logos'
+    and (
+      public.is_super_admin()
+      or (
+        public.is_gestor()
+        and (storage.foldername(name))[1] = public.minha_org()::text
+      )
+    )
+  );
+
+drop policy if exists "logos_atualizacao" on storage.objects;
+create policy "logos_atualizacao" on storage.objects
+  for update to authenticated
+  using (
+    bucket_id = 'logos'
+    and (
+      public.is_super_admin()
+      or (
+        public.is_gestor()
+        and (storage.foldername(name))[1] = public.minha_org()::text
+      )
+    )
+  );
+
+drop policy if exists "logos_remocao" on storage.objects;
+create policy "logos_remocao" on storage.objects
+  for delete to authenticated
+  using (
+    bucket_id = 'logos'
+    and (
+      public.is_super_admin()
+      or (
+        public.is_gestor()
+        and (storage.foldername(name))[1] = public.minha_org()::text
+      )
+    )
+  );

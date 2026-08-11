@@ -157,6 +157,8 @@ export type ConfirmacaoPublica = {
   medico: string | null;
   tipo: string;
   clinica: string;
+  /** Logo da clínica: é a marca dela que o paciente precisa reconhecer. */
+  logoClinica: string | null;
   endereco: string | null;
   telefoneClinica: string | null;
   /** A consulta já foi cancelada ou o horário já passou. */
@@ -194,6 +196,7 @@ export async function getConfirmacaoPorToken(
       medico: conf.medico_nome,
       tipo: conf.tipo,
       clinica: demoOrganization.nome,
+      logoClinica: demoOrganization.logo_url,
       endereco:
         [demoOrganization.endereco, demoOrganization.cidade]
           .filter(Boolean)
@@ -229,7 +232,7 @@ export async function getConfirmacaoPorToken(
   const [{ data: org }, { data: medico }] = await Promise.all([
     admin
       .from("organizations")
-      .select("nome,endereco,cidade,telefone")
+      .select("nome,endereco,cidade,telefone,logo_url")
       .eq("id", conf.organization_id)
       .maybeSingle(),
     admin.from("profiles").select("nome").eq("id", consulta.medico_id).maybeSingle(),
@@ -245,6 +248,7 @@ export async function getConfirmacaoPorToken(
     medico: medico?.nome ?? null,
     tipo: consulta.tipo,
     clinica: org?.nome ?? "a clínica",
+    logoClinica: org?.logo_url ?? null,
     endereco: partes.length ? partes.join(" — ") : null,
     telefoneClinica: org?.telefone ?? null,
     encerrada:
