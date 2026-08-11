@@ -1,8 +1,8 @@
 import Link from "next/link";
+import Image from "next/image";
 import { ArrowRight, Star, ShieldCheck, Users, TrendingDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Reveal } from "@/components/ui/reveal";
-import { PainelMockup } from "@/components/marketing/painel-mockup";
 import { site } from "@/lib/site";
 import { whatsappLink } from "@/lib/utils";
 
@@ -87,11 +87,20 @@ export function Hero() {
           </Reveal>
         </div>
 
-        {/* Coluna visual: mockup do painel */}
+        {/* Coluna visual: banner com a agenda real da plataforma */}
         <Reveal delay={0.15}>
-          <div className="relative">
-            <div className="absolute -inset-4 -z-10 rounded-[2rem] bg-gradient-to-br from-teal-claro/25 to-verde-menta" />
-            <PainelMockup />
+          {/* Sangra para fora do container no desktop: o banner tem margem
+              própria e fica pequeno demais se respeitar a coluna */}
+          <div className="relative lg:-mr-12 xl:-mr-24">
+            <Image
+              src="/BANNER-FUNDO-HERO.jpg"
+              alt="Notebook exibindo a agenda de consultas da plataforma Medi Marketing"
+              width={2000}
+              height={1333}
+              sizes="(max-width: 1024px) 100vw, 55vw"
+              priority
+              className="h-auto w-full"
+            />
           </div>
         </Reveal>
       </div>
