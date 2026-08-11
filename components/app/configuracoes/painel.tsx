@@ -256,7 +256,7 @@ function FormClinica({ organizacao: o }: { organizacao: Organization }) {
             </div>
 
             <div className="grid gap-1.5">
-              <Label htmlFor="hora-envio">Horário do disparo</Label>
+              <Label htmlFor="hora-envio">Horário de referência</Label>
               <Select
                 id="hora-envio"
                 value={v.lembreteHora}
@@ -268,6 +268,11 @@ function FormClinica({ organizacao: o }: { organizacao: Organization }) {
                   </option>
                 ))}
               </Select>
+              <p className="text-xs text-cinza-suave">
+                A rotina roda uma vez por dia, de manhã, e envia tudo que
+                vence naquele dia — então a mensagem pode sair um pouco
+                antes deste horário, nunca depois.
+              </p>
             </div>
           </div>
 

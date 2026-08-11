@@ -428,10 +428,26 @@ export async function gerarPendentes(
   return novas.length;
 }
 
-/** Confirmações prontas para disparar agora, em todas as clínicas ativas. */
-export async function getDevidas(limite = 200): Promise<
-  (Confirmacao & { organizacao: Organization })[]
-> {
+/**
+ * Fim do dia de hoje — o corte usado pela rotina de disparo.
+ *
+ * A rotina roda uma vez por dia, de manhã. Se o corte fosse "agora", um
+ * lembrete marcado para as 09:00 não seria pego na passada das 08:00 e
+ * só sairia no dia seguinte, atrasado. Pegando tudo que vence hoje, ele
+ * sai algumas horas antes do horário escolhido — o que é certo — em vez
+ * de um dia depois.
+ */
+export function fimDeHoje(): string {
+  const d = new Date();
+  d.setHours(23, 59, 59, 999);
+  return d.toISOString();
+}
+
+/** Confirmações prontas para disparar, em todas as clínicas ativas. */
+export async function getDevidas(
+  ate: string = fimDeHoje(),
+  limite = 200
+): Promise<(Confirmacao & { organizacao: Organization })[]> {
   if (!adminDisponivel()) return [];
 
   const admin = createAdminClient();
@@ -440,7 +456,7 @@ export async function getDevidas(limite = 200): Promise<
     .from("confirmacoes")
     .select("*")
     .eq("status", "pendente")
-    .lte("agendado_para", new Date().toISOString())
+    .lte("agendado_para", ate)
     .order("agendado_para", { ascending: true })
     .limit(limite);
 

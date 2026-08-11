@@ -15,9 +15,14 @@ import { montarMensagem, urlConfirmacao } from "@/lib/lembretes";
  *   1. cria a confirmação das consultas novas, com o disparo já datado;
  *   2. envia o que venceu.
  *
- * Roda de hora em hora. Como o horário de disparo da clínica é uma hora
- * cheia, isso dá no máximo 59 minutos de atraso — aceitável para um
- * lembrete de véspera e muito mais barato que rodar a cada minuto.
+ * Roda uma vez por dia (ver vercel.json). O plano Hobby da Vercel não
+ * aceita cron mais frequente, e um agendamento fora do permitido faz a
+ * plataforma recusar o deploy inteiro — não é só o cron que para.
+ *
+ * Por isso o corte é o fim do dia, e não "agora": a passada da manhã
+ * envia tudo que vence hoje. A mensagem sai algumas horas antes do
+ * horário escolhido pela clínica, nunca depois. Com o plano Pro, mudar
+ * o schedule para "0 * * * *" faz o horário ser respeitado na hora.
  *
  * Sem as credenciais do WhatsApp nada falha: a confirmação continua
  * pendente e a recepção dispara pelo painel.
