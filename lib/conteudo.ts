@@ -11,10 +11,10 @@
 /* ------------------------------------------------------------------ */
 export const numeros = [
   // TODO: substituir pelos números reais e atualizar periodicamente
-  { valor: "+120", label: "médicos e clínicas atendidos" },
-  { valor: "R$ 38 mi", label: "em faturamento gerado para clientes" },
-  { valor: "+90 mil", label: "consultas agendadas pela nossa operação" },
-  { valor: "-41%", label: "de faltas depois da régua de confirmação" },
+  { icone: "Stethoscope", valor: "+120", label: "médicos e clínicas atendidos" },
+  { icone: "Banknote", valor: "R$ 38 mi", label: "gerados em faturamento para clientes" },
+  { icone: "CalendarCheck", valor: "+90 mil", label: "consultas agendadas pela nossa operação" },
+  { icone: "TrendingDown", valor: "-41%", label: "de faltas com a régua de confirmação" },
 ] as const;
 
 /** Segmentos atendidos — usados na faixa de credibilidade do topo. */
