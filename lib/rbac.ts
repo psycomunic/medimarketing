@@ -21,6 +21,7 @@ import {
   User,
   LibraryBig,
   MessageSquareReply,
+  UsersRound,
   type LucideIcon,
 } from "lucide-react";
 import type { Role } from "@/lib/supabase/types";
@@ -37,6 +38,7 @@ export type ModuloId =
   | "indicadores"
   | "financeiro"
   | "clinicas"
+  | "admin-usuarios"
   | "admin-academy"
   | "admin-comentarios"
   | "configuracoes"
@@ -180,6 +182,16 @@ export const MODULOS: readonly Modulo[] = [
     fase: 1,
     grupo: "admin",
     resumo: "Todas as clínicas atendidas pela Medi Marketing.",
+  },
+  {
+    id: "admin-usuarios",
+    label: "Usuários",
+    href: "/app/admin/usuarios",
+    icone: UsersRound,
+    papeis: ["super_admin"],
+    fase: 1,
+    grupo: "admin",
+    resumo: "Criar acessos, definir papéis e cortar entrada, em todas as clínicas.",
   },
   {
     id: "admin-academy",

@@ -142,6 +142,7 @@ function perfil(
     foto_url: null,
     role,
     ativo: true,
+    aguardando_liberacao: false,
     created_at: new Date("2024-01-15").toISOString(),
     ...extras,
   };

@@ -71,6 +71,12 @@ export type Profile = {
   foto_url: string | null;
   role: Role;
   ativo: boolean;
+  /**
+   * Cadastrou-se sozinho e ainda não foi liberado por um administrador.
+   * Junto com `ativo = false`, distingue a fila de entrada de quem teve
+   * o acesso cortado — os dois estão barrados, por motivos opostos.
+   */
+  aguardando_liberacao: boolean;
   created_at: string;
 };
 

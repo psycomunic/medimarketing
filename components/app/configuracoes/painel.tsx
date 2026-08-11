@@ -18,18 +18,12 @@ import {
 import type {
   Integracao,
   Organization,
-  Profile,
   ProvedorIntegracao,
-  Role,
 } from "@/lib/supabase/types";
-import {
-  alterarPapel,
-  alternarAtivo,
-  salvarClinica,
-  salvarIntegracao,
-} from "@/lib/actions/configuracoes";
+import type { UsuarioGerenciavel } from "@/lib/supabase/usuarios";
+import { salvarClinica, salvarIntegracao } from "@/lib/actions/configuracoes";
 import { descricaoProvedor, rotuloProvedor } from "@/lib/rotulos";
-import { rotuloPapel } from "@/lib/rbac";
+import { GestaoUsuarios } from "@/components/app/admin/gestao-usuarios";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -60,12 +54,14 @@ export function PainelConfiguracoes({
   equipe,
   integracoes,
   usuarioId,
+  adminDisponivel,
   demo,
 }: {
   organizacao: Organization;
-  equipe: Profile[];
+  equipe: UsuarioGerenciavel[];
   integracoes: Integracao[];
   usuarioId: string;
+  adminDisponivel: boolean;
   demo: boolean;
 }) {
   const [aba, setAba] = useState<Aba>("clinica");
@@ -108,7 +104,17 @@ export function PainelConfiguracoes({
 
       <div className="mt-6">
         {aba === "clinica" && <FormClinica organizacao={organizacao} />}
-        {aba === "equipe" && <Equipe equipe={equipe} usuarioId={usuarioId} />}
+        {aba === "equipe" && (
+          <GestaoUsuarios
+            usuarios={equipe}
+            clinicas={[{ id: organizacao.id, nome: organizacao.nome }]}
+            usuarioId={usuarioId}
+            ehSuperAdmin={false}
+            organizationId={organizacao.id}
+            adminDisponivel={adminDisponivel}
+            demo={demo}
+          />
+        )}
         {aba === "integracoes" && (
           <Integracoes integracoes={integracoes} organizationId={organizacao.id} />
         )}
@@ -262,122 +268,6 @@ function FormClinica({ organizacao: o }: { organizacao: Organization }) {
   );
 }
 
-/* ------------------------------- Equipe ------------------------------- */
-
-function Equipe({ equipe, usuarioId }: { equipe: Profile[]; usuarioId: string }) {
-  const router = useRouter();
-  const [erro, setErro] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
-
-  function agir(fn: () => Promise<{ ok: boolean; erro?: string }>) {
-    setErro(null);
-    startTransition(async () => {
-      const res = await fn();
-      if (!res.ok) {
-        setErro(res.erro ?? "Não foi possível concluir.");
-        return;
-      }
-      router.refresh();
-    });
-  }
-
-  return (
-    <section className="rounded-lg border border-border bg-white shadow-soft">
-      <div className="border-b border-border px-6 py-4">
-        <h2 className="text-lg font-semibold text-azul-medico">Usuários e papéis</h2>
-        <p className="mt-1 text-sm text-cinza-suave">
-          O papel define o que a pessoa enxerga no painel. Desativar tira o
-          acesso sem apagar o histórico do que ela fez.
-        </p>
-      </div>
-
-      {erro && (
-        <p className="mx-6 mt-4 rounded-md bg-coral/10 px-4 py-2.5 text-sm text-coral">
-          {erro}
-        </p>
-      )}
-
-      <ul className="divide-y divide-border">
-        {equipe.length === 0 && (
-          <li className="px-6 py-12 text-center text-cinza-suave">
-            Nenhum usuário vinculado a esta clínica ainda.
-          </li>
-        )}
-        {equipe.map((p) => {
-          const souEu = p.id === usuarioId;
-          return (
-            <li
-              key={p.id}
-              className="flex flex-wrap items-center gap-3 px-6 py-4"
-            >
-              <span
-                className={cn(
-                  "grid size-10 shrink-0 place-items-center rounded-full text-sm font-semibold text-white",
-                  p.ativo ? "bg-azul-medico" : "bg-cinza-suave/60"
-                )}
-              >
-                {(p.nome ?? "?").charAt(0).toUpperCase()}
-              </span>
-
-              <div className="min-w-0 flex-1">
-                <p className="flex flex-wrap items-center gap-2 font-medium text-cinza-texto">
-                  <span className="truncate">{p.nome ?? "Sem nome"}</span>
-                  {souEu && (
-                    <span className="rounded-full bg-verde-menta px-2 py-0.5 text-[10px] font-semibold text-azul-medico">
-                      você
-                    </span>
-                  )}
-                  {!p.ativo && (
-                    <span className="rounded-full bg-coral/12 px-2 py-0.5 text-[10px] font-semibold text-coral">
-                      desativado
-                    </span>
-                  )}
-                </p>
-                <p className="truncate text-xs text-cinza-suave">
-                  {[p.especialidade, p.crm, p.telefone].filter(Boolean).join(" · ") ||
-                    rotuloPapel(p.role)}
-                </p>
-              </div>
-
-              {p.role === "super_admin" ? (
-                <span className="rounded-full bg-teal/12 px-3 py-1.5 text-xs font-semibold text-teal">
-                  {rotuloPapel(p.role)}
-                </span>
-              ) : (
-                <Select
-                  value={p.role}
-                  disabled={souEu || pending}
-                  onChange={(e) => agir(() => alterarPapel(p.id, e.target.value as Role))}
-                  className="h-9 w-auto min-w-[150px] text-xs"
-                  aria-label={`Papel de ${p.nome}`}
-                >
-                  <option value="gestor">Gestor(a) da clínica</option>
-                  <option value="secretaria">Atendimento</option>
-                  <option value="medico">Médico(a)</option>
-                </Select>
-              )}
-
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={souEu || pending || p.role === "super_admin"}
-                onClick={() => agir(() => alternarAtivo(p.id, !p.ativo))}
-              >
-                <UserCog className="size-4" />
-                {p.ativo ? "Desativar" : "Reativar"}
-              </Button>
-            </li>
-          );
-        })}
-      </ul>
-
-      <p className="border-t border-border bg-branco-clinico px-6 py-4 text-sm text-cinza-suave">
-        Para convidar alguém novo, peça à equipe da Medi Marketing: o convite
-        cria o acesso e já vincula a pessoa a esta clínica.
-      </p>
-    </section>
-  );
-}
 
 /* ----------------------------- Integrações ----------------------------- */
 

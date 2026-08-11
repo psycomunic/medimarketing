@@ -60,6 +60,12 @@ create table if not exists public.profiles (
 alter table public.profiles add column if not exists organization_id uuid references public.organizations(id) on delete set null;
 alter table public.profiles add column if not exists ativo boolean not null default true;
 
+-- Quem se cadastrou sozinho pela tela pública entra aqui como true e fica
+-- sem acesso até um administrador definir o papel. Distingue "ainda não
+-- foi liberado" de "teve o acesso cortado" — os dois têm ativo = false,
+-- mas significam coisas opostas para quem olha a lista.
+alter table public.profiles add column if not exists aguardando_liberacao boolean not null default false;
+
 -- Converte `role` de enum para text (bases criadas na versão anterior)
 do $$ begin
   if exists (
@@ -443,25 +449,30 @@ create policy "anexos_storage_delete" on storage.objects
 
 -- =====================================================================
 -- TRIGGER: cria profile automaticamente ao registrar um usuário
--- O papel e a clínica podem vir nos metadados do convite.
+--
+-- ATENÇÃO — o trigger NÃO lê papel nem clínica dos metadados.
+--
+-- `raw_user_meta_data` é preenchido por quem chama a API de cadastro, ou
+-- seja, pelo próprio visitante quando o cadastro público está aberto.
+-- Confiar nele significaria aceitar `{"role":"super_admin"}` de qualquer
+-- um e entregar a carteira inteira.
+--
+-- Aqui o perfil nasce sempre no menor privilégio possível: sem clínica e
+-- como 'medico'. Quem de fato concede acesso são os caminhos confiáveis
+-- do servidor, que rodam com a service role logo após o cadastro:
+--   - lib/actions/usuarios.ts  (admin criando alguém da equipe)
+--   - lib/actions/cadastro.ts  (dono de clínica se cadastrando)
 -- =====================================================================
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql security definer set search_path = public as $$
-declare
-  papel text;
 begin
-  papel := coalesce(new.raw_user_meta_data->>'role', 'medico');
-  if papel not in ('super_admin', 'gestor', 'secretaria', 'medico') then
-    papel := 'medico';
-  end if;
-
   insert into public.profiles (id, nome, role, organization_id)
   values (
     new.id,
-    coalesce(new.raw_user_meta_data->>'nome', new.email),
-    papel,
-    (new.raw_user_meta_data->>'organization_id')::uuid
+    coalesce(nullif(trim(new.raw_user_meta_data->>'nome'), ''), new.email),
+    'medico',
+    null
   )
   on conflict (id) do nothing;
   return new;

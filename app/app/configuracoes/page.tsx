@@ -2,7 +2,8 @@ import { Settings, Building2 } from "lucide-react";
 import { PainelConfiguracoes } from "@/components/app/configuracoes/painel";
 import { exigirModulo } from "@/lib/acesso";
 import { emModoDemo } from "@/lib/supabase/queries";
-import { getEquipe } from "@/lib/supabase/crm";
+import { adminDisponivel } from "@/lib/supabase/admin";
+import { getUsuarios } from "@/lib/supabase/usuarios";
 import { getIntegracoes } from "@/lib/supabase/configuracoes";
 
 export const metadata = { title: "Configurações" };
@@ -11,7 +12,7 @@ export default async function ConfiguracoesPage() {
   const { organizacao, profile } = await exigirModulo("configuracoes");
 
   const [equipe, integracoes, demo] = await Promise.all([
-    getEquipe(organizacao?.id ?? null),
+    getUsuarios({ organizationId: organizacao?.id ?? null, ehSuperAdmin: false }),
     getIntegracoes(organizacao?.id ?? null),
     emModoDemo(),
   ]);
@@ -50,6 +51,7 @@ export default async function ConfiguracoesPage() {
           equipe={equipe}
           integracoes={integracoes}
           usuarioId={profile.id}
+          adminDisponivel={adminDisponivel()}
           demo={demo}
         />
       )}

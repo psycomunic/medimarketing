@@ -14,9 +14,11 @@ export const metadata = {
 export default function LoginPage({
   searchParams,
 }: {
-  searchParams: { redirect?: string };
+  searchParams: { redirect?: string; erro?: string };
 }) {
   const demo = !supabaseConfigurado();
+  const contaInativa = searchParams.erro === "inativo";
+  const aguardando = searchParams.erro === "pendente";
 
   return (
     <div className="grid min-h-screen lg:grid-cols-2">
@@ -36,6 +38,29 @@ export default function LoginPage({
           <p className="mt-2 text-cinza-suave">
             Agenda, CRM, atendimento e resultados da sua clínica.
           </p>
+
+          {/* Cadastrou-se e ainda está na fila: a conta existe, falta liberar */}
+          {aguardando && (
+            <div className="mt-6 rounded-lg border border-alerta/30 bg-alerta/8 px-4 py-3 text-sm">
+              <p className="font-semibold text-alerta">Cadastro em análise</p>
+              <p className="mt-1 text-cinza-suave">
+                Sua conta foi criada e está aguardando liberação da equipe
+                Medi Marketing. Você recebe um aviso assim que o acesso for
+                definido.
+              </p>
+            </div>
+          )}
+
+          {/* Conta desativada pelo gestor: explica em vez de só barrar */}
+          {contaInativa && (
+            <div className="mt-6 rounded-lg border border-coral/30 bg-coral/8 px-4 py-3 text-sm">
+              <p className="font-semibold text-coral">Acesso desativado</p>
+              <p className="mt-1 text-cinza-suave">
+                Sua conta foi desativada pelo gestor da clínica. Fale com ele
+                para reativar o acesso.
+              </p>
+            </div>
+          )}
 
           {/* Aviso de modo demonstração com uma conta de teste por papel */}
           {demo && (
@@ -70,14 +95,17 @@ export default function LoginPage({
           </div>
 
           <p className="mt-8 text-sm text-cinza-suave">
-            Ainda não tem acesso?{" "}
-            <a
-              href="/#contato"
+            É dono de clínica e ainda não tem conta?{" "}
+            <Link
+              href="/cadastro"
               className="font-semibold text-teal hover:underline"
             >
-              Fale com nossa equipe
-            </a>
-            {/* TODO: definir fluxo de cadastro (convite por admin vs. autocadastro) */}
+              Cadastre sua clínica
+            </Link>
+          </p>
+          <p className="mt-1 text-sm text-cinza-suave">
+            Faz parte da equipe de uma clínica já cliente? Peça o acesso ao
+            gestor dela.
           </p>
         </div>
       </div>
