@@ -4,7 +4,7 @@ import { createAdminClient, adminDisponivel } from "@/lib/supabase/admin";
 import { emModoDemo, supabaseConfigurado } from "@/lib/supabase/queries";
 import { demoOrganization } from "@/lib/demo";
 import { demoConfirmacoes } from "@/lib/demo-modulos";
-import { calcularDisparo } from "@/lib/lembretes";
+import { calcularDisparo, montarMensagem, urlConfirmacao } from "@/lib/lembretes";
 import type {
   Confirmacao,
   ConfirmacaoComConsulta,
@@ -251,6 +251,116 @@ export async function getConfirmacaoPorToken(
       consulta.status === "cancelada" ||
       new Date(consulta.data_hora).getTime() < Date.now(),
   };
+}
+
+/* ------------------------------------------------------------------ */
+/* Ficha da consulta                                                   */
+/* ------------------------------------------------------------------ */
+
+export type ConfirmacaoDaConsulta = {
+  id: string;
+  token: string;
+  status: StatusConfirmacao;
+  agendadoPara: string;
+  enviadoEm: string | null;
+  respondidoEm: string | null;
+  canal: string | null;
+  observacao: string | null;
+  mensagem: string;
+  url: string;
+};
+
+/**
+ * Confirmações das consultas da agenda, indexadas por consulta.
+ *
+ * A mensagem já sai montada daqui para que o botão de WhatsApp da ficha
+ * mande exatamente o mesmo texto que a rotina automática enviaria.
+ */
+export async function getConfirmacoesDaAgenda(
+  consultas: { id: string; organization_id: string | null; paciente_nome: string; data_hora: string; medico_id: string }[]
+): Promise<Record<string, ConfirmacaoDaConsulta>> {
+  if (!consultas.length) return {};
+
+  const mapa: Record<string, ConfirmacaoDaConsulta> = {};
+
+  const monta = (
+    conf: Pick<
+      Confirmacao,
+      "id" | "token" | "status" | "agendado_para" | "enviado_em" | "respondido_em" | "canal" | "observacao" | "consulta_id"
+    >,
+    dados: { paciente: string; dataHora: string; medico: string | null; clinica: string; endereco: string | null; modelo: string | null }
+  ) => {
+    const url = urlConfirmacao(conf.token);
+    mapa[conf.consulta_id] = {
+      id: conf.id,
+      token: conf.token,
+      status: conf.status,
+      agendadoPara: conf.agendado_para,
+      enviadoEm: conf.enviado_em,
+      respondidoEm: conf.respondido_em,
+      canal: conf.canal,
+      observacao: conf.observacao,
+      url,
+      mensagem: montarMensagem({ ...dados, link: url }),
+    };
+  };
+
+  if (await emModoDemo()) {
+    for (const c of demoConfirmacoes()) {
+      monta(c, {
+        paciente: c.paciente_nome,
+        dataHora: c.data_hora,
+        medico: c.medico_nome,
+        clinica: demoOrganization.nome,
+        endereco:
+          [demoOrganization.endereco, demoOrganization.cidade].filter(Boolean).join(" — ") || null,
+        modelo: demoOrganization.mensagem_lembrete,
+      });
+    }
+    return mapa;
+  }
+
+  if (!adminDisponivel()) return {};
+
+  const admin = createAdminClient();
+  const { data: confs, error } = await admin
+    .from("confirmacoes")
+    .select("*")
+    .in("consulta_id", consultas.map((c) => c.id));
+
+  // Estrutura ausente no banco: a ficha mostra "sem confirmação" em vez
+  // de estourar. O aviso do que fazer fica na tela de Confirmações.
+  if (error || !confs?.length) return {};
+
+  const orgIds = [...new Set(consultas.map((c) => c.organization_id).filter(Boolean))] as string[];
+  const medicoIds = [...new Set(consultas.map((c) => c.medico_id))];
+
+  const [{ data: orgs }, { data: perfis }] = await Promise.all([
+    orgIds.length
+      ? admin.from("organizations").select("id,nome,endereco,cidade,mensagem_lembrete").in("id", orgIds)
+      : Promise.resolve({ data: [] as { id: string; nome: string; endereco: string | null; cidade: string | null; mensagem_lembrete: string | null }[] }),
+    admin.from("profiles").select("id,nome").in("id", medicoIds),
+  ]);
+
+  const porOrg = new Map((orgs ?? []).map((o) => [o.id, o]));
+  const nomeMedico = new Map((perfis ?? []).map((p) => [p.id, p.nome]));
+
+  for (const conf of confs) {
+    const consulta = consultas.find((c) => c.id === conf.consulta_id);
+    if (!consulta) continue;
+    const org = consulta.organization_id ? porOrg.get(consulta.organization_id) : null;
+
+    monta(conf, {
+      paciente: consulta.paciente_nome,
+      dataHora: consulta.data_hora,
+      medico: nomeMedico.get(consulta.medico_id) ?? null,
+      clinica: org?.nome ?? "a clínica",
+      endereco: [org?.endereco, org?.cidade].filter(Boolean).join(" — ") || null,
+      modelo: org?.mensagem_lembrete ?? null,
+    });
+  }
+
+  return mapa;
 }
 
 /* ------------------------------------------------------------------ */

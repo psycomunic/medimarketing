@@ -39,6 +39,7 @@ import {
 } from "@/lib/agenda";
 import { cn } from "@/lib/utils";
 import { ConsultaDialog } from "@/components/app/consulta-dialog";
+import type { ConfirmacaoDaConsulta } from "@/components/app/confirmacoes/bloco-consulta";
 import {
   NovaConsultaDialog,
   type OpcaoProfissional,
@@ -58,6 +59,8 @@ export function AgendaCalendar({
   opcoes,
   profissionais = [],
   clinicas = [],
+  confirmacoes = {},
+  envioAutomatico = false,
   usuarioId,
   organizationId,
   demo = false,
@@ -66,6 +69,9 @@ export function AgendaCalendar({
   opcoes: OpcoesAgenda;
   profissionais?: OpcaoProfissional[];
   clinicas?: { id: string; nome: string }[];
+  /** Estado da confirmação por consulta, para a ficha mostrar sem ida ao servidor. */
+  confirmacoes?: Record<string, ConfirmacaoDaConsulta>;
+  envioAutomatico?: boolean;
   usuarioId?: string;
   organizationId?: string | null;
   demo?: boolean;
@@ -246,6 +252,8 @@ export function AgendaCalendar({
       {/* Modais */}
       <ConsultaDialog
         consulta={selecionada}
+        confirmacao={selecionada ? confirmacoes[selecionada.id] ?? null : null}
+        envioAutomatico={envioAutomatico}
         demo={demo}
         onOpenChange={(o) => !o && setSelecionada(null)}
       />

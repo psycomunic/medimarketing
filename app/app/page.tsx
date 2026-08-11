@@ -1,86 +1,164 @@
 import Link from "next/link";
 import {
-  CalendarClock,
+  AlertTriangle,
+  ArrowRight,
   CalendarDays,
   CheckCircle2,
-  TrendingUp,
-  ArrowRight,
+  ChevronRight,
+  Clock,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { getResumo, getConsultas } from "@/lib/supabase/queries";
+import { getConsultas } from "@/lib/supabase/queries";
 import { exigirSessao } from "@/lib/acesso";
-import { modulosDoPapel } from "@/lib/rbac";
-import { formatarHora, rotuloStatus } from "@/lib/agenda";
+import { getPainel } from "@/lib/supabase/painel";
+import { modulosDoPapel, rotuloPapel } from "@/lib/rbac";
+import { formatarHora, rotuloStatus, rotuloTipo, capitalizar } from "@/lib/agenda";
+import { cn } from "@/lib/utils";
+
+/** Primeiro nome, sem título. E-mail vira o trecho antes do @. */
+function comoChamar(nome: string | null): string {
+  if (!nome?.trim()) return "tudo bem";
+  const limpo = nome.includes("@") ? nome.split("@")[0] : nome;
+  const semTitulo = limpo.replace(/^(dra?\.?|sr[a]?\.?)\s*/i, "").trim();
+  const primeiro = semTitulo.split(/[\s._-]+/)[0];
+  return primeiro.charAt(0).toUpperCase() + primeiro.slice(1);
+}
+
+/** "Bom dia" / "Boa tarde" / "Boa noite" pelo relógio do servidor. */
+function saudacao(): string {
+  const h = new Date().getHours();
+  if (h < 12) return "Bom dia";
+  if (h < 18) return "Boa tarde";
+  return "Boa noite";
+}
 
 export default async function DashboardPage() {
   const { profile, organizacao, role } = await exigirSessao();
-  const resumo = await getResumo();
 
-  // Próximas consultas (de agora até 7 dias)
   const agora = new Date();
   const em7 = new Date(agora);
   em7.setDate(em7.getDate() + 7);
-  const proximas = (
-    await getConsultas(agora.toISOString(), em7.toISOString())
-  ).slice(0, 5);
 
-  const nome = profile.nome || "Olá";
+  const [painel, proximas] = await Promise.all([
+    getPainel(role, organizacao?.id ?? null),
+    getConsultas(agora.toISOString(), em7.toISOString()),
+  ]);
 
-  // Cada papel chega no painel com um foco diferente
-  const subtitulo =
-    role === "medico"
-      ? "Aqui está o resumo da sua agenda."
-      : role === "super_admin"
-        ? "Visão consolidada das clínicas atendidas."
-        : `Resumo do dia em ${organizacao?.nome ?? "sua clínica"}.`;
+  const daSemana = proximas.slice(0, 6);
+  const urgentes = painel.pendencias.filter((p) => p.urgente);
 
-  // Atalhos para os demais módulos liberados para o papel
+  // Atalhos ficam no fim e enxutos: a sidebar já navega, aqui é resumo
   const atalhos = modulosDoPapel(role).filter(
     (m) => m.href !== "/app" && m.grupo !== "conta"
   );
 
-  const cards = [
-    { label: "Consultas hoje", valor: resumo.hoje, icon: CalendarClock, cor: "text-teal bg-teal/10" },
-    { label: "Próximos 7 dias", valor: resumo.proximos7, icon: CalendarDays, cor: "text-azul-medico bg-azul-medico/10" },
-    { label: "Taxa de confirmação", valor: `${resumo.taxaConfirmacao}%`, icon: CheckCircle2, cor: "text-sucesso bg-sucesso/10" },
-    { label: "Total no mês", valor: resumo.totalMes, icon: TrendingUp, cor: "text-alerta bg-alerta/10" },
-  ];
+  const contexto =
+    role === "super_admin"
+      ? "Visão consolidada das clínicas atendidas."
+      : `${rotuloPapel(role)} · ${organizacao?.nome ?? "sua clínica"}`;
 
   return (
     <div className="mx-auto max-w-6xl px-5 py-8 md:px-8 md:py-10">
-      <header className="flex flex-wrap items-center justify-between gap-4">
+      <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl">Olá, {nome} 👋</h1>
-          <p className="mt-1 text-cinza-suave">{subtitulo}</p>
+          <h1 className="text-2xl md:text-3xl">
+            {saudacao()}, {comoChamar(profile.nome)} 👋
+          </h1>
+          <p className="mt-1 text-cinza-suave">{contexto}</p>
         </div>
         <Button asChild variant="marca">
           <Link href="/app/agenda">
-            Ver agenda completa <ArrowRight className="size-4" />
+            Ver agenda <ArrowRight className="size-4" />
           </Link>
         </Button>
       </header>
 
-      {/* Cards de resumo */}
-      <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {cards.map((c) => (
-          <div
-            key={c.label}
-            className="rounded-lg border border-border bg-white p-5 shadow-soft"
-          >
-            <div className={`mb-3 grid size-10 place-items-center rounded-lg ${c.cor}`}>
-              <c.icon className="size-5" />
-            </div>
-            <p className="font-heading text-3xl font-bold text-azul-medico">
-              {c.valor}
-            </p>
-            <p className="text-sm text-cinza-suave">{c.label}</p>
-          </div>
-        ))}
-      </div>
+      {/* ---------------- O que precisa de você ---------------- */}
+      <section className="mt-8">
+        <h2 className="flex items-center gap-2 text-lg font-semibold text-azul-medico">
+          {urgentes.length > 0 ? (
+            <AlertTriangle className="size-5 text-alerta" />
+          ) : (
+            <CheckCircle2 className="size-5 text-sucesso" />
+          )}
+          O que precisa de você
+        </h2>
 
-      {/* Próximas consultas */}
-      <section className="mt-8 rounded-lg border border-border bg-white shadow-soft">
+        {painel.pendencias.length === 0 ? (
+          <div className="mt-3 rounded-lg border border-sucesso/30 bg-sucesso/5 px-5 py-6">
+            <p className="font-semibold text-sucesso">Nada pendente por aqui</p>
+            <p className="mt-1 text-sm text-cinza-suave">
+              Lembretes em dia, ninguém esperando resposta e nenhuma tarefa
+              atrasada. Bom momento para olhar os indicadores.
+            </p>
+          </div>
+        ) : (
+          <ul className="mt-3 grid gap-2.5 sm:grid-cols-2">
+            {painel.pendencias.map((p) => (
+              <li key={p.chave}>
+                <Link
+                  href={p.href}
+                  className={cn(
+                    "group flex items-start gap-3 rounded-lg border bg-white p-4 shadow-soft transition-all hover:-translate-y-0.5 hover:shadow-card",
+                    p.urgente ? "border-alerta/40" : "border-border"
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg",
+                      p.urgente
+                        ? "bg-alerta/15 text-alerta"
+                        : "bg-verde-menta text-teal"
+                    )}
+                  >
+                    {p.urgente ? (
+                      <AlertTriangle className="size-4" />
+                    ) : (
+                      <Clock className="size-4" />
+                    )}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-semibold text-azul-medico">
+                      {p.titulo}
+                    </span>
+                    <span className="mt-0.5 block text-sm leading-snug text-cinza-suave">
+                      {p.detalhe}
+                    </span>
+                  </span>
+                  <ChevronRight className="mt-1 size-4 shrink-0 text-cinza-suave/40 transition-colors group-hover:text-teal" />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {/* ---------------- Números ---------------- */}
+      {painel.numeros.length > 0 && (
+        <section className="mt-8">
+          <h2 className="text-lg font-semibold text-azul-medico">
+            {painel.tituloNumeros}
+          </h2>
+          <dl className="mt-3 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2 lg:grid-cols-3">
+            {painel.numeros.map((n) => (
+              <div key={n.chave} className="bg-white px-5 py-4">
+                <dd className="font-heading text-2xl font-bold text-azul-medico">
+                  {n.valor}
+                </dd>
+                <dt className="text-sm text-cinza-suave">{n.rotulo}</dt>
+                {n.nota && (
+                  <p className="mt-0.5 text-xs text-cinza-suave/80">{n.nota}</p>
+                )}
+              </div>
+            ))}
+          </dl>
+        </section>
+      )}
+
+      {/* ---------------- Próximas consultas ---------------- */}
+      <section className="mt-8 overflow-hidden rounded-lg border border-border bg-white shadow-soft">
         <div className="flex items-center justify-between border-b border-border px-6 py-4">
           <h2 className="text-lg font-semibold text-azul-medico">
             Próximas consultas
@@ -93,73 +171,84 @@ export default async function DashboardPage() {
           </Link>
         </div>
 
-        {proximas.length === 0 ? (
+        {daSemana.length === 0 ? (
           <div className="px-6 py-12 text-center text-cinza-suave">
             <CalendarDays className="mx-auto mb-3 size-10 text-teal-claro" />
-            <p>Nenhuma consulta agendada para os próximos dias.</p>
-            <p className="text-sm">
-              As consultas marcadas pela nossa equipe aparecem aqui.
+            <p>Nenhuma consulta nos próximos 7 dias.</p>
+            <p className="mt-1 text-sm">
+              Marque pela agenda — o lembrete de confirmação é criado junto.
             </p>
           </div>
         ) : (
           <ul className="divide-y divide-border">
-            {proximas.map((c) => (
-              <li
-                key={c.id}
-                className="flex items-center gap-4 px-6 py-4"
-              >
-                <div className="flex w-16 shrink-0 flex-col items-center rounded-lg bg-verde-menta py-2">
-                  <span className="text-sm font-bold text-azul-medico">
-                    {formatarHora(c.data_hora)}
-                  </span>
-                  <span className="text-[11px] text-cinza-suave">
-                    {new Date(c.data_hora).toLocaleDateString("pt-BR", {
-                      day: "2-digit",
-                      month: "2-digit",
-                    })}
-                  </span>
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-semibold text-cinza-texto">
-                    {c.paciente_nome}
-                  </p>
-                  <p className="text-sm capitalize text-cinza-suave">{c.tipo}</p>
-                </div>
-                <Badge variant={c.status}>{rotuloStatus[c.status]}</Badge>
-              </li>
-            ))}
+            {daSemana.map((c) => {
+              const data = new Date(c.data_hora);
+              const ehHoje = data.toDateString() === agora.toDateString();
+
+              return (
+                <li key={c.id} className="flex items-center gap-4 px-6 py-3.5">
+                  <div
+                    className={cn(
+                      "flex w-16 shrink-0 flex-col items-center rounded-lg py-2",
+                      ehHoje ? "bg-teal text-white" : "bg-verde-menta"
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "text-sm font-bold",
+                        ehHoje ? "text-white" : "text-azul-medico"
+                      )}
+                    >
+                      {formatarHora(c.data_hora)}
+                    </span>
+                    <span
+                      className={cn(
+                        "text-[11px]",
+                        ehHoje ? "text-white/80" : "text-cinza-suave"
+                      )}
+                    >
+                      {ehHoje
+                        ? "hoje"
+                        : data.toLocaleDateString("pt-BR", {
+                            day: "2-digit",
+                            month: "2-digit",
+                          })}
+                    </span>
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-semibold text-cinza-texto">
+                      {c.paciente_nome}
+                    </p>
+                    <p className="truncate text-sm text-cinza-suave">
+                      {rotuloTipo[c.tipo]}
+                      {c.convenio && ` · ${c.convenio}`}
+                    </p>
+                  </div>
+
+                  <Badge variant={c.status}>{rotuloStatus[c.status]}</Badge>
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>
 
-      {/* Atalhos para os módulos que o papel pode acessar */}
+      {/* ---------------- Atalhos ---------------- */}
       <section className="mt-8">
-        <h2 className="text-lg font-semibold text-azul-medico">
-          Seus módulos
+        <h2 className="flex items-center gap-2 text-lg font-semibold text-azul-medico">
+          <Sparkles className="size-5 text-teal" />
+          Ir para
         </h2>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-3 flex flex-wrap gap-2">
           {atalhos.map((m) => (
             <Link
               key={m.href}
               href={m.href}
-              className="group flex items-start gap-3 rounded-lg border border-border bg-white p-4 shadow-soft transition-all hover:-translate-y-0.5 hover:shadow-card"
+              className="inline-flex items-center gap-2 rounded-full border border-border bg-white px-4 py-2 text-sm font-medium text-cinza-suave shadow-soft transition-colors hover:border-teal hover:text-teal"
             >
-              <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-verde-menta text-teal transition-colors group-hover:bg-teal group-hover:text-white">
-                <m.icone className="size-5" />
-              </span>
-              <span className="min-w-0">
-                <span className="flex items-center gap-2 font-semibold text-azul-medico">
-                  {m.label}
-                  {m.fase > 1 && (
-                    <span className="rounded-full bg-alerta/12 px-1.5 py-0.5 text-[9px] font-semibold text-alerta">
-                      Fase {m.fase}
-                    </span>
-                  )}
-                </span>
-                <span className="mt-0.5 block text-sm leading-snug text-cinza-suave">
-                  {m.resumo}
-                </span>
-              </span>
+              <m.icone className="size-4 text-teal" />
+              {capitalizar(m.label)}
             </Link>
           ))}
         </div>

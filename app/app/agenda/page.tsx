@@ -2,6 +2,8 @@ import { AgendaCalendar } from "@/components/app/agenda-calendar";
 import { getAgenda, emModoDemo } from "@/lib/supabase/queries";
 import { exigirModulo } from "@/lib/acesso";
 import { getClinicasDisponiveis, getUsuarios } from "@/lib/supabase/usuarios";
+import { getConfirmacoesDaAgenda } from "@/lib/supabase/confirmacoes";
+import { whatsappConfigurado } from "@/lib/envio";
 
 export const metadata = { title: "Agenda" };
 
@@ -26,6 +28,9 @@ export default async function AgendaPage() {
     emModoDemo(),
   ]);
 
+  // Estado da confirmação de cada consulta, para a ficha já abrir com ele
+  const confirmacoes = await getConfirmacoesDaAgenda(consultas);
+
   // Quem pode atender: médicos e gestores. A secretária marca para eles,
   // e não para si — é o que evita a consulta nascer no nome de quem
   // apenas digitou.
@@ -44,6 +49,8 @@ export default async function AgendaPage() {
         opcoes={opcoes}
         profissionais={profissionais}
         clinicas={clinicas}
+        confirmacoes={confirmacoes}
+        envioAutomatico={whatsappConfigurado()}
         usuarioId={profile.id}
         organizationId={organizacao?.id ?? null}
         demo={demo}

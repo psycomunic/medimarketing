@@ -40,13 +40,22 @@ import {
 } from "@/lib/agenda";
 import { atualizarStatus, salvarObservacao } from "@/lib/actions/consultas";
 import { AnexosManager } from "@/components/app/anexos-manager";
+import {
+  BlocoConfirmacao,
+  type ConfirmacaoDaConsulta,
+} from "@/components/app/confirmacoes/bloco-consulta";
 
 export function ConsultaDialog({
   consulta,
+  confirmacao,
+  envioAutomatico = false,
   demo = false,
   onOpenChange,
 }: {
   consulta: Consulta | null;
+  /** Estado da confirmação desta consulta, se já existir uma. */
+  confirmacao?: ConfirmacaoDaConsulta | null;
+  envioAutomatico?: boolean;
   demo?: boolean;
   onOpenChange: (aberto: boolean) => void;
 }) {
@@ -157,6 +166,16 @@ export function ConsultaDialog({
             </Button>
           </div>
         </div>
+
+        {/* Confirmação do paciente */}
+        <BlocoConfirmacao
+          consultaId={consulta.id}
+          confirmacao={confirmacao ?? null}
+          telefone={consulta.paciente_telefone}
+          envioAutomatico={envioAutomatico}
+          semClinica={!consulta.organization_id}
+          demo={demo}
+        />
 
         {/* Anexos / documentos */}
         <div className="border-t border-border pt-4">
