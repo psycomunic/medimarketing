@@ -1,10 +1,13 @@
 /**
  * MODELOS DE E-MAIL
  *
- * Cada mensagem sai com a marca da clínica: logo dela no topo, nome
- * dela no remetente, resposta caindo na caixa dela. A plataforma só
- * assina discretamente no rodapé — para o paciente, quem cuida dele é
- * a clínica.
+ * Cada mensagem sai com a marca da clínica: logo dela no topo e nome
+ * dela no remetente. A plataforma só assina discretamente no rodapé —
+ * para o paciente, quem cuida dele é a clínica.
+ *
+ * Nenhuma delas aceita resposta. Quem envia é a caixa da plataforma,
+ * que ninguém acompanha, então toda saída é botão: o paciente vai para
+ * o link dele, a clínica vai para o painel.
  *
  * Todo estilo é inline. Clientes de e-mail descartam <style> no head,
  * e o Gmail remove classes: o que não estiver no atributo `style` do
