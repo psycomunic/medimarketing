@@ -22,6 +22,7 @@ export const navLinks = [
   { label: "Serviços", href: "#solucoes" },
   { label: "Método", href: "#metodo" },
   { label: "Plataforma", href: "#plataforma" },
+  { label: "Automações", href: "#automacoes" },
   { label: "Planos", href: "#planos" },
   { label: "Resultados", href: "#resultados" },
   { label: "FAQ", href: "#faq" },

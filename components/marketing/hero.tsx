@@ -40,9 +40,10 @@ export function Hero() {
           <Reveal delay={0.1}>
             <p className="mt-6 max-w-xl text-lg text-cinza-suave">
               Marketing que traz paciente, equipe humana que atende e converte,
-              agenda e CRM num painel único, com os números na sua mão para
-              saber o que está funcionando. Você cuida da medicina, a gente
-              cuida do resto.
+              agenda e CRM num painel único. A confirmação de consulta sai
+              sozinha, pelo WhatsApp da sua clínica e por e-mail, e o que
+              precisa de atenção vira alerta na hora. Você cuida da medicina,
+              a gente cuida do resto.
             </p>
           </Reveal>
 

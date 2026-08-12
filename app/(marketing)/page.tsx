@@ -4,6 +4,7 @@ import { Dores } from "@/components/marketing/dores";
 import { Metodo } from "@/components/marketing/metodo";
 import { Solucoes } from "@/components/marketing/solucoes";
 import { Plataforma } from "@/components/marketing/plataforma";
+import { Automacoes } from "@/components/marketing/automacoes";
 import { Academy } from "@/components/marketing/academy";
 import { ComoFunciona } from "@/components/marketing/como-funciona";
 import { Diferenciais } from "@/components/marketing/diferenciais";
@@ -25,6 +26,7 @@ export default function HomePage() {
       <Metodo />
       <Solucoes />
       <Plataforma />
+      <Automacoes />
       <Academy />
       <ComoFunciona />
       <Diferenciais />

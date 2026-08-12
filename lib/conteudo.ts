@@ -212,7 +212,9 @@ export const solucoes = [
     resumo: "Tudo em um painel só, no computador ou no celular.",
     itens: [
       "Agenda por mês, semana e dia",
-      "Status de confirmação em tempo real",
+      "Lembrete automático um dia útil antes, por WhatsApp e e-mail",
+      "Confirmação do paciente em um toque, sem ligar para ninguém",
+      "Pedido de remarcação vira alerta na hora, com o telefone à mão",
       "Disponibilidade e bloqueios sob seu controle",
       "Acesso por papel: gestor, secretária e médico",
     ],
@@ -271,10 +273,80 @@ export const modulosPlataforma = [
       "Trilhas em vídeo para a equipe, com progresso por pessoa e certificado ao final. Onboarding da plataforma incluído.",
   },
   {
+    icone: "CalendarCheck",
+    titulo: "Confirmações",
+    texto:
+      "Lembrete automático na véspera, confirmação do paciente em um toque e a agenda atualizada sozinha. Quem pede para remarcar vira alerta na hora.",
+  },
+  {
     icone: "BarChart3",
     titulo: "Indicadores",
     texto:
       "A linha inteira: investimento, leads, agendamentos, comparecimento, faturamento e ROI, comparando períodos e etapas do método.",
+  },
+] as const;
+
+/* ------------------------------------------------------------------ */
+/* Automações de confirmação (seção "Automações")                      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * O ciclo completo, na ordem em que acontece.
+ *
+ * Escrito do ponto de vista de quem opera a clínica, não do sistema:
+ * o que interessa é o que deixa de dar trabalho, não qual serviço
+ * dispara o quê.
+ */
+export const automacoes = [
+  {
+    icone: "CalendarClock",
+    quando: "Um dia útil antes",
+    titulo: "O lembrete sai sozinho",
+    texto:
+      "Pelo WhatsApp da sua clínica e por e-mail, com data, horário, profissional e endereço. Ninguém precisa lembrar de mandar.",
+  },
+  {
+    icone: "MousePointerClick",
+    quando: "O paciente responde",
+    titulo: "Confirma em um toque",
+    texto:
+      "Um botão, sem instalar nada e sem digitar. A agenda muda de status na hora e a recepção vê antes de abrir o dia.",
+  },
+  {
+    icone: "BellRing",
+    quando: "Se pedir para remarcar",
+    titulo: "Vira alerta imediato",
+    texto:
+      "Médico e dono recebem no celular e no e-mail, com o telefone do paciente na mensagem. O horário fica reservado até vocês combinarem o novo.",
+  },
+  {
+    icone: "CalendarPlus",
+    quando: "Se cancelar",
+    titulo: "A vaga aparece para encaixe",
+    texto:
+      "O horário é liberado e a equipe avisada, com tempo de oferecer a quem está na lista de espera.",
+  },
+] as const;
+
+/** Os pontos que diferenciam isso de um disparador qualquer. */
+export const automacoesDestaques = [
+  {
+    icone: "Smartphone",
+    titulo: "Do número da sua clínica",
+    texto:
+      "Não é um número desconhecido. O paciente responde na mesma conversa de sempre, e tudo fica registrado na central de atendimento.",
+  },
+  {
+    icone: "Mail",
+    titulo: "Com a sua marca no e-mail",
+    texto:
+      "Logo da clínica no topo, nome dela no remetente. Para o paciente, quem cuida dele é você — a plataforma só assina discretamente no rodapé.",
+  },
+  {
+    icone: "ShieldCheck",
+    titulo: "Sem caixa de e-mail parada",
+    texto:
+      "Nenhuma mensagem pede resposta: cada uma tem o botão da ação certa. O paciente vai para o link dele, sua equipe vai para o painel.",
   },
 ] as const;
 
@@ -518,7 +590,17 @@ export const faq = [
   {
     pergunta: "Como funciona a integração com o WhatsApp?",
     resposta:
-      "A central de atendimento reúne WhatsApp, Instagram Direct e Facebook numa caixa de entrada única, ligada à ficha do paciente. A conexão é feita pela API oficial do WhatsApp, com o número da própria clínica. (TODO: confirmar o provedor oficial contratado.)",
+      "A central de atendimento reúne WhatsApp, Instagram Direct e Facebook numa caixa de entrada única, ligada à ficha do paciente. O WhatsApp usa o número da própria clínica, conectado de duas formas: lendo um QR code, como no WhatsApp Web, ou pela API oficial da Meta. As mensagens automáticas saem desse mesmo número, então o paciente responde na conversa de sempre.",
+  },
+  {
+    pergunta: "Como funciona a confirmação de consulta?",
+    resposta:
+      "Um dia útil antes, o paciente recebe um lembrete pelo WhatsApp da sua clínica e por e-mail, com a data, o horário e o profissional. Ele confirma tocando num botão — sem instalar nada e sem precisar responder. A agenda muda de status na hora. Se pedir para remarcar, a sua equipe recebe um alerta no celular e no e-mail com o telefone dele já na mensagem, porque nesse caso a vaga só se salva se alguém ligar rápido.",
+  },
+  {
+    pergunta: "As mensagens saem com o nome da minha clínica?",
+    resposta:
+      "Sim. No WhatsApp, saem do número da própria clínica. No e-mail, com o nome dela no remetente e a logo dela no topo da mensagem — o paciente vê a sua marca, não a nossa. Você sobe a logo em Configurações e ela passa a aparecer também no link de confirmação que o paciente abre.",
   },
   {
     pergunta: "Preciso trocar o sistema que já uso hoje?",
