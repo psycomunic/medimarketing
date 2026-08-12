@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { Building2, CalendarDays, ShieldCheck } from "lucide-react";
 import { FormPerfil, FormSenha } from "@/components/app/perfil/form-perfil";
+import { MarcaClinica } from "@/components/app/perfil/marca-clinica";
 import { exigirSessao } from "@/lib/acesso";
 import { emModoDemo } from "@/lib/supabase/queries";
 import { rotuloPapel, modulosDoPapel } from "@/lib/rbac";
@@ -12,6 +13,8 @@ export default async function PerfilPage() {
   const demo = await emModoDemo();
 
   const modulos = modulosDoPapel(role);
+  // Mesma régua da action e da política do banco
+  const podeEditarMarca = role === "gestor" || role === "medico";
   const desde = new Date(profile.created_at).toLocaleDateString("pt-BR", {
     month: "long",
     year: "numeric",
@@ -77,6 +80,17 @@ export default async function PerfilPage() {
       <div className="mt-6">
         <FormPerfil profile={profile} demo={demo} />
       </div>
+
+      {/* A marca só aparece para quem responde por ela. A secretária
+          opera a agenda e não decide como a clínica se apresenta. */}
+      {organizacao && podeEditarMarca && (
+        <MarcaClinica
+          organizationId={organizacao.id}
+          nome={organizacao.nome}
+          logoUrl={organizacao.logo_url}
+          demo={demo}
+        />
+      )}
 
       <FormSenha demo={demo} />
 

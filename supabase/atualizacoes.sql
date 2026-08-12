@@ -327,3 +327,78 @@ alter table public.confirmacoes
 alter table public.confirmacoes
   add constraint confirmacoes_canal_check
   check (canal in ('whatsapp','merge','manual','email'));
+
+-- ====================================================================
+-- 2026-08-12 (2) · Nome e logo da clínica pelo médico
+--
+-- Nome e logo não são administração: são a cara que o paciente vê em
+-- toda mensagem — remetente do e-mail, assinatura do WhatsApp e
+-- cabeçalho da página de confirmação. Em consultório de um médico só,
+-- que é a maior parte da carteira, obrigá-lo a pedir para outra pessoa
+-- trocar a própria marca é burocracia sem propósito.
+--
+-- A secretária continua de fora: ela opera a agenda, não decide a
+-- marca. E o médico segue sem poder mexer em CNPJ, endereço, plano ou
+-- horário de lembrete — para isso a política de gestor continua sendo
+-- a única porta.
+-- ====================================================================
+
+create or replace function public.pode_editar_marca()
+returns boolean
+language sql stable security definer set search_path = public as $$
+  select coalesce(public.meu_papel() in ('gestor', 'medico', 'super_admin'), false);
+$$;
+
+comment on function public.pode_editar_marca() is
+  'Quem pode trocar o nome e a logo da própria clínica.';
+
+drop policy if exists "org_update" on public.organizations;
+create policy "org_update" on public.organizations
+  for update using (
+    (id = public.minha_org() and public.pode_editar_marca())
+    or public.is_super_admin()
+  );
+
+-- O storage guarda o arquivo da logo; sem liberar aqui também, o
+-- médico salvaria o nome e apanharia no upload.
+drop policy if exists "logos_envio" on storage.objects;
+create policy "logos_envio" on storage.objects
+  for insert to authenticated
+  with check (
+    bucket_id = 'logos'
+    and (
+      public.is_super_admin()
+      or (
+        public.pode_editar_marca()
+        and (storage.foldername(name))[1] = public.minha_org()::text
+      )
+    )
+  );
+
+drop policy if exists "logos_atualizacao" on storage.objects;
+create policy "logos_atualizacao" on storage.objects
+  for update to authenticated
+  using (
+    bucket_id = 'logos'
+    and (
+      public.is_super_admin()
+      or (
+        public.pode_editar_marca()
+        and (storage.foldername(name))[1] = public.minha_org()::text
+      )
+    )
+  );
+
+drop policy if exists "logos_remocao" on storage.objects;
+create policy "logos_remocao" on storage.objects
+  for delete to authenticated
+  using (
+    bucket_id = 'logos'
+    and (
+      public.is_super_admin()
+      or (
+        public.pode_editar_marca()
+        and (storage.foldername(name))[1] = public.minha_org()::text
+      )
+    )
+  );

@@ -9,6 +9,8 @@ import {
 } from "lucide-react";
 import { exigirModulo } from "@/lib/acesso";
 import { getClientes } from "@/lib/supabase/indicadores";
+import { emModoDemo } from "@/lib/supabase/queries";
+import { EditarMarca } from "@/components/app/clinicas/editar-marca";
 import { formatarNumero, formatarReais } from "@/lib/indicadores";
 import { cn } from "@/lib/utils";
 
@@ -29,7 +31,7 @@ const corPlano: Record<string, string> = {
 // Uso interno da Medi Marketing: só o super admin acessa.
 export default async function ClinicasPage() {
   await exigirModulo("clinicas");
-  const clientes = await getClientes();
+  const [clientes, demo] = await Promise.all([getClientes(), emModoDemo()]);
 
   const ativos = clientes.filter((c) => c.ativo);
   const totais = ativos.reduce(
@@ -128,8 +130,11 @@ export default async function ClinicasPage() {
                     <th className="px-4 py-3 text-right font-semibold">
                       Leads
                     </th>
-                    <th className="px-6 py-3 text-right font-semibold">
+                    <th className="px-4 py-3 text-right font-semibold">
                       Faturamento
+                    </th>
+                    <th className="px-6 py-3 text-right font-semibold">
+                      <span className="sr-only">Ações</span>
                     </th>
                   </tr>
                 </thead>
@@ -178,8 +183,16 @@ export default async function ClinicasPage() {
                       <td className="px-4 py-4 text-right text-cinza-texto">
                         {c.leads_mes}
                       </td>
-                      <td className="px-6 py-4 text-right font-semibold text-azul-medico">
+                      <td className="px-4 py-4 text-right font-semibold text-azul-medico">
                         {formatarReais(c.faturamento_mes)}
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <EditarMarca
+                          organizationId={c.id}
+                          nome={c.nome}
+                          logoUrl={c.logo_url}
+                          demo={demo}
+                        />
                       </td>
                     </tr>
                   ))}
@@ -232,6 +245,14 @@ export default async function ClinicasPage() {
                         <p className="text-[10px] text-cinza-suave">{m.l}</p>
                       </div>
                     ))}
+                  </div>
+                  <div className="mt-2 flex justify-end">
+                    <EditarMarca
+                      organizationId={c.id}
+                      nome={c.nome}
+                      logoUrl={c.logo_url}
+                      demo={demo}
+                    />
                   </div>
                 </li>
               ))}

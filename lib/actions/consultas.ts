@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { avisarConsultaMarcada } from "@/lib/avisos-consulta";
 import { createClient } from "@/lib/supabase/server";
 import { emModoDemo } from "@/lib/supabase/queries";
 import type { StatusConsulta, TipoConsulta } from "@/lib/supabase/types";
@@ -21,7 +22,7 @@ async function getUserId() {
 /** Atualiza o status de uma consulta (ex.: marcar como realizada). */
 export async function atualizarStatus(
   id: string,
-  status: StatusConsulta
+  status: StatusConsulta,
 ): Promise<ActionResult> {
   if (await emModoDemo()) return { ok: false, erro: MSG_DEMO };
   const { supabase, userId } = await getUserId();
@@ -41,7 +42,7 @@ export async function atualizarStatus(
 /** Salva/atualiza a observação de uma consulta. */
 export async function salvarObservacao(
   id: string,
-  observacao: string
+  observacao: string,
 ): Promise<ActionResult> {
   if (await emModoDemo()) return { ok: false, erro: MSG_DEMO };
   const { supabase, userId } = await getUserId();
@@ -52,7 +53,8 @@ export async function salvarObservacao(
     .update({ observacao })
     .eq("id", id);
 
-  if (error) return { ok: false, erro: "Não foi possível salvar a observação." };
+  if (error)
+    return { ok: false, erro: "Não foi possível salvar a observação." };
   revalidatePath("/app/agenda");
   return { ok: true };
 }
@@ -81,7 +83,8 @@ export async function criarConsulta(input: {
   if (await emModoDemo()) return { ok: false, erro: MSG_DEMO };
   const { supabase, userId } = await getUserId();
   if (!userId) return { ok: false, erro: "Sessão expirada." };
-  if (!input.paciente_nome?.trim()) return { ok: false, erro: "Informe o nome do paciente." };
+  if (!input.paciente_nome?.trim())
+    return { ok: false, erro: "Informe o nome do paciente." };
 
   const { data: perfil } = await supabase
     .from("profiles")
@@ -100,8 +103,8 @@ export async function criarConsulta(input: {
    * consulta nasceria órfã e nunca entraria em nenhum desses módulos.
    */
   const organizationId = ehSuperAdmin
-    ? input.organization_id ?? null
-    : perfil?.organization_id ?? null;
+    ? (input.organization_id ?? null)
+    : (perfil?.organization_id ?? null);
 
   if (!organizationId) {
     return {
@@ -144,25 +147,35 @@ export async function criarConsulta(input: {
     };
   }
 
-  const { error } = await supabase.from("consultas").insert({
-    organization_id: organizationId,
-    medico_id: medicoId,
-    criado_por: userId,
-    paciente_nome: input.paciente_nome.trim(),
-    paciente_telefone: input.paciente_telefone || null,
-    paciente_email: input.paciente_email || null,
-    paciente_nascimento: input.paciente_nascimento || null,
-    convenio: input.convenio || null,
-    data_hora: input.data_hora,
-    duracao_min: input.duracao_min ?? 30,
-    tipo: input.tipo,
-    status: "pendente",
-    motivo: input.motivo || null,
-    observacao: input.observacao || null,
-    valor: input.valor ?? null,
-  });
+  const { data: criada, error } = await supabase
+    .from("consultas")
+    .insert({
+      organization_id: organizationId,
+      medico_id: medicoId,
+      criado_por: userId,
+      paciente_nome: input.paciente_nome.trim(),
+      paciente_telefone: input.paciente_telefone || null,
+      paciente_email: input.paciente_email || null,
+      paciente_nascimento: input.paciente_nascimento || null,
+      convenio: input.convenio || null,
+      data_hora: input.data_hora,
+      duracao_min: input.duracao_min ?? 30,
+      tipo: input.tipo,
+      status: "pendente",
+      motivo: input.motivo || null,
+      observacao: input.observacao || null,
+      valor: input.valor ?? null,
+    })
+    .select("id")
+    .single();
 
   if (error) return { ok: false, erro: "Não foi possível criar a consulta." };
+
+  // O paciente combinou por telefone ou no balcão e ainda não tem nada
+  // por escrito. Este é o comprovante dele — vai pelos dois canais e
+  // não derruba o agendamento se falhar.
+  if (criada) await avisarConsultaMarcada(criada.id);
+
   revalidatePath("/app/agenda");
   revalidatePath("/app");
   return { ok: true };

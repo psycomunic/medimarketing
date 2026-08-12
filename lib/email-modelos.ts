@@ -186,6 +186,50 @@ export type Modelo = { assunto: string; html: string; texto: string };
 /* ------------------------------------------------------------------ */
 
 /**
+ * Confirmação de que a consulta foi marcada.
+ *
+ * Sai no momento do agendamento, não na véspera: o paciente acabou de
+ * combinar por telefone ou no balcão e ainda não tem nada por escrito.
+ * Esta é a mensagem que ele guarda — por isso traz o endereço e não
+ * pede ação nenhuma. A cobrança de confirmação vem depois, no lembrete.
+ */
+export function emailPacienteAgendada(
+  m: MarcaEmail,
+  d: DadosEmailConsulta
+): Modelo {
+  const corpo = `
+  <tr><td style="padding:24px 32px;">
+    ${faixa(TEAL, MENTA, "Consulta marcada")}
+    <p style="margin:0 0 4px;font-size:16px;color:${TEXTO};">
+      Olá, ${esc(d.paciente)}!
+    </p>
+    <p style="margin:0;font-size:15px;color:${CINZA};line-height:1.6;">
+      Sua consulta na ${esc(m.clinica)} está agendada:
+    </p>
+    ${blocoDados([
+      ["Data", `${d.data} (${d.diaSemana})`],
+      ["Horário", d.hora],
+      ["Profissional", d.medico],
+      ["Local", d.endereco],
+    ])}
+    <p style="margin:0 0 4px;font-size:15px;color:${CINZA};line-height:1.6;">
+      Guarde este e-mail. Na véspera enviamos um lembrete para você
+      confirmar presença.
+    </p>
+    <p style="margin:0;font-size:15px;color:${CINZA};line-height:1.6;">
+      Pedimos que chegue com 15 minutos de antecedência.
+    </p>
+    ${d.link ? botao("Ver os detalhes da consulta", d.link) : ""}
+  </td></tr>`;
+
+  return {
+    assunto: `Consulta marcada — ${d.data} às ${d.hora}`,
+    html: layout(m, corpo),
+    texto: `Ola, ${d.paciente}! Sua consulta na ${m.clinica} ficou marcada para ${d.data} as ${d.hora}${d.medico ? ` com ${d.medico}` : ""}. Na vespera enviamos um lembrete para confirmar.`,
+  };
+}
+
+/**
  * Lembrete da véspera — o par por e-mail do que já ia por WhatsApp.
  *
  * Faz uma pergunta só: você vem? Tudo na mensagem existe para que a
