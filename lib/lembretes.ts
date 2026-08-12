@@ -13,10 +13,79 @@ import {
   somenteLatin1,
 } from "@/lib/mensagens";
 
-/** Sábado e domingo. Feriado não entra: exigiria calendário por cidade. */
-function ehFimDeSemana(d: Date): boolean {
-  const dia = d.getDay();
-  return dia === 0 || dia === 6;
+/**
+ * FUSO HORÁRIO
+ *
+ * Tudo que o paciente lê é hora de Brasília, sempre — e precisa ser
+ * dito explicitamente. `getHours()` e companhia respondem no fuso de
+ * quem está rodando o código: na máquina de desenvolvimento isso é
+ * Brasília e tudo parece certo, mas o servidor da Vercel roda em UTC.
+ * Uma consulta das 18:50 virava "21:50" no e-mail, e uma das 21:00
+ * pulava para o dia seguinte.
+ *
+ * O horário de verão brasileiro está extinto desde 2019, mas usar o
+ * nome do fuso em vez de somar três horas mantém isso correto caso
+ * volte.
+ */
+const FUSO = "America/Sao_Paulo";
+
+/** Partes da data já convertidas para o fuso de Brasília. */
+function partesEmBrasilia(d: Date) {
+  const fmt = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: FUSO,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    weekday: "long",
+    hour12: false,
+  });
+
+  const p = Object.fromEntries(
+    fmt.formatToParts(d).map((x) => [x.type, x.value])
+  ) as Record<string, string>;
+
+  return {
+    dia: p.day,
+    mes: p.month,
+    ano: p.year,
+    // À meia-noite o Intl devolve "24" em vez de "00"
+    hora: p.hour === "24" ? "00" : p.hour,
+    minuto: p.minute,
+    diaSemana: p.weekday,
+  };
+}
+
+/**
+ * Quanto somar a uma hora de parede de Brasília para chegar ao UTC.
+ *
+ * Calculado a partir do próprio instante, e não fixado em três horas,
+ * para não quebrar se o horário de verão voltar.
+ */
+function deslocamentoUtc(instante: Date): number {
+  const comoUtc = new Date(instante.toLocaleString("en-US", { timeZone: "UTC" }));
+  const comoBrasilia = new Date(instante.toLocaleString("en-US", { timeZone: FUSO }));
+  return comoUtc.getTime() - comoBrasilia.getTime();
+}
+
+/** O instante exato de uma hora de parede brasileira. */
+function deBrasilia(
+  ano: number,
+  mes: number,
+  dia: number,
+  hora: number,
+  minuto = 0
+): Date {
+  const paredeComoUtc = Date.UTC(ano, mes - 1, dia, hora, minuto);
+  return new Date(paredeComoUtc + deslocamentoUtc(new Date(paredeComoUtc)));
+}
+
+/** Sábado e domingo em Brasília, que é onde o paciente vive. */
+function ehFimDeSemana(ano: number, mes: number, dia: number): boolean {
+  // Meio-dia evita que o deslocamento de fuso mude o dia da semana
+  const d = new Date(Date.UTC(ano, mes - 1, dia, 12));
+  return d.getUTCDay() === 0 || d.getUTCDay() === 6;
 }
 
 /**
@@ -26,22 +95,32 @@ function ehFimDeSemana(d: Date): boolean {
  * escolhido pela clínica. É por isso que a contagem é em dias úteis e
  * não em horas: consulta de segunda de manhã precisa avisar na sexta,
  * senão a mensagem cai no sábado e ninguém lê a tempo.
+ *
+ * A conta inteira acontece no calendário de Brasília. Feita no fuso do
+ * servidor, a hora escolhida pela clínica saía três horas mais cedo em
+ * produção — "às 9h" virava 6h da manhã.
  */
 export function calcularDisparo(
   dataConsulta: Date,
   diasUteis: number,
   hora: number
 ): Date {
-  const d = new Date(dataConsulta);
-  d.setHours(hora, 0, 0, 0);
+  const p = partesEmBrasilia(dataConsulta);
+  let ano = Number(p.ano);
+  let mes = Number(p.mes);
+  let dia = Number(p.dia);
 
   let restantes = Math.max(1, diasUteis);
   while (restantes > 0) {
-    d.setDate(d.getDate() - 1);
-    if (!ehFimDeSemana(d)) restantes--;
+    // Voltar um dia pelo calendário, sem depender do fuso local
+    const anterior = new Date(Date.UTC(ano, mes - 1, dia - 1, 12));
+    ano = anterior.getUTCFullYear();
+    mes = anterior.getUTCMonth() + 1;
+    dia = anterior.getUTCDate();
+    if (!ehFimDeSemana(ano, mes, dia)) restantes--;
   }
 
-  return d;
+  return deBrasilia(ano, mes, dia, hora);
 }
 
 /** Lê as preferências da clínica com defaults seguros. */
@@ -73,23 +152,18 @@ export type DadosMensagem = {
   modelo?: string | null;
 };
 
-const DIAS = [
-  "domingo", "segunda-feira", "terça-feira", "quarta-feira",
-  "quinta-feira", "sexta-feira", "sábado",
-];
-
 export function formatarData(iso: string): string {
-  const d = new Date(iso);
-  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+  const p = partesEmBrasilia(new Date(iso));
+  return `${p.dia}/${p.mes}/${p.ano}`;
 }
 
 export function formatarHora(iso: string): string {
-  const d = new Date(iso);
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  const p = partesEmBrasilia(new Date(iso));
+  return `${p.hora}:${p.minuto}`;
 }
 
 export function diaDaSemana(iso: string): string {
-  return DIAS[new Date(iso).getDay()];
+  return partesEmBrasilia(new Date(iso)).diaSemana;
 }
 
 /**
