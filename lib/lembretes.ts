@@ -6,6 +6,12 @@
  * nos dois lugares.
  */
 import type { Organization } from "@/lib/supabase/types";
+import {
+  msgConfirmacao,
+  msgReagendada,
+  primeiroNome,
+  somenteLatin1,
+} from "@/lib/mensagens";
 
 /** Sábado e domingo. Feriado não entra: exigiria calendário por cidade. */
 function ehFimDeSemana(d: Date): boolean {
@@ -99,7 +105,7 @@ export function montarMensagem(d: DadosMensagem): string {
 
   if (d.modelo?.trim()) {
     const texto = d.modelo
-      .replaceAll("{paciente}", d.paciente)
+      .replaceAll("{paciente}", primeiroNome(d.paciente))
       .replaceAll("{data}", data)
       .replaceAll("{hora}", hora)
       .replaceAll("{clinica}", d.clinica)
@@ -111,31 +117,30 @@ export function montarMensagem(d: DadosMensagem): string {
       : `${texto}\n\nConfirme sua presença: ${d.link}`;
   }
 
-  const linhas = [
-    `Olá, ${d.paciente}! 👋`,
-    "",
-    "Sua consulta está agendada para:",
-    "",
-    `📅 Data: ${data} (${diaDaSemana(d.dataHora)})`,
-    `🕐 Horário: ${hora}`,
-  ];
+  return msgConfirmacao({
+    paciente: d.paciente,
+    clinica: d.clinica,
+    data,
+    hora,
+    diaSemana: diaDaSemana(d.dataHora),
+    medico: d.medico,
+    endereco: d.endereco,
+    link: d.link,
+  });
+}
 
-  if (d.medico) linhas.push(`👨‍⚕️ Profissional: ${d.medico}`);
-  if (d.endereco) linhas.push(`📍 Local: ${d.endereco}`);
-
-  linhas.push(
-    "",
-    "✅ Para confirmar sua presença, clique no link abaixo:",
-    d.link,
-    "",
-    "🕐 Recomendamos chegar com 15 minutos de antecedência.",
-    "ℹ️ Se precisar reagendar ou tiver dúvidas, é só responder esta mensagem.",
-    "",
-    `Aguardamos você! 💚`,
-    d.clinica
-  );
-
-  return linhas.join("\n");
+/** Aviso do novo horário depois que a clínica remarca. */
+export function montarMensagemReagendada(d: DadosMensagem): string {
+  return msgReagendada({
+    paciente: d.paciente,
+    clinica: d.clinica,
+    data: formatarData(d.dataHora),
+    hora: formatarHora(d.dataHora),
+    diaSemana: diaDaSemana(d.dataHora),
+    medico: d.medico,
+    endereco: d.endereco,
+    link: d.link,
+  });
 }
 
 /**
@@ -143,10 +148,16 @@ export function montarMensagem(d: DadosMensagem): string {
  *
  * É o caminho que a recepção usa enquanto a API oficial não está
  * conectada: abre a conversa com o texto já digitado, bastando enviar.
+ *
+ * O texto passa por `somenteLatin1` porque o WhatsApp Desktop decodifica
+ * este parâmetro como Latin-1: acento chega certo, emoji vira losango de
+ * erro. Nossa codificação está correta — é o cliente que erra —, então
+ * limpamos o que ele não aguenta em vez de mandar lixo para o paciente.
+ * A API oficial não tem esse problema e recebe o texto completo.
  */
 export function linkWhatsApp(telefone: string, texto: string): string {
   const numero = normalizarTelefone(telefone);
-  return `https://wa.me/${numero}?text=${encodeURIComponent(texto)}`;
+  return `https://wa.me/${numero}?text=${encodeURIComponent(somenteLatin1(texto))}`;
 }
 
 /** Deixa só dígitos e garante o DDI do Brasil. */

@@ -27,6 +27,7 @@ import {
   demoNomeMedico,
 } from "@/lib/demo";
 import { calcularDisparo } from "@/lib/lembretes";
+import { MODELOS_REGUA } from "@/lib/mensagens";
 
 const SECRETARIA = CONTAS_DEMO[1].profile;
 const GESTOR = CONTAS_DEMO[2].profile;
@@ -230,7 +231,8 @@ export function demoMensagens(conversaId: string): Mensagem[] {
 
 type ReguaDemo = {
   regua: Omit<Regua, "created_at">;
-  passos: Omit<ReguaPasso, "id" | "regua_id">[];
+  /** Formato da biblioteca de mensagens; vira ReguaPasso em demoReguas. */
+  passos: readonly { atrasoHoras: number; canal: string; mensagem: string }[];
   desempenho: { enviados: number; respondidos: number; convertidos: number };
 };
 
@@ -242,11 +244,7 @@ const REGUAS: ReguaDemo[] = [
       descricao: "Para quem recebeu o valor e não respondeu. Três toques em uma semana, cada um trazendo informação nova.",
       ativa: true,
     },
-    passos: [
-      { ordem: 1, atraso_horas: 48, canal: "whatsapp", mensagem: "Oi, {paciente}! Passando aqui pra saber se ficou alguma dúvida sobre o que conversamos. Qualquer coisa é só me chamar 💚" },
-      { ordem: 2, atraso_horas: 96, canal: "whatsapp", mensagem: "{paciente}, lembrei de você: separei um antes e depois de um caso bem parecido com o seu. Quer que eu mande?" },
-      { ordem: 3, atraso_horas: 168, canal: "whatsapp", mensagem: "Oi, {paciente}! Vou parar de te escrever pra não incomodar. Deixo a agenda da Dra. Marina aberta pra quando fizer sentido pra você. Fico à disposição!" },
-    ],
+    passos: [...MODELOS_REGUA.reabordagem],
     desempenho: { enviados: 84, respondidos: 31, convertidos: 12 },
   },
   {
@@ -256,11 +254,7 @@ const REGUAS: ReguaDemo[] = [
       descricao: "A janela de ouro são as duas primeiras horas depois do horário perdido.",
       ativa: true,
     },
-    passos: [
-      { ordem: 1, atraso_horas: 2, canal: "whatsapp", mensagem: "Oi, {paciente}! Senti sua falta hoje 😟 Aconteceu alguma coisa? Consigo te encaixar ainda esta semana se quiser." },
-      { ordem: 2, atraso_horas: 24, canal: "telefone", mensagem: "Ligação de recuperação: entender o motivo da falta e reagendar na hora." },
-      { ordem: 3, atraso_horas: 72, canal: "whatsapp", mensagem: "{paciente}, tenho dois horários novos que abriram. Quer que eu reserve um pra você?" },
-    ],
+    passos: [...MODELOS_REGUA.no_show],
     desempenho: { enviados: 46, respondidos: 27, convertidos: 19 },
   },
   {
@@ -270,10 +264,7 @@ const REGUAS: ReguaDemo[] = [
       descricao: "Pacientes sem retorno há mais de 8 meses. Roda uma vez por trimestre.",
       ativa: true,
     },
-    passos: [
-      { ordem: 1, atraso_horas: 0, canal: "whatsapp", mensagem: "Oi, {paciente}! Faz um tempinho que você não aparece por aqui. Como está a sua pele?" },
-      { ordem: 2, atraso_horas: 120, canal: "whatsapp", mensagem: "{paciente}, este mês estamos com a avaliação de retorno sem custo pra quem já é da casa. Quer aproveitar?" },
-    ],
+    passos: [...MODELOS_REGUA.reativacao],
     desempenho: { enviados: 213, respondidos: 58, convertidos: 24 },
   },
   {
@@ -283,10 +274,7 @@ const REGUAS: ReguaDemo[] = [
       descricao: "Dispara conforme o protocolo clínico de cada tratamento.",
       ativa: true,
     },
-    passos: [
-      { ordem: 1, atraso_horas: 168, canal: "whatsapp", mensagem: "Oi, {paciente}! Já faz uma semana do procedimento. Como você está se sentindo?" },
-      { ordem: 2, atraso_horas: 720, canal: "whatsapp", mensagem: "{paciente}, chegou a hora da sua revisão. Tenho horários na próxima semana — qual dia fica melhor?" },
-    ],
+    passos: [...MODELOS_REGUA.recall],
     desempenho: { enviados: 137, respondidos: 89, convertidos: 61 },
   },
   {
@@ -296,10 +284,7 @@ const REGUAS: ReguaDemo[] = [
       descricao: "Cuidado no dia seguinte e convite para avaliar a clínica no Google.",
       ativa: false,
     },
-    passos: [
-      { ordem: 1, atraso_horas: 24, canal: "whatsapp", mensagem: "Oi, {paciente}! Tudo certo depois da consulta de ontem? Qualquer dúvida sobre os cuidados é só chamar." },
-      { ordem: 2, atraso_horas: 120, canal: "whatsapp", mensagem: "{paciente}, se você gostou do atendimento, uma avaliação no Google ajuda demais outras pessoas a encontrarem a gente 💚" },
-    ],
+    passos: [...MODELOS_REGUA.pos_consulta],
     desempenho: { enviados: 0, respondidos: 0, convertidos: 0 },
   },
 ];
@@ -309,9 +294,12 @@ export function demoReguas(): ReguaComDesempenho[] {
     ...r.regua,
     created_at: h(24 * (60 - i * 8)),
     passos: r.passos.map((p, j) => ({
-      ...p,
       id: `${r.regua.id}-p${j + 1}`,
       regua_id: r.regua.id,
+      ordem: j + 1,
+      atraso_horas: p.atrasoHoras,
+      canal: p.canal as ReguaPasso["canal"],
+      mensagem: p.mensagem,
     })),
     ...r.desempenho,
   }));

@@ -34,8 +34,10 @@ export type ConfirmacaoDaConsulta = {
   respondidoEm: string | null;
   canal: string | null;
   observacao: string | null;
-  /** Texto pronto, montado no servidor. */
+  /** Texto do lembrete, montado no servidor. */
   mensagem: string;
+  /** Aviso do novo horário, para usar logo depois de remarcar. */
+  mensagemReagendada: string;
   url: string;
 };
 
@@ -234,6 +236,19 @@ export function BlocoConfirmacao({
               pode reabrir o mesmo link para ver a data nova.
             </p>
           </div>
+        )}
+
+        {/* Depois de remarcar, avisar é o passo que fecha o ciclo */}
+        {telefone && confirmacao.status === "pendente" && confirmacao.observacao?.includes("Reagendada") && (
+          <a
+            href={linkWhatsApp(telefone, confirmacao.mensagemReagendada)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-3 inline-flex items-center gap-2 rounded-md bg-sucesso/12 px-3 py-2 text-xs font-semibold text-sucesso transition-colors hover:bg-sucesso/20"
+          >
+            <MessageCircle className="size-4" />
+            Avisar o paciente do novo horário
+          </a>
         )}
 
         <div className="mt-3 flex flex-wrap items-center gap-2">

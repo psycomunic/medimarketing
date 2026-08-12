@@ -4,7 +4,12 @@ import { createAdminClient, adminDisponivel } from "@/lib/supabase/admin";
 import { emModoDemo, supabaseConfigurado } from "@/lib/supabase/queries";
 import { demoOrganization } from "@/lib/demo";
 import { demoConfirmacoes } from "@/lib/demo-modulos";
-import { calcularDisparo, montarMensagem, urlConfirmacao } from "@/lib/lembretes";
+import {
+  calcularDisparo,
+  montarMensagem,
+  montarMensagemReagendada,
+  urlConfirmacao,
+} from "@/lib/lembretes";
 import type {
   Confirmacao,
   ConfirmacaoComConsulta,
@@ -271,6 +276,7 @@ export type ConfirmacaoDaConsulta = {
   canal: string | null;
   observacao: string | null;
   mensagem: string;
+  mensagemReagendada: string;
   url: string;
 };
 
@@ -306,6 +312,7 @@ export async function getConfirmacoesDaAgenda(
       observacao: conf.observacao,
       url,
       mensagem: montarMensagem({ ...dados, link: url }),
+      mensagemReagendada: montarMensagemReagendada({ ...dados, link: url }),
     };
   };
 

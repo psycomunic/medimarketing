@@ -25,6 +25,7 @@ import {
   rotuloTipoRegua,
 } from "@/lib/rotulos";
 import { formatarNumero, formatarPercentual } from "@/lib/indicadores";
+import { MODELOS_REGUA } from "@/lib/mensagens";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -53,22 +54,19 @@ function descreverAtraso(horas: number): string {
   return `${dias} ${dias === 1 ? "dia" : "dias"} depois`;
 }
 
+/**
+ * Cadência sugerida por tipo, vinda da biblioteca de mensagens.
+ *
+ * Régua nova já nasce com a sequência inteira, e não com um passo solto:
+ * o valor está na cadência, e montar três toques do zero é justamente o
+ * trabalho que faz a clínica desistir de usar.
+ */
 const MODELO: Record<TipoRegua, PassoEditavel[]> = {
-  reabordagem: [
-    { atrasoHoras: 48, canal: "whatsapp", mensagem: "Oi, {paciente}! Ficou alguma dúvida sobre o que conversamos?" },
-  ],
-  no_show: [
-    { atrasoHoras: 2, canal: "whatsapp", mensagem: "Oi, {paciente}! Senti sua falta hoje. Consigo te encaixar ainda esta semana?" },
-  ],
-  reativacao: [
-    { atrasoHoras: 0, canal: "whatsapp", mensagem: "Oi, {paciente}! Faz um tempo que você não aparece por aqui. Como você está?" },
-  ],
-  recall: [
-    { atrasoHoras: 168, canal: "whatsapp", mensagem: "Oi, {paciente}! Chegou a hora da sua revisão. Qual dia fica melhor?" },
-  ],
-  pos_consulta: [
-    { atrasoHoras: 24, canal: "whatsapp", mensagem: "Oi, {paciente}! Tudo certo depois da consulta de ontem?" },
-  ],
+  reabordagem: [...MODELOS_REGUA.reabordagem],
+  no_show: [...MODELOS_REGUA.no_show],
+  reativacao: [...MODELOS_REGUA.reativacao],
+  recall: [...MODELOS_REGUA.recall],
+  pos_consulta: [...MODELOS_REGUA.pos_consulta],
 };
 
 export function Reguas({

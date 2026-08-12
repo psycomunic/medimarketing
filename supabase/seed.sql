@@ -158,22 +158,22 @@ select r.id, v.ordem, v.atraso, v.canal, v.mensagem
 from public.reguas r
 join public.organizations o on o.id = r.organization_id
 join (values
-  ('Reabordagem de orçamento parado', 1, 48,  'whatsapp', 'Oi, {paciente}! Passando aqui pra saber se ficou alguma dúvida sobre o que conversamos. Qualquer coisa é só me chamar.'),
-  ('Reabordagem de orçamento parado', 2, 96,  'whatsapp', '{paciente}, lembrei de você: separei um antes e depois de um caso bem parecido com o seu. Quer que eu mande?'),
-  ('Reabordagem de orçamento parado', 3, 168, 'whatsapp', 'Oi, {paciente}! Vou parar de te escrever pra não incomodar. Deixo a agenda aberta pra quando fizer sentido pra você. Fico à disposição!'),
+  ('Reabordagem de orçamento parado', 1, 48,  'whatsapp', 'Oi, {paciente}! Passando para saber se ficou alguma dúvida sobre o que conversamos. Se quiser, posso explicar melhor qualquer parte do tratamento, sem compromisso.'),
+  ('Reabordagem de orçamento parado', 2, 96,  'whatsapp', '{paciente}, lembrei de você hoje. Separei um caso bem parecido com o seu, com antes e depois. Quer que eu mande para você ver o resultado?'),
+  ('Reabordagem de orçamento parado', 3, 168, 'whatsapp', 'Oi, {paciente}! Vou parar por aqui para não incomodar. Deixo a porta aberta: quando fizer sentido para você, me chama que retomo de onde paramos. Um abraço da equipe {clinica}.'),
 
-  ('Resgate de falta no mesmo dia', 1, 2,  'whatsapp', 'Oi, {paciente}! Senti sua falta hoje. Aconteceu alguma coisa? Consigo te encaixar ainda esta semana se quiser.'),
-  ('Resgate de falta no mesmo dia', 2, 24, 'telefone', 'Ligação de recuperação: entender o motivo da falta e reagendar na hora.'),
-  ('Resgate de falta no mesmo dia', 3, 72, 'whatsapp', '{paciente}, tenho dois horários novos que abriram. Quer que eu reserve um pra você?'),
+  ('Resgate de falta no mesmo dia', 1, 2,  'whatsapp', 'Oi, {paciente}! Você tinha horário com a gente hoje e acabou não conseguindo vir. Está tudo bem? Se quiser, consigo te encaixar ainda esta semana.'),
+  ('Resgate de falta no mesmo dia', 2, 24, 'telefone', 'Ligação de recuperação: entender o que aconteceu e já oferecer dois horários concretos, em vez de perguntar quando ele pode.'),
+  ('Resgate de falta no mesmo dia', 3, 72, 'whatsapp', '{paciente}, abriram dois horários novos na agenda. Quer que eu reserve um para você? Só me dizer qual período prefere.'),
 
-  ('Reativação da base parada', 1, 0,   'whatsapp', 'Oi, {paciente}! Faz um tempinho que você não aparece por aqui. Como você está?'),
-  ('Reativação da base parada', 2, 120, 'whatsapp', '{paciente}, este mês estamos com a avaliação de retorno sem custo pra quem já é da casa. Quer aproveitar?'),
+  ('Reativação da base parada', 1, 0,   'whatsapp', 'Oi, {paciente}! Faz um tempo que você não aparece por aqui e lembrei de você. Como está indo o seu tratamento?'),
+  ('Reativação da base parada', 2, 120, 'whatsapp', '{paciente}, este mês a avaliação de retorno é por nossa conta para quem já é paciente da casa. Se quiser aproveitar, me diga qual semana fica melhor.'),
 
-  ('Recall de retorno e revisão', 1, 168, 'whatsapp', 'Oi, {paciente}! Já faz uma semana do procedimento. Como você está se sentindo?'),
-  ('Recall de retorno e revisão', 2, 720, 'whatsapp', '{paciente}, chegou a hora da sua revisão. Tenho horários na próxima semana — qual dia fica melhor?'),
+  ('Recall de retorno e revisão', 1, 168, 'whatsapp', 'Oi, {paciente}! Já faz uma semana do seu procedimento. Como você está se sentindo? Qualquer coisa fora do esperado, me avise.'),
+  ('Recall de retorno e revisão', 2, 720, 'whatsapp', '{paciente}, chegou o momento da sua revisão. É rapidinha e serve para conferir se está tudo evoluindo bem. Qual dia da semana costuma ser melhor para você?'),
 
-  ('Pós-consulta e pedido de avaliação', 1, 24,  'whatsapp', 'Oi, {paciente}! Tudo certo depois da consulta de ontem? Qualquer dúvida sobre os cuidados é só chamar.'),
-  ('Pós-consulta e pedido de avaliação', 2, 120, 'whatsapp', '{paciente}, se você gostou do atendimento, uma avaliação no Google ajuda demais outras pessoas a encontrarem a gente.')
+  ('Pós-consulta e pedido de avaliação', 1, 24,  'whatsapp', 'Oi, {paciente}! Tudo certo depois da consulta de ontem? Se surgir qualquer dúvida sobre os cuidados, é só me chamar.'),
+  ('Pós-consulta e pedido de avaliação', 2, 120, 'whatsapp', '{paciente}, se o atendimento foi bom para você, uma avaliação no Google ajuda muito outras pessoas a encontrarem a gente. Se preferir, também adoramos ouvir sua opinião por aqui mesmo.')
 ) as v(regua, ordem, atraso, canal, mensagem) on v.regua = r.nome
 where o.slug = 'minha-clinica'
   and not exists (
