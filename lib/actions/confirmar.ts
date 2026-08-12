@@ -3,9 +3,108 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient, adminDisponivel } from "@/lib/supabase/admin";
 import { notificar } from "@/lib/supabase/notificacoes";
+import { destinatariosDaConsulta } from "@/lib/supabase/destinatarios";
+import { emailConfigurado, enviarVarios } from "@/lib/email";
+import {
+  emailClinicaCancelou,
+  emailClinicaConfirmou,
+  emailClinicaReagendar,
+  emailPacienteConfirmou,
+} from "@/lib/email-modelos";
+import {
+  diaDaSemana,
+  formatarData,
+  formatarHora,
+  urlConfirmacao,
+  urlPainel,
+} from "@/lib/lembretes";
 import type { StatusConfirmacao } from "@/lib/supabase/types";
 
 export type RespostaPaciente = "confirmado" | "reagendar" | "recusado";
+
+/**
+ * Avisa paciente e clínica por e-mail sobre a resposta.
+ *
+ * O paciente só recebe quando confirma: é o recibo dele. Pedido de
+ * remarcação e cancelamento ele já sabe que fez — quem precisa saber é
+ * a clínica, e para ela todos os três chegam.
+ */
+async function avisarPorEmail(args: {
+  resposta: RespostaPaciente;
+  organizationId: string;
+  token: string;
+  consulta: {
+    paciente_nome: string;
+    paciente_email: string | null;
+    paciente_telefone: string | null;
+    data_hora: string;
+    medico_id: string;
+  };
+}): Promise<void> {
+  if (!emailConfigurado()) return;
+
+  const { resposta, organizationId, token, consulta } = args;
+
+  const destino = await destinatariosDaConsulta(organizationId, consulta.medico_id);
+  if (!destino) return;
+
+  const admin = createAdminClient();
+  const { data: medico } = await admin
+    .from("profiles")
+    .select("nome")
+    .eq("id", consulta.medico_id)
+    .maybeSingle();
+
+  const dados = {
+    paciente: consulta.paciente_nome,
+    data: formatarData(consulta.data_hora),
+    hora: formatarHora(consulta.data_hora),
+    diaSemana: diaDaSemana(consulta.data_hora),
+    medico: medico?.nome ?? null,
+    telefone: consulta.paciente_telefone,
+  };
+
+  const envios: Parameters<typeof enviarVarios>[0] = [];
+
+  // Recibo do paciente. Vai com o mesmo link que ele acabou de usar: se
+  // depois precisar remarcar, é por ali — a caixa não recebe resposta.
+  if (resposta === "confirmado" && consulta.paciente_email) {
+    const modelo = emailPacienteConfirmou(destino.marca, {
+      ...dados,
+      link: urlConfirmacao(token),
+    });
+    envios.push({
+      para: consulta.paciente_email,
+      assunto: modelo.assunto,
+      html: modelo.html,
+      texto: modelo.texto,
+      remetenteNome: destino.marca.clinica,
+    });
+  }
+
+  // Aviso da clínica. Todo botão aponta para o painel: é lá que estão a
+  // agenda e as configurações, e é de lá que sai qualquer contato.
+  if (destino.emails.length) {
+    const painel = urlPainel("/app/confirmacoes");
+    const comPainel = { ...dados, painel };
+    const modelo =
+      resposta === "confirmado"
+        ? emailClinicaConfirmou(destino.marca, comPainel)
+        : resposta === "reagendar"
+          ? emailClinicaReagendar(destino.marca, comPainel)
+          : emailClinicaCancelou(destino.marca, comPainel);
+
+    envios.push({
+      para: destino.emails,
+      assunto: modelo.assunto,
+      html: modelo.html,
+      texto: modelo.texto,
+      remetenteNome: destino.marca.clinica,
+    });
+  }
+
+  if (envios.length) await enviarVarios(envios);
+}
 
 export type ResultadoResposta =
   | { ok: true; status: StatusConfirmacao }
@@ -49,7 +148,7 @@ export async function responderConfirmacao(
 
   const { data: consulta } = await admin
     .from("consultas")
-    .select("data_hora,status,paciente_nome,paciente_telefone")
+    .select("data_hora,status,paciente_nome,paciente_telefone,paciente_email,medico_id")
     .eq("id", conf.consulta_id)
     .maybeSingle();
 
@@ -128,6 +227,15 @@ export async function responderConfirmacao(
     entidadeId: conf.consulta_id,
     href: "/app/confirmacoes",
     ...aviso,
+  });
+
+  // E-mail para os dois lados. Falhar aqui não desfaz a resposta que o
+  // paciente acabou de dar — o aviso no painel já está registrado.
+  await avisarPorEmail({
+    resposta,
+    organizationId: conf.organization_id,
+    token,
+    consulta,
   });
 
   revalidatePath(`/confirmar/${token}`);

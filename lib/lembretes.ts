@@ -170,12 +170,25 @@ export function normalizarTelefone(telefone: string): string {
 }
 
 /** A URL pública que o paciente abre. */
-export function urlConfirmacao(token: string): string {
-  const base =
+export function urlBase(): string {
+  return (
     process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ??
     (process.env.VERCEL_PROJECT_PRODUCTION_URL
       ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-      : "http://localhost:3000");
+      : "http://localhost:3000")
+  );
+}
 
-  return `${base}/confirmar/${token}`;
+export function urlConfirmacao(token: string): string {
+  return `${urlBase()}/confirmar/${token}`;
+}
+
+/**
+ * Endereço de uma tela do painel, para os botões dos e-mails.
+ *
+ * Nenhum e-mail nosso aceita resposta: quando a clínica precisa agir, o
+ * caminho é entrar no painel, onde estão a agenda e as configurações.
+ */
+export function urlPainel(caminho = "/app"): string {
+  return `${urlBase()}${caminho.startsWith("/") ? caminho : `/${caminho}`}`;
 }

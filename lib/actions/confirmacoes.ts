@@ -10,8 +10,18 @@ import {
 } from "@/lib/actions/contexto";
 import { createAdminClient, adminDisponivel } from "@/lib/supabase/admin";
 import { gerarToken } from "@/lib/supabase/confirmacoes";
-import { calcularDisparo, montarMensagem, urlConfirmacao } from "@/lib/lembretes";
+import {
+  calcularDisparo,
+  diaDaSemana,
+  formatarData,
+  formatarHora,
+  montarMensagem,
+  urlConfirmacao,
+} from "@/lib/lembretes";
 import { enviarWhatsApp, whatsappConfigurado } from "@/lib/envio";
+import { emailConfigurado, enviarEmail } from "@/lib/email";
+import { emailPacienteRemarcada } from "@/lib/email-modelos";
+import { marcaDaClinica } from "@/lib/supabase/destinatarios";
 import type { Confirmacao, StatusConfirmacao } from "@/lib/supabase/types";
 
 function revalidar() {
@@ -254,6 +264,42 @@ export async function reagendarConsulta(
       ok: false,
       erro: "Horário alterado, mas o lembrete não foi reprogramado.",
     };
+  }
+
+  // O paciente pediu para remarcar: avisar que foi atendido é o que
+  // fecha o ciclo. Sem e-mail cadastrado, resta o WhatsApp no painel.
+  const { data: consulta } = await r.admin
+    .from("consultas")
+    .select("paciente_nome,paciente_email,medico_id")
+    .eq("id", r.conf.consulta_id)
+    .maybeSingle();
+
+  if (emailConfigurado() && consulta?.paciente_email) {
+    const marca = await marcaDaClinica(r.conf.organization_id);
+    const { data: medico } = await r.admin
+      .from("profiles")
+      .select("nome")
+      .eq("id", consulta.medico_id)
+      .maybeSingle();
+
+    if (marca) {
+      const modelo = emailPacienteRemarcada(marca, {
+        paciente: consulta.paciente_nome,
+        data: formatarData(quando.toISOString()),
+        hora: formatarHora(quando.toISOString()),
+        diaSemana: diaDaSemana(quando.toISOString()),
+        medico: medico?.nome ?? null,
+        link: urlConfirmacao(r.conf.token),
+      });
+
+      await enviarEmail({
+        para: consulta.paciente_email,
+        assunto: modelo.assunto,
+        html: modelo.html,
+        texto: modelo.texto,
+        remetenteNome: marca.clinica,
+      });
+    }
   }
 
   revalidar();
