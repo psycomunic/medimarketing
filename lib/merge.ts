@@ -189,17 +189,45 @@ export async function garantirContato(
   return buscarContato(numero);
 }
 
+/**
+ * O mesmo celular escrito das duas formas que existem no Brasil.
+ *
+ * Desde 2016 o celular tem nove dígitos, mas o identificador que o
+ * WhatsApp usa para números antigos de muitos DDDs continua com oito.
+ * O cadastro da clínica costuma ter a forma nova; a conversa que já
+ * existe no Merge, a antiga. Procurar só pelo que está no cadastro
+ * criaria um contato novo do lado de uma conversa que já existe — o
+ * paciente vira duas pessoas, e o histórico que a recepção enxerga
+ * fica partido em dois.
+ */
+function variantes(numero: string): string[] {
+  const ddd = numero.slice(2, 4);
+  const resto = numero.slice(4);
+  const formas = new Set([numero]);
+
+  if (resto.length === 9 && resto.startsWith("9")) {
+    formas.add(`55${ddd}${resto.slice(1)}`);
+  } else if (resto.length === 8) {
+    formas.add(`55${ddd}9${resto}`);
+  }
+
+  return [...formas];
+}
+
 async function buscarContato(numero: string): Promise<number | null> {
+  // Os oito dígitos finais são o que as duas formas têm em comum
+  const sufixo = numero.slice(-8);
+
   const r = await chamar<{ data?: Array<{ id: number; number: string }> }>(
-    `/v1/contacts/?search=${encodeURIComponent(numero)}&limit=20`
+    `/v1/contacts/?search=${encodeURIComponent(sufixo)}&limit=20`
   );
   if (!r.ok) return null;
 
-  // A busca casa nome ou número por aproximação: confere o número exato
-  const exato = (r.dados?.data ?? []).find(
-    (c) => normalizarTelefone(c.number) === numero
+  const aceitos = new Set(variantes(numero));
+  const achado = (r.dados?.data ?? []).find((c) =>
+    aceitos.has(normalizarTelefone(c.number))
   );
-  return exato?.id ?? null;
+  return achado?.id ?? null;
 }
 
 /* ------------------------------------------------------------------ */
