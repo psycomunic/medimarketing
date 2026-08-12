@@ -7,7 +7,16 @@ import {
 } from "@/lib/supabase/confirmacoes";
 import { agendarWhatsApp, envioAutomatico, whatsappConfigurado } from "@/lib/envio";
 import { mergeConfigurado } from "@/lib/merge";
-import { montarMensagem, urlConfirmacao } from "@/lib/lembretes";
+import {
+  diaDaSemana,
+  formatarData,
+  formatarHora,
+  montarMensagem,
+  urlConfirmacao,
+} from "@/lib/lembretes";
+import { emailConfigurado, enviarEmail } from "@/lib/email";
+import { emailPacienteLembrete } from "@/lib/email-modelos";
+import { marcaDaClinica } from "@/lib/supabase/destinatarios";
 
 /**
  * ROTINA DE LEMBRETES — chamada pelo Vercel Cron (ver vercel.json).
@@ -67,7 +76,14 @@ export async function GET(req: NextRequest) {
   }
 
   const admin = createAdminClient();
-  const relatorio = { geradas: 0, enviadas: 0, semCanal: 0, semTelefone: 0, falhas: 0 };
+  const relatorio = {
+    geradas: 0,
+    enviadas: 0,
+    porEmail: 0,
+    semCanal: 0,
+    semTelefone: 0,
+    falhas: 0,
+  };
 
   // 1) Confirmações para consultas que ainda não têm
   const ate = new Date();
@@ -89,7 +105,7 @@ export async function GET(req: NextRequest) {
   for (const c of devidas) {
     const { data: consulta } = await admin
       .from("consultas")
-      .select("paciente_nome,paciente_telefone,data_hora,medico_id,status")
+      .select("paciente_nome,paciente_telefone,paciente_email,data_hora,medico_id,status")
       .eq("id", c.consulta_id)
       .maybeSingle();
 
@@ -99,11 +115,6 @@ export async function GET(req: NextRequest) {
         .from("confirmacoes")
         .update({ status: "cancelado" })
         .eq("id", c.id);
-      continue;
-    }
-
-    if (!consulta.paciente_telefone) {
-      relatorio.semTelefone++;
       continue;
     }
 
@@ -122,6 +133,39 @@ export async function GET(req: NextRequest) {
       link: urlConfirmacao(c.token),
       modelo: c.organizacao.mensagem_lembrete,
     });
+
+    // O lembrete também vai por e-mail quando há endereço. Não
+    // substitui o WhatsApp — é o mesmo pedido por outro caminho, para
+    // o paciente que lê e-mail e não vê mensagem.
+    if (emailConfigurado() && consulta.paciente_email) {
+      const marca = await marcaDaClinica(c.organization_id);
+      if (marca) {
+        const modelo = emailPacienteLembrete(marca, {
+          paciente: consulta.paciente_nome,
+          data: formatarData(consulta.data_hora),
+          hora: formatarHora(consulta.data_hora),
+          diaSemana: diaDaSemana(consulta.data_hora),
+          medico: medico?.nome ?? null,
+          endereco:
+            [c.organizacao.endereco, c.organizacao.cidade].filter(Boolean).join(" — ") ||
+            null,
+          link: urlConfirmacao(c.token),
+        });
+        const r = await enviarEmail({
+          para: consulta.paciente_email,
+          assunto: modelo.assunto,
+          html: modelo.html,
+          texto: modelo.texto,
+          remetenteNome: marca.clinica,
+        });
+        if (r.enviado) relatorio.porEmail++;
+      }
+    }
+
+    if (!consulta.paciente_telefone) {
+      relatorio.semTelefone++;
+      continue;
+    }
 
     const conexaoId = c.organizacao.merge_connection_id ?? null;
 

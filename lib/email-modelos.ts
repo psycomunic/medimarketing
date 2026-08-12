@@ -185,6 +185,56 @@ export type Modelo = { assunto: string; html: string; texto: string };
 /* Para o paciente                                                     */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Lembrete da véspera — o par por e-mail do que já ia por WhatsApp.
+ *
+ * Faz uma pergunta só: você vem? Tudo na mensagem existe para que a
+ * resposta caiba num toque, e o botão é a primeira coisa depois dos
+ * dados. Quem não clicar ainda tem o telefone da clínica no rodapé.
+ *
+ * O tom é de lembrança, não de cobrança: quem esqueceu não precisa se
+ * explicar, e quem não puder vir só precisa dizer.
+ */
+export function emailPacienteLembrete(
+  m: MarcaEmail,
+  d: DadosEmailConsulta
+): Modelo {
+  const corpo = `
+  <tr><td style="padding:24px 32px;">
+    ${faixa(AZUL, MENTA, "Sua consulta é amanhã")}
+    <p style="margin:0 0 4px;font-size:16px;color:${TEXTO};">
+      Olá, ${esc(d.paciente)}!
+    </p>
+    <p style="margin:0;font-size:15px;color:${CINZA};line-height:1.6;">
+      Passando para lembrar da sua consulta e confirmar se está tudo
+      certo para amanhã:
+    </p>
+    ${blocoDados([
+      ["Data", `${d.data} (${d.diaSemana})`],
+      ["Horário", d.hora],
+      ["Profissional", d.medico],
+      ["Local", d.endereco],
+    ])}
+    ${d.link ? botao("Sim, confirmo minha presença", d.link) : ""}
+    ${
+      d.link
+        ? linkSecundario("Preciso remarcar para outro dia", d.link)
+        : ""
+    }
+    <p style="margin:14px 0 0;font-size:14px;color:${CINZA};line-height:1.6;">
+      Pedimos que chegue com 15 minutos de antecedência. Se não puder
+      vir, avisar com antecedência libera o horário para outro paciente.
+    </p>
+  </td></tr>`;
+
+  return {
+    // O assunto é texto puro: escapar aqui deixaria "&" e acento à mostra
+    assunto: `${d.paciente}, podemos confirmar sua consulta de amanhã?`,
+    html: layout(m, corpo),
+    texto: `Ola, ${d.paciente}! Sua consulta na ${m.clinica} e amanha, ${d.data} as ${d.hora}${d.medico ? ` com ${d.medico}` : ""}. Confirme sua presenca ou peca outro horario em: ${d.link ?? ""}`,
+  };
+}
+
 /** Recibo depois que o paciente confirma pelo link. */
 export function emailPacienteConfirmou(
   m: MarcaEmail,
