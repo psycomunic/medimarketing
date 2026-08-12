@@ -334,6 +334,10 @@ export function AgendaCalendar({
         clinicas={clinicas}
         usuarioId={usuarioId}
         organizationId={organizationId}
+        onCriada={(quando) => {
+          setCursor(quando);
+          setVisao("dia");
+        }}
       />
     </div>
   );

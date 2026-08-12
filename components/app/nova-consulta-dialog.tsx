@@ -2,8 +2,9 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { format } from "date-fns";
-import { Loader2, Plus } from "lucide-react";
+import { differenceInCalendarDays, format, isValid } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { CalendarCheck, Loader2, Plus, TriangleAlert } from "lucide-react";
 import type { TipoConsulta } from "@/lib/supabase/types";
 import {
   Dialog,
@@ -44,6 +45,7 @@ export type OpcaoProfissional = {
 };
 
 export function NovaConsultaDialog({
+  onCriada,
   aberto,
   data,
   onOpenChange,
@@ -62,6 +64,8 @@ export function NovaConsultaDialog({
   usuarioId?: string;
   /** Clínica de quem está criando; nula para o super admin. */
   organizationId?: string | null;
+  /** Avisa a data criada, para a agenda ir até ela. */
+  onCriada?: (quando: Date) => void;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -120,6 +124,41 @@ export function NovaConsultaDialog({
     setObservacao("");
   }
 
+  /*
+   * Conferência do que foi escolhido, escrita por extenso.
+   *
+   * O <input type="date"> desenha o formato conforme o idioma do
+   * navegador, não o da página: num Chrome em inglês ele mostra
+   * mm/dd/yyyy, e quem digita "12/08" pensando em 12 de agosto marca
+   * 8 de dezembro. Como as duas datas são válidas, nada reclama — a
+   * consulta simplesmente não aparece no dia esperado.
+   *
+   * Não dá para mudar o formato do campo. Dá para escrever a data
+   * escolhida por extenso, em português, onde é impossível não ver.
+   */
+  const escolhida = new Date(`${dia}T${hora || "00:00"}:00`);
+  const dataValida = isValid(escolhida);
+  const diasAdiante = dataValida ? differenceInCalendarDays(escolhida, new Date()) : 0;
+
+  const porExtenso = dataValida
+    ? format(escolhida, "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR })
+    : null;
+
+  const distancia = !dataValida
+    ? null
+    : diasAdiante === 0
+      ? "hoje"
+      : diasAdiante === 1
+        ? "amanhã"
+        : diasAdiante === -1
+          ? "ontem"
+          : diasAdiante < 0
+            ? `${Math.abs(diasAdiante)} dias atrás`
+            : `daqui a ${diasAdiante} dias`;
+
+  // Passado é quase sempre engano; muito longe costuma ser dia/mês trocados
+  const suspeita = dataValida && (diasAdiante < 0 || diasAdiante > 120);
+
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErro(null);
@@ -149,6 +188,9 @@ export function NovaConsultaDialog({
       if (res.ok) {
         limpar();
         onOpenChange(false);
+        // Leva a agenda até a consulta criada. Sem isso, marcar num mês
+        // que não é o que está na tela parece que a consulta sumiu.
+        onCriada?.(dataHora);
         router.refresh();
       } else setErro(res.erro);
     });
@@ -349,6 +391,37 @@ export function NovaConsultaDialog({
                 </select>
               </div>
             </div>
+
+            {/* A data por extenso: é aqui que um dia/mês trocado aparece */}
+            {porExtenso && (
+              <p
+                className={cn(
+                  "flex items-start gap-2 rounded-md border px-3.5 py-2.5 text-sm",
+                  suspeita
+                    ? "border-alerta/40 bg-alerta/8 text-cinza-texto"
+                    : "border-border bg-branco-clinico text-cinza-suave"
+                )}
+              >
+                {suspeita ? (
+                  <TriangleAlert className="mt-0.5 size-4 shrink-0 text-alerta" />
+                ) : (
+                  <CalendarCheck className="mt-0.5 size-4 shrink-0 text-teal" />
+                )}
+                <span>
+                  <strong className="font-semibold capitalize text-azul-medico">
+                    {porExtenso}
+                  </strong>{" "}
+                  às {hora} — {distancia}.
+                  {suspeita && (
+                    <>
+                      {" "}
+                      Confira: o campo de data segue o idioma do seu navegador,
+                      e nele o dia pode estar no lugar do mês.
+                    </>
+                  )}
+                </span>
+              </p>
+            )}
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="grid gap-1.5">
