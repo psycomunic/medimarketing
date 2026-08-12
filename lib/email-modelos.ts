@@ -14,13 +14,13 @@
  * próprio elemento simplesmente não é aplicado.
  */
 
-const AZUL = "#0B4F6C";
-const TEAL = "#1A9E8F";
-const MENTA = "#E8F6F3";
-const CINZA = "#6B7A82";
-const TEXTO = "#2E3A40";
-const BORDA = "#E2ECEF";
-const FUNDO = "#F8FBFC";
+export const AZUL = "#0B4F6C";
+export const TEAL = "#1A9E8F";
+export const MENTA = "#E8F6F3";
+export const CINZA = "#6B7A82";
+export const TEXTO = "#2E3A40";
+export const BORDA = "#E2ECEF";
+export const FUNDO = "#F8FBFC";
 
 export type MarcaEmail = {
   clinica: string;
@@ -31,7 +31,7 @@ export type MarcaEmail = {
 };
 
 /** Escapa texto que vai para dentro do HTML. */
-function esc(t: string): string {
+export function esc(t: string): string {
   return t
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -141,7 +141,7 @@ function blocoDados(itens: [string, string | null | undefined][]): string {
   </table>`;
 }
 
-function botao(texto: string, url: string, cor = TEAL): string {
+export function botao(texto: string, url: string, cor = TEAL): string {
   return `
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:20px 0 8px;">
     <tr><td style="background:${cor};border-radius:999px;">
@@ -152,14 +152,14 @@ function botao(texto: string, url: string, cor = TEAL): string {
 }
 
 /** Link secundário, para a segunda ação sem competir com o botão. */
-function linkSecundario(texto: string, url: string): string {
+export function linkSecundario(texto: string, url: string): string {
   return `
   <p style="margin:0 0 4px;font-size:14px;">
     <a href="${esc(url)}" style="color:${TEAL};text-decoration:underline;">${esc(texto)}</a>
   </p>`;
 }
 
-function faixa(cor: string, fundo: string, texto: string): string {
+export function faixa(cor: string, fundo: string, texto: string): string {
   return `
   <p style="margin:0 0 18px;padding:10px 14px;border-radius:8px;background:${fundo};
     color:${cor};font-size:14px;font-weight:600;">${esc(texto)}</p>`;

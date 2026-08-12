@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { urlBase } from "@/lib/lembretes";
 import { createAdminClient, adminDisponivel } from "@/lib/supabase/admin";
 import { supabaseConfigurado } from "@/lib/supabase/queries";
 import { notificar } from "@/lib/supabase/notificacoes";
@@ -92,7 +93,12 @@ export async function cadastrar(input: CadastroInput): Promise<CadastroResult> {
   const { data: cadastro, error } = await supabase.auth.signUp({
     email: d.email,
     password: d.senha,
-    options: { data: { nome: d.nome } },
+    options: {
+      data: { nome: d.nome },
+      // Confirmado o e-mail, a pessoa cai no login já sabendo que a
+      // conta espera liberação — e não numa home que não explica nada.
+      emailRedirectTo: `${urlBase()}/login?erro=pendente`,
+    },
   });
 
   if (error || !cadastro.user) {

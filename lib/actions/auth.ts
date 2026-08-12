@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { supabaseConfigurado } from "@/lib/supabase/queries";
+import { urlBase } from "@/lib/lembretes";
 import { DEMO_COOKIE, checarCredenciaisDemo } from "@/lib/demo";
 
 export type AuthResult = { ok: false; erro: string } | { ok: true };
@@ -62,10 +63,18 @@ export async function logout() {
   redirect("/login");
 }
 
-/** Envia e-mail de redefinição de senha. */
+/**
+ * Envia e-mail de redefinição de senha.
+ *
+ * O `redirectTo` é o que faz o link do e-mail chegar a algum lugar
+ * útil: sem ele o Supabase manda a pessoa para a raiz do site, com o
+ * token no fragmento e nenhuma tela para digitar a senha nova.
+ */
 export async function solicitarReset(email: string): Promise<AuthResult> {
   const supabase = await createClient();
-  const { error } = await supabase.auth.resetPasswordForEmail(email);
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${urlBase()}/nova-senha`,
+  });
   if (error) return { ok: false, erro: traduzErro(error.message) };
   return { ok: true };
 }
