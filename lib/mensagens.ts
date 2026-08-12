@@ -179,6 +179,83 @@ export function msgCancelada(d: DadosConsulta): string {
 }
 
 /* ------------------------------------------------------------------ */
+/* Para a equipe: médico, dono da clínica e recepção                   */
+/* ------------------------------------------------------------------ */
+
+/**
+ * As mensagens acima falam com o paciente; estas falam com quem atende.
+ *
+ * O tom muda porque a leitura é outra: o médico olha o celular entre
+ * uma consulta e outra e precisa saber, em duas linhas, se tem algo
+ * para fazer. Por isso o assunto vem na primeira linha, o telefone do
+ * paciente vem junto (para ligar sem procurar) e o link do painel
+ * fecha a mensagem — é de lá que sai qualquer ação.
+ */
+export type AvisoEquipe = {
+  paciente: string;
+  data: string;
+  hora: string;
+  diaSemana: string;
+  medico?: string | null;
+  telefone?: string | null;
+  painel?: string | null;
+};
+
+function blocoAviso(d: AvisoEquipe): string[] {
+  return [
+    `Paciente: ${d.paciente}`,
+    `Quando: ${d.data} (${d.diaSemana}), às ${d.hora}`,
+    d.medico ? `Profissional: ${d.medico}` : null,
+    d.telefone ? `Telefone: ${d.telefone}` : null,
+  ].filter((l): l is string => l !== null);
+}
+
+/** Boa notícia: só registra, não pede nada. */
+export function msgEquipeConfirmou(d: AvisoEquipe): string {
+  return montar([
+    "*Presença confirmada*",
+    "",
+    ...blocoAviso(d),
+    "",
+    "A agenda já foi atualizada. Nada a fazer.",
+    d.painel ? "" : null,
+    d.painel ? `Ver no painel: ${d.painel}` : null,
+  ]);
+}
+
+/**
+ * O único aviso que pede ação — e por isso o mais direto de todos.
+ *
+ * A vaga só se salva se alguém ligar rápido, então o telefone vem
+ * antes do link e a urgência é dita sem rodeio.
+ */
+export function msgEquipeReagendar(d: AvisoEquipe): string {
+  return montar([
+    "*Pedido de remarcação*",
+    "",
+    ...blocoAviso(d),
+    "",
+    "O horário segue reservado até vocês combinarem o novo.",
+    "Quanto antes o contato, maior a chance de reaproveitar a vaga.",
+    d.painel ? "" : null,
+    d.painel ? `Remarcar no painel: ${d.painel}` : null,
+  ]);
+}
+
+/** Vaga livre: o aviso vale pelo encaixe que ainda dá tempo de fazer. */
+export function msgEquipeCancelou(d: AvisoEquipe): string {
+  return montar([
+    "*Consulta cancelada pelo paciente*",
+    "",
+    ...blocoAviso(d),
+    "",
+    "O horário está livre. Vale oferecer a quem está na lista de espera.",
+    d.painel ? "" : null,
+    d.painel ? `Ver a agenda: ${d.painel}` : null,
+  ]);
+}
+
+/* ------------------------------------------------------------------ */
 /* Réguas de relacionamento                                            */
 /* ------------------------------------------------------------------ */
 

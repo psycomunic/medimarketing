@@ -58,6 +58,9 @@ function org(
     lembrete_dias_uteis: 1,
     lembrete_hora: 9,
     lembrete_ativo: true,
+    // Na demonstração nada sai de verdade: sem conexão, o painel mostra
+    // a fila de envio manual, que é o que se quer demonstrar mesmo.
+    merge_connection_id: null,
     created_at: new Date("2024-01-15").toISOString(),
     ...extras,
   };

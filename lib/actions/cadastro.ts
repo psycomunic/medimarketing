@@ -144,6 +144,7 @@ export async function cadastrar(input: CadastroInput): Promise<CadastroResult> {
         lembrete_dias_uteis: 1,
         lembrete_hora: 9,
         lembrete_ativo: true,
+    merge_connection_id: null,
       })
       .select("id")
       .single();

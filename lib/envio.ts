@@ -1,30 +1,126 @@
 import "server-only";
 
 import { normalizarTelefone } from "@/lib/lembretes";
+import {
+  agendarTexto,
+  enviarTexto,
+  mergeConfigurado,
+} from "@/lib/merge";
 
 /**
- * Envio de mensagem ao paciente.
+ * Envio de mensagem por WhatsApp.
  *
- * Hoje existe um canal só, o WhatsApp Cloud API oficial. Ele só entra em
- * ação quando as credenciais estão no ambiente; sem elas, a mensagem não
- * é "perdida": ela fica na fila do painel para a recepção disparar pelo
- * wa.me em um clique. É o comportamento que faz a funcionalidade servir
- * desde o primeiro dia, antes de qualquer homologação com a Meta.
+ * Há dois caminhos, nesta ordem:
+ *
+ *   1. Merge — a plataforma onde cada clínica conecta o próprio número
+ *      por QR code. É o caminho preferido: a mensagem sai do número que
+ *      o paciente já conhece, e a conversa fica no mesmo lugar onde a
+ *      secretária atende, o que também permite à agência acompanhar.
+ *      Exige que a clínica tenha uma conexão escolhida.
+ *
+ *   2. Cloud API da Meta — número único da plataforma, sem vínculo com
+ *      a clínica. Fica como reserva para quem não usa o Merge.
+ *
+ * Sem nenhum dos dois, a mensagem não se perde: continua na fila do
+ * painel para a recepção disparar pelo wa.me em um clique. É o que faz
+ * a funcionalidade servir desde o primeiro dia.
  */
 
 export type ResultadoEnvio =
-  | { enviado: true; canal: "whatsapp" }
-  | { enviado: false; motivo: "sem_credenciais" | "sem_telefone" | "erro"; detalhe?: string };
+  | { enviado: true; canal: "merge" | "whatsapp"; referencia?: string }
+  | {
+      enviado: false;
+      motivo: "sem_credenciais" | "sem_telefone" | "sem_conexao" | "erro";
+      detalhe?: string;
+    };
+
+export type Destino = {
+  /** Nome de quem recebe. O Merge cadastra o contato com ele. */
+  nome: string;
+  telefone: string | null;
+  /**
+   * Conexão do Merge que envia — o número da clínica.
+   * Sem ela, o Merge não entra em ação nem por engano: mandar pelo
+   * número de outra clínica seria pior do que não mandar.
+   */
+  conexaoId?: number | null;
+};
 
 export function whatsappConfigurado(): boolean {
   return !!process.env.WHATSAPP_TOKEN && !!process.env.WHATSAPP_PHONE_ID;
 }
 
+/** Algum canal automático disponível para esta clínica. */
+export function envioAutomatico(conexaoId?: number | null): boolean {
+  return (mergeConfigurado() && !!conexaoId) || whatsappConfigurado();
+}
+
+/**
+ * Manda agora.
+ *
+ * Quando `quando` vem preenchido e o canal é o Merge, a mensagem é
+ * programada em vez de disparada — ver `agendar` abaixo.
+ */
 export async function enviarWhatsApp(
-  telefone: string | null,
+  destino: Destino,
   texto: string
 ): Promise<ResultadoEnvio> {
-  if (!telefone) return { enviado: false, motivo: "sem_telefone" };
+  if (!destino.telefone) return { enviado: false, motivo: "sem_telefone" };
+
+  if (mergeConfigurado() && destino.conexaoId) {
+    const r = await enviarTexto({
+      conexaoId: destino.conexaoId,
+      nome: destino.nome,
+      telefone: destino.telefone,
+      texto,
+    });
+    if (r.enviado) return { enviado: true, canal: "merge", referencia: r.messageUuid };
+    return { enviado: false, motivo: "erro", detalhe: r.motivo };
+  }
+
+  if (mergeConfigurado() && !whatsappConfigurado()) {
+    return { enviado: false, motivo: "sem_conexao" };
+  }
+
+  return enviarPelaMeta(destino.telefone, texto);
+}
+
+/**
+ * Programa a mensagem para a hora certa.
+ *
+ * O cron da Vercel passa uma vez por dia; sem agendamento, o lembrete
+ * sairia na hora da passada da manhã, não na hora que a clínica
+ * escolheu. O Merge segura e dispara no minuto certo. A Cloud API não
+ * tem esse recurso, então lá o envio é imediato — a mensagem chega
+ * mais cedo, nunca mais tarde.
+ */
+export async function agendarWhatsApp(
+  destino: Destino,
+  texto: string,
+  quando: Date
+): Promise<ResultadoEnvio> {
+  if (!destino.telefone) return { enviado: false, motivo: "sem_telefone" };
+
+  if (mergeConfigurado() && destino.conexaoId && quando.getTime() > Date.now()) {
+    const r = await agendarTexto({
+      conexaoId: destino.conexaoId,
+      nome: destino.nome,
+      telefone: destino.telefone,
+      texto,
+      quando,
+    });
+    if (r.enviado) return { enviado: true, canal: "merge", referencia: r.messageUuid };
+    // Agendamento recusado não pode custar a mensagem: manda agora
+    console.warn("[envio] Agendamento recusado, enviando agora:", r.motivo);
+  }
+
+  return enviarWhatsApp(destino, texto);
+}
+
+async function enviarPelaMeta(
+  telefone: string,
+  texto: string
+): Promise<ResultadoEnvio> {
   if (!whatsappConfigurado()) return { enviado: false, motivo: "sem_credenciais" };
 
   const numero = normalizarTelefone(telefone);

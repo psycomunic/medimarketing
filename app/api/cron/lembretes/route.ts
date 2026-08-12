@@ -5,7 +5,8 @@ import {
   getDevidas,
   gerarPendentes,
 } from "@/lib/supabase/confirmacoes";
-import { enviarWhatsApp, whatsappConfigurado } from "@/lib/envio";
+import { agendarWhatsApp, envioAutomatico, whatsappConfigurado } from "@/lib/envio";
+import { mergeConfigurado } from "@/lib/merge";
 import { montarMensagem, urlConfirmacao } from "@/lib/lembretes";
 
 /**
@@ -122,12 +123,25 @@ export async function GET(req: NextRequest) {
       modelo: c.organizacao.mensagem_lembrete,
     });
 
-    if (!whatsappConfigurado()) {
+    const conexaoId = c.organizacao.merge_connection_id ?? null;
+
+    if (!envioAutomatico(conexaoId)) {
       relatorio.semCanal++;
       continue;
     }
 
-    const res = await enviarWhatsApp(consulta.paciente_telefone, texto);
+    // Pelo Merge a mensagem é programada para a hora que a clínica
+    // escolheu, mesmo que esta passada seja de manhã. Pela Cloud API
+    // não há agendamento: sai agora, algumas horas mais cedo.
+    const res = await agendarWhatsApp(
+      {
+        nome: consulta.paciente_nome,
+        telefone: consulta.paciente_telefone,
+        conexaoId,
+      },
+      texto,
+      new Date(c.agendado_para)
+    );
 
     if (res.enviado) {
       await admin
@@ -135,7 +149,7 @@ export async function GET(req: NextRequest) {
         .update({
           status: "enviado",
           enviado_em: new Date().toISOString(),
-          canal: "whatsapp",
+          canal: res.canal,
           tentativas: c.tentativas + 1,
         })
         .eq("id", c.id);
@@ -159,7 +173,11 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     ok: true,
     em: new Date().toISOString(),
-    canalAutomatico: whatsappConfigurado() ? "whatsapp" : "nenhum (envio manual pelo painel)",
+    canalAutomatico: mergeConfigurado()
+      ? "merge (número da própria clínica)"
+      : whatsappConfigurado()
+        ? "whatsapp (número da plataforma)"
+        : "nenhum (envio manual pelo painel)",
     ...relatorio,
   });
 }

@@ -298,3 +298,32 @@ create policy "logos_remocao" on storage.objects
       )
     )
   );
+
+-- ====================================================================
+-- 2026-08-12 · WhatsApp pelo Merge
+--
+-- Cada clínica conecta o próprio número no Merge por QR code. A chave
+-- da API é da conta da agência e vale para todas as conexões; o que
+-- separa uma clínica da outra é o id da conexão, guardado aqui.
+--
+-- Fica nulo de propósito até alguém escolher: sem conexão definida o
+-- envio automático não acontece, porque mandar mensagem de uma clínica
+-- pelo número de outra é pior do que não mandar.
+-- ====================================================================
+
+alter table public.organizations
+  add column if not exists merge_connection_id integer;
+
+comment on column public.organizations.merge_connection_id is
+  'Conexão do Merge (número de WhatsApp) que envia as mensagens desta clínica.';
+
+-- O canal de disparo passa a distinguir de onde a mensagem saiu: pelo
+-- número da própria clínica (merge) ou pelo número da plataforma
+-- (whatsapp). Sem isso o histórico não conta a diferença que o
+-- paciente enxerga.
+alter table public.confirmacoes
+  drop constraint if exists confirmacoes_canal_check;
+
+alter table public.confirmacoes
+  add constraint confirmacoes_canal_check
+  check (canal in ('whatsapp','merge','manual','email'));

@@ -65,6 +65,12 @@ export type Organization = {
   /** Hora do dia (0–23) em que o disparo acontece. */
   lembrete_hora: number;
   lembrete_ativo: boolean;
+  /**
+   * Conexão do Merge que envia as mensagens desta clínica — o número
+   * de WhatsApp que ela conectou por QR code. Nulo enquanto ninguém
+   * escolheu: sem isso o envio automático não sai, de propósito.
+   */
+  merge_connection_id: number | null;
   created_at: string;
 };
 
@@ -368,7 +374,11 @@ export type StatusConfirmacao =
   | "recusado"
   | "cancelado";
 
-export type CanalEnvio = "whatsapp" | "manual" | "email";
+/**
+ * Por onde a mensagem saiu. "merge" é o número da própria clínica;
+ * "whatsapp", o número único da plataforma pela Cloud API.
+ */
+export type CanalEnvio = "whatsapp" | "merge" | "manual" | "email";
 
 /**
  * Pedido de confirmação de uma consulta.

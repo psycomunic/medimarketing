@@ -21,10 +21,15 @@ import type {
   ProvedorIntegracao,
 } from "@/lib/supabase/types";
 import type { UsuarioGerenciavel } from "@/lib/supabase/usuarios";
-import { salvarClinica, salvarIntegracao } from "@/lib/actions/configuracoes";
+import {
+  salvarClinica,
+  salvarIntegracao,
+  type ConexaoDisponivel,
+} from "@/lib/actions/configuracoes";
 import { descricaoProvedor, rotuloProvedor } from "@/lib/rotulos";
 import { GestaoUsuarios } from "@/components/app/admin/gestao-usuarios";
 import { FormLogo } from "@/components/app/configuracoes/form-logo";
+import { ConexaoWhatsApp } from "@/components/app/configuracoes/conexao-whatsapp";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -54,6 +59,8 @@ export function PainelConfiguracoes({
   organizacao,
   equipe,
   integracoes,
+  conexoesWhatsApp,
+  mergeDisponivel,
   usuarioId,
   adminDisponivel,
   demo,
@@ -61,6 +68,8 @@ export function PainelConfiguracoes({
   organizacao: Organization;
   equipe: UsuarioGerenciavel[];
   integracoes: Integracao[];
+  conexoesWhatsApp: ConexaoDisponivel[];
+  mergeDisponivel: boolean;
   usuarioId: string;
   adminDisponivel: boolean;
   demo: boolean;
@@ -117,7 +126,16 @@ export function PainelConfiguracoes({
           />
         )}
         {aba === "integracoes" && (
-          <Integracoes integracoes={integracoes} organizationId={organizacao.id} />
+          <div className="space-y-4">
+            <ConexaoWhatsApp
+              organizationId={organizacao.id}
+              conexoes={conexoesWhatsApp}
+              disponivel={mergeDisponivel}
+              escolhida={organizacao.merge_connection_id ?? null}
+              demo={demo}
+            />
+            <Integracoes integracoes={integracoes} organizationId={organizacao.id} />
+          </div>
         )}
       </div>
     </>

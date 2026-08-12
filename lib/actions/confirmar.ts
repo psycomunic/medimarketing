@@ -3,7 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient, adminDisponivel } from "@/lib/supabase/admin";
 import { notificar } from "@/lib/supabase/notificacoes";
-import { destinatariosDaConsulta } from "@/lib/supabase/destinatarios";
+import {
+  destinatariosDaConsulta,
+  type DestinoConsulta,
+} from "@/lib/supabase/destinatarios";
 import { emailConfigurado, enviarVarios } from "@/lib/email";
 import {
   emailClinicaCancelou,
@@ -11,6 +14,14 @@ import {
   emailClinicaReagendar,
   emailPacienteConfirmou,
 } from "@/lib/email-modelos";
+import { enviarWhatsApp } from "@/lib/envio";
+import { mergeConfigurado } from "@/lib/merge";
+import {
+  msgEquipeCancelou,
+  msgEquipeConfirmou,
+  msgEquipeReagendar,
+  type AvisoEquipe,
+} from "@/lib/mensagens";
 import {
   diaDaSemana,
   formatarData,
@@ -31,50 +42,26 @@ export type RespostaPaciente = "confirmado" | "reagendar" | "recusado";
  */
 async function avisarPorEmail(args: {
   resposta: RespostaPaciente;
-  organizationId: string;
+  destino: DestinoConsulta;
+  dados: AvisoEquipe;
   token: string;
-  consulta: {
-    paciente_nome: string;
-    paciente_email: string | null;
-    paciente_telefone: string | null;
-    data_hora: string;
-    medico_id: string;
-  };
+  emailPaciente: string | null;
 }): Promise<void> {
   if (!emailConfigurado()) return;
 
-  const { resposta, organizationId, token, consulta } = args;
-
-  const destino = await destinatariosDaConsulta(organizationId, consulta.medico_id);
-  if (!destino) return;
-
-  const admin = createAdminClient();
-  const { data: medico } = await admin
-    .from("profiles")
-    .select("nome")
-    .eq("id", consulta.medico_id)
-    .maybeSingle();
-
-  const dados = {
-    paciente: consulta.paciente_nome,
-    data: formatarData(consulta.data_hora),
-    hora: formatarHora(consulta.data_hora),
-    diaSemana: diaDaSemana(consulta.data_hora),
-    medico: medico?.nome ?? null,
-    telefone: consulta.paciente_telefone,
-  };
+  const { resposta, destino, dados, token, emailPaciente } = args;
 
   const envios: Parameters<typeof enviarVarios>[0] = [];
 
   // Recibo do paciente. Vai com o mesmo link que ele acabou de usar: se
   // depois precisar remarcar, é por ali — a caixa não recebe resposta.
-  if (resposta === "confirmado" && consulta.paciente_email) {
+  if (resposta === "confirmado" && emailPaciente) {
     const modelo = emailPacienteConfirmou(destino.marca, {
       ...dados,
       link: urlConfirmacao(token),
     });
     envios.push({
-      para: consulta.paciente_email,
+      para: emailPaciente,
       assunto: modelo.assunto,
       html: modelo.html,
       texto: modelo.texto,
@@ -104,6 +91,96 @@ async function avisarPorEmail(args: {
   }
 
   if (envios.length) await enviarVarios(envios);
+}
+
+/**
+ * O mesmo aviso da clínica, pelo WhatsApp.
+ *
+ * Vale mais que o e-mail no caso urgente: o pedido de remarcação chega
+ * no celular que o médico já tem na mão, e a vaga só se salva se
+ * alguém ligar rápido. O paciente não entra aqui — ele acabou de
+ * responder, já sabe o que fez.
+ *
+ * Sai do número da própria clínica, então nada é enviado se ela ainda
+ * não escolheu a conexão: melhor não avisar do que avisar pelo número
+ * de outra clínica.
+ */
+async function avisarPorWhatsApp(args: {
+  resposta: RespostaPaciente;
+  destino: DestinoConsulta;
+  dados: AvisoEquipe;
+}): Promise<void> {
+  const { resposta, destino, dados } = args;
+
+  if (!mergeConfigurado() || !destino.conexaoId || !destino.whatsapps.length) return;
+
+  const texto =
+    resposta === "confirmado"
+      ? msgEquipeConfirmou(dados)
+      : resposta === "reagendar"
+        ? msgEquipeReagendar(dados)
+        : msgEquipeCancelou(dados);
+
+  await Promise.all(
+    destino.whatsapps.map((c) =>
+      enviarWhatsApp({ nome: c.nome, telefone: c.telefone, conexaoId: destino.conexaoId }, texto)
+    )
+  );
+}
+
+/**
+ * Apura os destinatários uma vez e avisa pelos dois canais.
+ *
+ * E-mail e WhatsApp dizem a mesma coisa para as mesmas pessoas; o que
+ * muda é o formato. Buscar a lista duas vezes só multiplicaria consulta
+ * ao banco e abriria espaço para os dois canais discordarem.
+ */
+async function avisar(args: {
+  resposta: RespostaPaciente;
+  organizationId: string;
+  token: string;
+  consulta: {
+    paciente_nome: string;
+    paciente_email: string | null;
+    paciente_telefone: string | null;
+    data_hora: string;
+    medico_id: string;
+  };
+}): Promise<void> {
+  const { resposta, organizationId, token, consulta } = args;
+
+  const destino = await destinatariosDaConsulta(organizationId, consulta.medico_id);
+  if (!destino) return;
+
+  const admin = createAdminClient();
+  const { data: medico } = await admin
+    .from("profiles")
+    .select("nome")
+    .eq("id", consulta.medico_id)
+    .maybeSingle();
+
+  const dados: AvisoEquipe = {
+    paciente: consulta.paciente_nome,
+    data: formatarData(consulta.data_hora),
+    hora: formatarHora(consulta.data_hora),
+    diaSemana: diaDaSemana(consulta.data_hora),
+    medico: medico?.nome ?? null,
+    telefone: consulta.paciente_telefone,
+    painel: urlPainel("/app/confirmacoes"),
+  };
+
+  // Em paralelo e sem propagar erro: um canal fora do ar não pode
+  // calar o outro nem desfazer a resposta que o paciente já deu.
+  await Promise.allSettled([
+    avisarPorEmail({
+      resposta,
+      destino,
+      dados,
+      token,
+      emailPaciente: consulta.paciente_email,
+    }),
+    avisarPorWhatsApp({ resposta, destino, dados }),
+  ]);
 }
 
 export type ResultadoResposta =
@@ -229,9 +306,9 @@ export async function responderConfirmacao(
     ...aviso,
   });
 
-  // E-mail para os dois lados. Falhar aqui não desfaz a resposta que o
-  // paciente acabou de dar — o aviso no painel já está registrado.
-  await avisarPorEmail({
+  // E-mail e WhatsApp para os dois lados. Falhar aqui não desfaz a
+  // resposta que o paciente deu — o aviso no painel já está registrado.
+  await avisar({
     resposta,
     organizationId: conf.organization_id,
     token,

@@ -18,7 +18,9 @@ import {
   montarMensagem,
   urlConfirmacao,
 } from "@/lib/lembretes";
-import { enviarWhatsApp, whatsappConfigurado } from "@/lib/envio";
+import { enviarWhatsApp, envioAutomatico } from "@/lib/envio";
+import { msgReagendada } from "@/lib/mensagens";
+import { mergeConfigurado } from "@/lib/merge";
 import { emailConfigurado, enviarEmail } from "@/lib/email";
 import { emailPacienteRemarcada } from "@/lib/email-modelos";
 import { marcaDaClinica } from "@/lib/supabase/destinatarios";
@@ -106,13 +108,6 @@ export async function enviarAgora(id: string): Promise<ActionResult> {
   const r = await autorizar(id);
   if ("erro" in r) return r.erro;
 
-  if (!whatsappConfigurado()) {
-    return {
-      ok: false,
-      erro: "WhatsApp oficial não configurado. Use o botão de envio manual.",
-    };
-  }
-
   const { data: consulta } = await r.admin
     .from("consultas")
     .select("paciente_nome,paciente_telefone,data_hora,medico_id")
@@ -126,11 +121,22 @@ export async function enviarAgora(id: string): Promise<ActionResult> {
   const [{ data: org }, { data: medico }] = await Promise.all([
     r.admin
       .from("organizations")
-      .select("nome,endereco,cidade,mensagem_lembrete")
+      .select("nome,endereco,cidade,mensagem_lembrete,merge_connection_id")
       .eq("id", r.conf.organization_id)
       .maybeSingle(),
     r.admin.from("profiles").select("nome").eq("id", consulta.medico_id).maybeSingle(),
   ]);
+
+  const conexaoId = org?.merge_connection_id ?? null;
+
+  if (!envioAutomatico(conexaoId)) {
+    return {
+      ok: false,
+      erro: mergeConfigurado()
+        ? "Esta clínica ainda não escolheu o número de WhatsApp em Configurações. Use o botão de envio manual."
+        : "Envio automático não configurado. Use o botão de envio manual.",
+    };
+  }
 
   const texto = montarMensagem({
     paciente: consulta.paciente_nome,
@@ -142,9 +148,19 @@ export async function enviarAgora(id: string): Promise<ActionResult> {
     modelo: org?.mensagem_lembrete,
   });
 
-  const envio = await enviarWhatsApp(consulta.paciente_telefone, texto);
+  const envio = await enviarWhatsApp(
+    {
+      nome: consulta.paciente_nome,
+      telefone: consulta.paciente_telefone,
+      conexaoId,
+    },
+    texto
+  );
   if (!envio.enviado) {
-    return { ok: false, erro: `Não foi possível enviar (${envio.motivo}).` };
+    return {
+      ok: false,
+      erro: `Não foi possível enviar (${envio.detalhe ?? envio.motivo}).`,
+    };
   }
 
   await r.admin
@@ -152,7 +168,7 @@ export async function enviarAgora(id: string): Promise<ActionResult> {
     .update({
       status: "enviado",
       enviado_em: new Date().toISOString(),
-      canal: "whatsapp",
+      canal: envio.canal,
       tentativas: r.conf.tentativas + 1,
     })
     .eq("id", id);
@@ -267,39 +283,69 @@ export async function reagendarConsulta(
   }
 
   // O paciente pediu para remarcar: avisar que foi atendido é o que
-  // fecha o ciclo. Sem e-mail cadastrado, resta o WhatsApp no painel.
+  // fecha o ciclo. Vai pelos dois canais — o WhatsApp é o que ele
+  // realmente lê, o e-mail é o que fica guardado.
   const { data: consulta } = await r.admin
     .from("consultas")
-    .select("paciente_nome,paciente_email,medico_id")
+    .select("paciente_nome,paciente_email,paciente_telefone,medico_id")
     .eq("id", r.conf.consulta_id)
     .maybeSingle();
 
-  if (emailConfigurado() && consulta?.paciente_email) {
-    const marca = await marcaDaClinica(r.conf.organization_id);
-    const { data: medico } = await r.admin
-      .from("profiles")
-      .select("nome")
-      .eq("id", consulta.medico_id)
-      .maybeSingle();
+  if (consulta) {
+    const [marca, { data: medico }, { data: orgEnvio }] = await Promise.all([
+      marcaDaClinica(r.conf.organization_id),
+      r.admin.from("profiles").select("nome").eq("id", consulta.medico_id).maybeSingle(),
+      r.admin
+        .from("organizations")
+        .select("nome,endereco,cidade,merge_connection_id")
+        .eq("id", r.conf.organization_id)
+        .maybeSingle(),
+    ]);
 
-    if (marca) {
-      const modelo = emailPacienteRemarcada(marca, {
-        paciente: consulta.paciente_nome,
-        data: formatarData(quando.toISOString()),
-        hora: formatarHora(quando.toISOString()),
-        diaSemana: diaDaSemana(quando.toISOString()),
-        medico: medico?.nome ?? null,
-        link: urlConfirmacao(r.conf.token),
-      });
+    const dados = {
+      paciente: consulta.paciente_nome,
+      data: formatarData(quando.toISOString()),
+      hora: formatarHora(quando.toISOString()),
+      diaSemana: diaDaSemana(quando.toISOString()),
+      medico: medico?.nome ?? null,
+      link: urlConfirmacao(r.conf.token),
+    };
 
-      await enviarEmail({
-        para: consulta.paciente_email,
-        assunto: modelo.assunto,
-        html: modelo.html,
-        texto: modelo.texto,
-        remetenteNome: marca.clinica,
-      });
+    const avisos: Promise<unknown>[] = [];
+
+    if (emailConfigurado() && consulta.paciente_email && marca) {
+      const modelo = emailPacienteRemarcada(marca, dados);
+      avisos.push(
+        enviarEmail({
+          para: consulta.paciente_email,
+          assunto: modelo.assunto,
+          html: modelo.html,
+          texto: modelo.texto,
+          remetenteNome: marca.clinica,
+        })
+      );
     }
+
+    if (consulta.paciente_telefone && orgEnvio) {
+      avisos.push(
+        enviarWhatsApp(
+          {
+            nome: consulta.paciente_nome,
+            telefone: consulta.paciente_telefone,
+            conexaoId: orgEnvio.merge_connection_id ?? null,
+          },
+          msgReagendada({
+            ...dados,
+            clinica: orgEnvio.nome,
+            endereco:
+              [orgEnvio.endereco, orgEnvio.cidade].filter(Boolean).join(" — ") || null,
+          })
+        )
+      );
+    }
+
+    // Nenhum aviso pode derrubar a remarcação que já foi feita
+    await Promise.allSettled(avisos);
   }
 
   revalidar();
