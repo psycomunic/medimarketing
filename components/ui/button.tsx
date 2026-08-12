@@ -3,8 +3,18 @@ import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
+/**
+ * O rótulo pode quebrar em duas linhas.
+ *
+ * Antes havia `whitespace-nowrap` aqui, e um botão de texto longo
+ * ("Quero meu diagnóstico gratuito") impunha sua largura à coluna, à
+ * seção e por fim à página: em telas de 320 e 360px o site inteiro
+ * rolava de lado. Entre quebrar a linha de um botão e fazer a página
+ * deslizar, quebrar a linha é o mal menor — e `text-balance` reparte
+ * as palavras de forma equilibrada quando isso acontece.
+ */
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex min-w-0 items-center justify-center gap-2 text-balance rounded-full text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {

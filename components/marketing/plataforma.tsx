@@ -18,7 +18,7 @@ export function Plataforma() {
     >
       {/* Fundo decorativo */}
       <div aria-hidden className="pointer-events-none absolute inset-0">
-        <div className="absolute -right-32 top-10 size-[420px] rounded-full bg-teal/25 blur-3xl" />
+        <div className="pointer-events-none absolute -right-32 top-10 size-[420px] rounded-full bg-teal/25 blur-3xl" />
         <div className="absolute -left-24 bottom-0 size-[360px] rounded-full bg-teal-claro/15 blur-3xl" />
       </div>
 

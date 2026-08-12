@@ -39,14 +39,30 @@ export default async function ClinicasPage() {
       leads: acc.leads + c.leads_mes,
       faturamento: acc.faturamento + c.faturamento_mes,
     }),
-    { usuarios: 0, consultas: 0, leads: 0, faturamento: 0 }
+    { usuarios: 0, consultas: 0, leads: 0, faturamento: 0 },
   );
 
   const resumo = [
-    { icone: Building2, label: "clínicas ativas", valor: formatarNumero(ativos.length) },
-    { icone: Users, label: "usuários na plataforma", valor: formatarNumero(totais.usuarios) },
-    { icone: CalendarDays, label: "consultas no mês", valor: formatarNumero(totais.consultas) },
-    { icone: Banknote, label: "faturamento da carteira", valor: formatarReais(totais.faturamento) },
+    {
+      icone: Building2,
+      label: "clínicas ativas",
+      valor: formatarNumero(ativos.length),
+    },
+    {
+      icone: Users,
+      label: "usuários na plataforma",
+      valor: formatarNumero(totais.usuarios),
+    },
+    {
+      icone: CalendarDays,
+      label: "consultas no mês",
+      valor: formatarNumero(totais.consultas),
+    },
+    {
+      icone: Banknote,
+      label: "faturamento da carteira",
+      valor: formatarReais(totais.faturamento),
+    },
   ];
 
   return (
@@ -93,63 +109,83 @@ export default async function ClinicasPage() {
           </p>
         ) : (
           <>
-            {/* Tabela no desktop */}
-            <table className="hidden w-full text-sm md:table">
-              <thead>
-                <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-cinza-suave">
-                  <th className="px-6 py-3 font-semibold">Clínica</th>
-                  <th className="px-4 py-3 font-semibold">Plano</th>
-                  <th className="px-4 py-3 text-right font-semibold">Usuários</th>
-                  <th className="px-4 py-3 text-right font-semibold">Consultas</th>
-                  <th className="px-4 py-3 text-right font-semibold">Leads</th>
-                  <th className="px-6 py-3 text-right font-semibold">Faturamento</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {clientes.map((c) => (
-                  <tr key={c.id} className="transition-colors hover:bg-branco-clinico">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <CircleDot
-                          className={cn(
-                            "size-3.5 shrink-0",
-                            c.ativo ? "text-sucesso" : "text-cinza-suave/50"
-                          )}
-                        />
-                        <div className="min-w-0">
-                          <p className="truncate font-semibold text-azul-medico">
-                            {c.nome}
-                          </p>
-                          <p className="truncate text-xs text-cinza-suave">
-                            {[c.especialidade, c.cidade].filter(Boolean).join(" · ")}
-                          </p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-4">
-                      <span
-                        className={cn(
-                          "rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide",
-                          corPlano[c.plano]
-                        )}
-                      >
-                        {rotuloPlano[c.plano] ?? c.plano}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4 text-right text-cinza-texto">{c.usuarios}</td>
-                    <td className="px-4 py-4 text-right text-cinza-texto">
-                      {c.consultas_mes}
-                    </td>
-                    <td className="px-4 py-4 text-right text-cinza-texto">
-                      {c.leads_mes}
-                    </td>
-                    <td className="px-6 py-4 text-right font-semibold text-azul-medico">
-                      {formatarReais(c.faturamento_mes)}
-                    </td>
+            {/* Tabela no desktop. O invólucro rola por conta própria:
+                a seção recorta o que passa da borda, e sem isso a
+                última coluna sumia sem deixar rastro em telas de 768
+                a 1024px — nem barra de rolagem, nem aviso. */}
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full min-w-[46rem] text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-cinza-suave">
+                    <th className="px-6 py-3 font-semibold">Clínica</th>
+                    <th className="px-4 py-3 font-semibold">Plano</th>
+                    <th className="px-4 py-3 text-right font-semibold">
+                      Usuários
+                    </th>
+                    <th className="px-4 py-3 text-right font-semibold">
+                      Consultas
+                    </th>
+                    <th className="px-4 py-3 text-right font-semibold">
+                      Leads
+                    </th>
+                    <th className="px-6 py-3 text-right font-semibold">
+                      Faturamento
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {clientes.map((c) => (
+                    <tr
+                      key={c.id}
+                      className="transition-colors hover:bg-branco-clinico"
+                    >
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          <CircleDot
+                            className={cn(
+                              "size-3.5 shrink-0",
+                              c.ativo ? "text-sucesso" : "text-cinza-suave/50",
+                            )}
+                          />
+                          <div className="min-w-0">
+                            <p className="truncate font-semibold text-azul-medico">
+                              {c.nome}
+                            </p>
+                            <p className="truncate text-xs text-cinza-suave">
+                              {[c.especialidade, c.cidade]
+                                .filter(Boolean)
+                                .join(" · ")}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <span
+                          className={cn(
+                            "rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide",
+                            corPlano[c.plano],
+                          )}
+                        >
+                          {rotuloPlano[c.plano] ?? c.plano}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4 text-right text-cinza-texto">
+                        {c.usuarios}
+                      </td>
+                      <td className="px-4 py-4 text-right text-cinza-texto">
+                        {c.consultas_mes}
+                      </td>
+                      <td className="px-4 py-4 text-right text-cinza-texto">
+                        {c.leads_mes}
+                      </td>
+                      <td className="px-6 py-4 text-right font-semibold text-azul-medico">
+                        {formatarReais(c.faturamento_mes)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
             {/* Cartões no mobile */}
             <ul className="divide-y divide-border md:hidden">
@@ -161,19 +197,21 @@ export default async function ClinicasPage() {
                         <CircleDot
                           className={cn(
                             "size-3.5 shrink-0",
-                            c.ativo ? "text-sucesso" : "text-cinza-suave/50"
+                            c.ativo ? "text-sucesso" : "text-cinza-suave/50",
                           )}
                         />
                         <span className="truncate">{c.nome}</span>
                       </p>
                       <p className="mt-0.5 text-xs text-cinza-suave">
-                        {[c.especialidade, c.cidade].filter(Boolean).join(" · ")}
+                        {[c.especialidade, c.cidade]
+                          .filter(Boolean)
+                          .join(" · ")}
                       </p>
                     </div>
                     <span
                       className={cn(
                         "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase",
-                        corPlano[c.plano]
+                        corPlano[c.plano],
                       )}
                     >
                       {rotuloPlano[c.plano] ?? c.plano}
@@ -186,7 +224,10 @@ export default async function ClinicasPage() {
                       { l: "Leads", v: c.leads_mes },
                       { l: "Faturam.", v: formatarReais(c.faturamento_mes) },
                     ].map((m) => (
-                      <div key={m.l} className="rounded-md bg-branco-clinico py-2">
+                      <div
+                        key={m.l}
+                        className="rounded-md bg-branco-clinico py-2"
+                      >
                         <p className="font-semibold text-azul-medico">{m.v}</p>
                         <p className="text-[10px] text-cinza-suave">{m.l}</p>
                       </div>
@@ -201,10 +242,13 @@ export default async function ClinicasPage() {
 
       <p className="mt-4 rounded-md border border-dashed border-border bg-white px-4 py-3 text-sm text-cinza-suave">
         <UserPlus className="mr-1.5 inline size-4 text-teal" />
-        Para cadastrar uma clínica nova e convidar a equipe dela, use o painel do
-        Supabase (Authentication → Users) e vincule o usuário à organização. O
-        fluxo de convite dentro da plataforma entra na Fase 2.{" "}
-        <Link href="/app/admin/academy" className="font-semibold text-teal hover:underline">
+        Para cadastrar uma clínica nova e convidar a equipe dela, use o painel
+        do Supabase (Authentication → Users) e vincule o usuário à organização.
+        O fluxo de convite dentro da plataforma entra na Fase 2.{" "}
+        <Link
+          href="/app/admin/academy"
+          className="font-semibold text-teal hover:underline"
+        >
           Gerenciar conteúdo da Academy
         </Link>
         .
