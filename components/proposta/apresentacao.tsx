@@ -278,7 +278,9 @@ function Capa({ proposta: p }: { proposta: Proposta }) {
         aria-hidden
         className="pointer-events-none absolute -right-40 -top-20 size-[520px] rounded-full bg-teal/20 blur-3xl"
       />
-      <div className="relative grid items-center gap-10 lg:grid-cols-[1fr_1.1fr]">
+      <FotoPainel className="pointer-events-none absolute inset-y-0 right-0 hidden w-[60%] items-center lg:flex" />
+
+      <div className="relative lg:max-w-[46%]">
         <div>
           <div className="mb-7">
             {p.cliente_logo_url ? (
@@ -356,7 +358,6 @@ function Capa({ proposta: p }: { proposta: Proposta }) {
           />
         </div>
 
-        <FotoPainel className="hidden lg:block" />
       </div>
     </Slide>
   );
@@ -567,7 +568,7 @@ function Plataforma() {
 
   return (
     <Slide escuro>
-      <div className="grid items-center gap-8 lg:grid-cols-[1.15fr_1fr]">
+      <div className="grid items-center gap-8 lg:grid-cols-[1.1fr_0.9fr]">
         <div>
           <Rotulo escuro>A plataforma</Rotulo>
           <Titulo escuro>
