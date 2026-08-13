@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { salvarNomeClinica } from "@/lib/actions/identidade";
 import { FormLogo } from "@/components/app/configuracoes/form-logo";
+import { ConexaoWhatsApp } from "@/components/app/configuracoes/conexao-whatsapp";
+import type { ConexaoDisponivel } from "@/lib/actions/configuracoes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,11 +26,17 @@ export function MarcaClinica({
   organizationId,
   nome,
   logoUrl,
+  conexaoEscolhida,
+  conexoes,
+  mergeDisponivel,
   demo,
 }: {
   organizationId: string;
   nome: string;
   logoUrl: string | null;
+  conexaoEscolhida: number | null;
+  conexoes: ConexaoDisponivel[];
+  mergeDisponivel: boolean;
   demo: boolean;
 }) {
   const router = useRouter();
@@ -102,6 +110,19 @@ export function MarcaClinica({
           organizationId={organizationId}
           nome={valor || nome}
           logoUrl={logoUrl}
+          demo={demo}
+        />
+      </div>
+
+      {/* O número fica aqui, e não só em Configurações, porque o médico
+          dono não enxerga aquela tela — e sem escolher o número o
+          WhatsApp simplesmente não sai. */}
+      <div className="mt-6 border-t border-border pt-6">
+        <ConexaoWhatsApp
+          organizationId={organizationId}
+          conexoes={conexoes}
+          disponivel={mergeDisponivel}
+          escolhida={conexaoEscolhida}
           demo={demo}
         />
       </div>

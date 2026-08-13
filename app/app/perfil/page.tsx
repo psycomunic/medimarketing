@@ -4,13 +4,14 @@ import { FormPerfil, FormSenha } from "@/components/app/perfil/form-perfil";
 import { MarcaClinica } from "@/components/app/perfil/marca-clinica";
 import { exigirSessao } from "@/lib/acesso";
 import { emModoDemo } from "@/lib/supabase/queries";
+import { listarConexoesMerge } from "@/lib/actions/configuracoes";
 import { rotuloPapel, modulosDoPapel } from "@/lib/rbac";
 
 export const metadata = { title: "Meu perfil" };
 
 export default async function PerfilPage() {
   const { profile, organizacao, role } = await exigirSessao();
-  const demo = await emModoDemo();
+  const [demo, whatsapp] = await Promise.all([emModoDemo(), listarConexoesMerge()]);
 
   const modulos = modulosDoPapel(role);
   // Mesma régua da action e da política do banco
@@ -88,6 +89,9 @@ export default async function PerfilPage() {
           organizationId={organizacao.id}
           nome={organizacao.nome}
           logoUrl={organizacao.logo_url}
+          conexaoEscolhida={organizacao.merge_connection_id}
+          conexoes={whatsapp.conexoes}
+          mergeDisponivel={whatsapp.disponivel}
           demo={demo}
         />
       )}

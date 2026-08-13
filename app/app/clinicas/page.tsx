@@ -11,6 +11,7 @@ import { exigirModulo } from "@/lib/acesso";
 import { getClientes } from "@/lib/supabase/indicadores";
 import { emModoDemo } from "@/lib/supabase/queries";
 import { EditarMarca } from "@/components/app/clinicas/editar-marca";
+import { listarConexoesMerge } from "@/lib/actions/configuracoes";
 import { formatarNumero, formatarReais } from "@/lib/indicadores";
 import { cn } from "@/lib/utils";
 
@@ -31,7 +32,13 @@ const corPlano: Record<string, string> = {
 // Uso interno da Medi Marketing: só o super admin acessa.
 export default async function ClinicasPage() {
   await exigirModulo("clinicas");
-  const [clientes, demo] = await Promise.all([getClientes(), emModoDemo()]);
+  // Os números do Merge são buscados uma vez e passados a cada linha:
+  // uma chamada por clínica seria a mesma resposta repetida.
+  const [clientes, demo, whatsapp] = await Promise.all([
+    getClientes(),
+    emModoDemo(),
+    listarConexoesMerge(),
+  ]);
 
   const ativos = clientes.filter((c) => c.ativo);
   const totais = ativos.reduce(
@@ -191,6 +198,10 @@ export default async function ClinicasPage() {
                           organizationId={c.id}
                           nome={c.nome}
                           logoUrl={c.logo_url}
+                          ativa={c.ativo}
+                          conexaoEscolhida={c.merge_connection_id}
+                          conexoes={whatsapp.conexoes}
+                          mergeDisponivel={whatsapp.disponivel}
                           demo={demo}
                         />
                       </td>
@@ -251,6 +262,10 @@ export default async function ClinicasPage() {
                       organizationId={c.id}
                       nome={c.nome}
                       logoUrl={c.logo_url}
+                      ativa={c.ativo}
+                      conexaoEscolhida={c.merge_connection_id}
+                      conexoes={whatsapp.conexoes}
+                      mergeDisponivel={whatsapp.disponivel}
                       demo={demo}
                     />
                   </div>

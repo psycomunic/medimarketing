@@ -2,9 +2,11 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, Loader2, Pencil } from "lucide-react";
-import { salvarNomeClinica } from "@/lib/actions/identidade";
+import { CheckCircle2, Loader2, Pencil, Power } from "lucide-react";
+import { ativarClinica, salvarNomeClinica } from "@/lib/actions/identidade";
+import type { ConexaoDisponivel } from "@/lib/actions/configuracoes";
 import { FormLogo } from "@/components/app/configuracoes/form-logo";
+import { ConexaoWhatsApp } from "@/components/app/configuracoes/conexao-whatsapp";
 import {
   Dialog,
   DialogContent,
@@ -15,6 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 
 /**
  * Edição da marca de uma clínica pela equipe Medi Marketing.
@@ -31,11 +34,19 @@ export function EditarMarca({
   organizationId,
   nome,
   logoUrl,
+  ativa,
+  conexaoEscolhida,
+  conexoes,
+  mergeDisponivel,
   demo,
 }: {
   organizationId: string;
   nome: string;
   logoUrl: string | null;
+  ativa: boolean;
+  conexaoEscolhida: number | null;
+  conexoes: ConexaoDisponivel[];
+  mergeDisponivel: boolean;
   demo: boolean;
 }) {
   const router = useRouter();
@@ -44,8 +55,23 @@ export function EditarMarca({
   const [erro, setErro] = useState<string | null>(null);
   const [salvo, setSalvo] = useState(false);
   const [pending, startTransition] = useTransition();
+  const [mudandoStatus, setMudandoStatus] = useState(false);
 
   const mudou = valor.trim() !== nome.trim();
+
+  function alternarStatus() {
+    setErro(null);
+    setMudandoStatus(true);
+    startTransition(async () => {
+      const res = await ativarClinica(organizationId, !ativa);
+      setMudandoStatus(false);
+      if (!res.ok) {
+        setErro(res.erro);
+        return;
+      }
+      router.refresh();
+    });
+  }
 
   function salvar() {
     setErro(null);
@@ -82,12 +108,55 @@ export function EditarMarca({
 
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Marca da clínica</DialogTitle>
+          <DialogTitle>Configurar clínica</DialogTitle>
         </DialogHeader>
 
-        <p className="text-sm text-cinza-suave">
-          É o que o paciente vê no remetente do e-mail, na assinatura do
-          WhatsApp e na página de confirmação.
+        {/* Status primeiro: é o que decide se a clínica opera */}
+        <div
+          className={cn(
+            "flex flex-wrap items-center justify-between gap-3 rounded-lg border px-4 py-3",
+            ativa
+              ? "border-teal/25 bg-verde-menta"
+              : "border-dashed border-border bg-branco-clinico"
+          )}
+        >
+          <div className="flex items-start gap-2.5">
+            <Power
+              className={cn(
+                "mt-0.5 size-4 shrink-0",
+                ativa ? "text-teal" : "text-cinza-suave"
+              )}
+            />
+            <div>
+              <p className="text-sm font-semibold text-azul-medico">
+                {ativa ? "Clínica ativa" : "Cadastro ainda não liberado"}
+              </p>
+              <p className="text-xs text-cinza-suave">
+                {ativa
+                  ? "Entra na rotina diária de lembretes."
+                  : "Enquanto inativa, nenhum lembrete de véspera é disparado."}
+              </p>
+            </div>
+          </div>
+          <Button
+            variant={ativa ? "ghost" : "primary"}
+            size="sm"
+            disabled={demo || mudandoStatus}
+            onClick={alternarStatus}
+          >
+            {mudandoStatus ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : ativa ? (
+              "Desativar"
+            ) : (
+              "Ativar clínica"
+            )}
+          </Button>
+        </div>
+
+        <p className="mt-4 text-sm text-cinza-suave">
+          O nome e a logo abaixo são o que o paciente vê no remetente do
+          e-mail, na assinatura do WhatsApp e na página de confirmação.
         </p>
 
         <div className="mt-4 grid gap-2">
@@ -126,6 +195,16 @@ export function EditarMarca({
             organizationId={organizationId}
             nome={valor || nome}
             logoUrl={logoUrl}
+            demo={demo}
+          />
+        </div>
+
+        <div className="mt-5 border-t border-border pt-5">
+          <ConexaoWhatsApp
+            organizationId={organizationId}
+            conexoes={conexoes}
+            disponivel={mergeDisponivel}
+            escolhida={conexaoEscolhida}
             demo={demo}
           />
         </div>

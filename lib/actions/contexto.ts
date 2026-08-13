@@ -30,6 +30,16 @@ export const OPERACIONAL: readonly Role[] = ["super_admin", "gestor", "secretari
 export const GESTAO: readonly Role[] = ["super_admin", "gestor"];
 
 /**
+ * Quem responde pela cara da clínica: nome, logo e número de WhatsApp.
+ *
+ * O médico entra porque, em consultório de um profissional só — a maior
+ * parte da carteira —, ele é o dono; pedir para outra pessoa trocar a
+ * própria logo seria burocracia sem propósito. A secretária fica de
+ * fora: opera a agenda, não decide a marca.
+ */
+export const MARCA: readonly Role[] = ["super_admin", "gestor", "medico"];
+
+/**
  * Sessão pronta para escrever no banco.
  *
  * `papeis` restringe quem pode executar a action; sem ele, basta estar

@@ -7,6 +7,7 @@ import {
   contexto,
   organizacaoAlvo,
   GESTAO,
+  MARCA,
   type ActionResult,
 } from "@/lib/actions/contexto";
 import { listarConexoes, mergeConfigurado } from "@/lib/merge";
@@ -116,7 +117,7 @@ export async function listarConexoesMerge(): Promise<{
   disponivel: boolean;
   conexoes: ConexaoDisponivel[];
 }> {
-  const ctx = await contexto(GESTAO);
+  const ctx = await contexto(MARCA);
   if (ctx.estado !== "ok") return { disponivel: false, conexoes: [] };
   if (!mergeConfigurado()) return { disponivel: false, conexoes: [] };
 
@@ -146,7 +147,9 @@ export async function salvarConexaoMerge(
   const parsed = conexaoSchema.safeParse(input);
   if (!parsed.success) return { ok: false, erro: "Conexão inválida." };
 
-  const ctx = await contexto(GESTAO);
+  // Mesma régua do nome e da logo: o número é a identidade da clínica
+  // no WhatsApp, e quem responde por ela é o profissional.
+  const ctx = await contexto(MARCA);
   if (ctx.estado !== "ok") return bloqueio(ctx);
 
   const orgId = organizacaoAlvo(ctx.profile, parsed.data.organizationId);

@@ -5,18 +5,10 @@ import {
   bloqueio,
   contexto,
   organizacaoAlvo,
+  MARCA,
   type ActionResult,
 } from "@/lib/actions/contexto";
-import type { Role } from "@/lib/supabase/types";
 
-/**
- * A logo é a cara que o paciente vê em toda mensagem, e quem responde
- * por ela é o profissional. Num consultório de um médico só, obrigá-lo
- * a pedir para outra pessoa trocar a própria marca seria burocracia
- * sem propósito. A secretária fica de fora: opera a agenda, não decide
- * a marca. Mesma régua de `salvarNomeClinica`.
- */
-const PODE_EDITAR: readonly Role[] = ["super_admin", "gestor", "medico"];
 
 const BUCKET = "logos";
 const MAX_BYTES = 2 * 1024 * 1024;
@@ -40,7 +32,7 @@ function revalidar() {
  * clínico e é privado.
  */
 export async function salvarLogo(formData: FormData): Promise<ActionResult> {
-  const ctx = await contexto(PODE_EDITAR);
+  const ctx = await contexto(MARCA);
   if (ctx.estado !== "ok") return bloqueio(ctx);
 
   const orgId = organizacaoAlvo(
@@ -107,7 +99,7 @@ export async function salvarLogo(formData: FormData): Promise<ActionResult> {
 
 /** Remove a logo e volta ao símbolo padrão. */
 export async function removerLogo(organizationId?: string): Promise<ActionResult> {
-  const ctx = await contexto(PODE_EDITAR);
+  const ctx = await contexto(MARCA);
   if (ctx.estado !== "ok") return bloqueio(ctx);
 
   const orgId = organizacaoAlvo(ctx.profile, organizationId);

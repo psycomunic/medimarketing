@@ -402,3 +402,40 @@ create policy "logos_remocao" on storage.objects
       )
     )
   );
+
+-- ====================================================================
+-- 2026-08-12 (3) · Colunas comerciais protegidas
+--
+-- A política de update libera a linha inteira, não coluna por coluna.
+-- Como gestor e médico agora podem editar nome, logo e número de
+-- WhatsApp, nada impediria um deles de chamar a API direto e mudar o
+-- próprio plano ou reativar uma clínica que a agência desligou — a
+-- interface não oferece, mas a interface não é a fronteira.
+--
+-- O gatilho fecha isso onde a fronteira de verdade está.
+-- ====================================================================
+
+create or replace function public.protege_campos_comerciais()
+returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if public.is_super_admin() then
+    return new;
+  end if;
+
+  if new.plano is distinct from old.plano then
+    raise exception 'Somente a equipe Medi Marketing altera o plano da clínica';
+  end if;
+
+  if new.ativo is distinct from old.ativo then
+    raise exception 'Somente a equipe Medi Marketing ativa ou desativa a clínica';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists organizations_protege_comercial on public.organizations;
+create trigger organizations_protege_comercial
+  before update on public.organizations
+  for each row execute function public.protege_campos_comerciais();

@@ -6,9 +6,9 @@ import {
   bloqueio,
   contexto,
   organizacaoAlvo,
+  MARCA,
   type ActionResult,
 } from "@/lib/actions/contexto";
-import type { Role } from "@/lib/supabase/types";
 
 /**
  * IDENTIDADE DA CLÍNICA — nome e logo
@@ -18,13 +18,8 @@ import type { Role } from "@/lib/supabase/types";
  * que o paciente vê em toda mensagem, e quem responde por ela é o
  * profissional, não só quem cuida do cadastro.
  *
- * Por isso o médico entra na lista. Em consultório de um profissional
- * só — que é a maior parte da carteira — ele é o dono, e obrigá-lo a
- * pedir para outra pessoa trocar a própria logo seria burocracia sem
- * propósito. A secretária fica de fora: ela opera a agenda, não decide
- * a marca.
+ * Quem pode editar está em `MARCA`, junto dos demais papéis.
  */
-const PODE_EDITAR: readonly Role[] = ["super_admin", "gestor", "medico"];
 
 const schema = z.object({
   organizationId: z.string().min(1),
@@ -52,7 +47,7 @@ export async function salvarNomeClinica(
     return { ok: false, erro: parsed.error.errors[0]?.message ?? "Dados inválidos" };
   }
 
-  const ctx = await contexto(PODE_EDITAR);
+  const ctx = await contexto(MARCA);
   if (ctx.estado !== "ok") return bloqueio(ctx);
 
   // Fora do super admin, `organizacaoAlvo` recusa qualquer id que não
@@ -75,5 +70,41 @@ export async function salvarNomeClinica(
   revalidatePath("/app/perfil");
   revalidatePath("/app/configuracoes");
   revalidatePath("/app/clinicas");
+  return { ok: true };
+}
+
+/* ------------------------------------------------------------------ */
+/* Ativação da clínica                                                 */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Liga ou desliga uma clínica.
+ *
+ * Só a equipe Medi Marketing: é decisão comercial, não configuração.
+ * Enquanto inativa, a clínica não entra na rotina de lembretes — é o
+ * que separa um cadastro declarado de um cliente.
+ *
+ * Antes disto não havia caminho nenhum na interface, e ativar um
+ * cliente novo exigia mexer no banco à mão.
+ */
+export async function ativarClinica(
+  organizationId: string,
+  ativo: boolean
+): Promise<ActionResult> {
+  const ctx = await contexto(["super_admin"]);
+  if (ctx.estado !== "ok") return bloqueio(ctx);
+
+  const { error } = await ctx.supabase
+    .from("organizations")
+    .update({ ativo })
+    .eq("id", organizationId);
+
+  if (error) {
+    console.error("[identidade] Erro ao ativar:", error.message);
+    return { ok: false, erro: "Não foi possível mudar o status da clínica." };
+  }
+
+  revalidatePath("/app/clinicas");
+  revalidatePath("/app", "layout");
   return { ok: true };
 }
