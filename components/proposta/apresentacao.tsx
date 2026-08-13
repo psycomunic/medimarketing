@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { Icone } from "@/components/marketing/icone";
 import { PainelMockup } from "@/components/marketing/painel-mockup";
+import { Notebook } from "@/components/comum/notebook";
 import { ConversaWhatsApp } from "@/components/comum/conversa-whatsapp";
 import { Button } from "@/components/ui/button";
 import { responderProposta } from "@/lib/actions/propostas";
@@ -85,7 +86,10 @@ export function Apresentacao({
   useEffect(() => {
     function teclado(e: KeyboardEvent) {
       // Sem sequestrar o teclado de quem está digitando num campo
-      if (e.target instanceof HTMLElement && e.target.closest("input,textarea")) {
+      if (
+        e.target instanceof HTMLElement &&
+        e.target.closest("input,textarea")
+      ) {
         return;
       }
       if (["ArrowRight", "PageDown", " "].includes(e.key)) {
@@ -138,7 +142,7 @@ export function Apresentacao({
           aria-label="Slide anterior"
           className={cn(
             "pointer-events-auto grid size-11 place-items-center rounded-full border border-border bg-white/90 text-azul-medico shadow-soft backdrop-blur transition-opacity",
-            atual === 0 && "pointer-events-none opacity-0"
+            atual === 0 && "pointer-events-none opacity-0",
           )}
         >
           <ChevronLeft className="size-5" />
@@ -153,7 +157,9 @@ export function Apresentacao({
               aria-current={i === atual}
               className={cn(
                 "h-2 rounded-full transition-all",
-                i === atual ? "w-6 bg-teal" : "w-2 bg-cinza-suave/30 hover:bg-teal/50"
+                i === atual
+                  ? "w-6 bg-teal"
+                  : "w-2 bg-cinza-suave/30 hover:bg-teal/50",
               )}
             />
           ))}
@@ -167,7 +173,7 @@ export function Apresentacao({
             "pointer-events-auto grid size-11 place-items-center rounded-full shadow-soft transition-opacity",
             ultimo
               ? "pointer-events-none opacity-0"
-              : "bg-teal text-white hover:bg-teal/90"
+              : "bg-teal text-white hover:bg-teal/90",
           )}
         >
           <ChevronRight className="size-5" />
@@ -202,7 +208,7 @@ function Slide({
       className={cn(
         "relative h-full w-full shrink-0 snap-center overflow-y-auto",
         escuro ? "bg-azul-medico text-white" : "bg-branco-clinico",
-        className
+        className,
       )}
     >
       <div className="mx-auto flex min-h-full w-full max-w-5xl items-center px-5 pb-24 pt-12 sm:px-8 md:pb-28 md:pt-16">
@@ -212,12 +218,18 @@ function Slide({
   );
 }
 
-function Rotulo({ children, escuro }: { children: React.ReactNode; escuro?: boolean }) {
+function Rotulo({
+  children,
+  escuro,
+}: {
+  children: React.ReactNode;
+  escuro?: boolean;
+}) {
   return (
     <span
       className={cn(
         "inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide",
-        escuro ? "bg-white/10 text-teal-claro" : "bg-verde-menta text-teal"
+        escuro ? "bg-white/10 text-teal-claro" : "bg-verde-menta text-teal",
       )}
     >
       {children}
@@ -236,7 +248,7 @@ function Titulo({
     <h2
       className={cn(
         "mt-3 max-w-3xl text-[1.6rem] leading-tight sm:text-3xl md:text-4xl",
-        escuro && "text-white"
+        escuro && "text-white",
       )}
     >
       {children}
@@ -301,7 +313,7 @@ function Capa({ proposta: p }: { proposta: Proposta }) {
                   p.especialidade
                     ? `a sua ${p.especialidade.toLowerCase()}`
                     : "a sua clínica"
-                } atrair mais pacientes, atender melhor e enxergar os números — com marketing, equipe e plataforma no mesmo lugar.`}
+                } atrair mais pacientes, atender melhor e enxergar os números, com marketing, equipe e plataforma no mesmo lugar.`}
           </p>
 
           <dl className="mt-8 flex flex-wrap gap-x-8 gap-y-4 text-sm">
@@ -329,11 +341,26 @@ function Capa({ proposta: p }: { proposta: Proposta }) {
             <ArrowRight className="size-4 animate-pulse" />
             Deslize para o lado, ou use as setas do teclado
           </p>
+
+          {/* Nossa assinatura fica pequena e embaixo: a capa é da
+              clínica, e a logo dela já ocupa o alto. */}
+          <Image
+            src="/logo-medimarketing-branca.svg"
+            alt="Medi Marketing"
+            width={150}
+            height={26}
+            className="mt-10 h-6 w-auto opacity-60"
+          />
         </div>
 
-        {/* O produto já na capa: promessa e prova na mesma tela */}
+        {/* O produto já na capa: promessa e prova na mesma tela.
+            Aqui o painel vai compacto, porque divide a largura com o
+            texto: espremer a versão inteira truncava o nome do
+            paciente em "A…" e embolava a legenda no título. */}
         <div className="hidden lg:block">
-          <PainelMockup />
+          <Notebook>
+            <PainelMockup semMoldura compacto />
+          </Notebook>
         </div>
       </div>
     </Slide>
@@ -383,7 +410,7 @@ function Diagnostico({ cliente }: { cliente: string }) {
       <p className="mt-2 max-w-2xl text-sm text-cinza-suave sm:text-base">
         A cada cem pessoas que procuram uma clínica sem processo, é assim que a
         conta costuma terminar. Nenhum desses furos é falta de competência
-        clínica — todos são falha de processo.
+        clínica. Todos são falha de processo.
       </p>
 
       <div className="mt-8 grid gap-6 lg:grid-cols-[1.3fr_1fr]">
@@ -402,7 +429,7 @@ function Diagnostico({ cliente }: { cliente: string }) {
                 <div
                   className={cn(
                     "h-full rounded-md transition-all",
-                    e.perda ? "bg-teal/70" : "bg-azul-medico"
+                    e.perda ? "bg-teal/70" : "bg-azul-medico",
                   )}
                   style={{ width: e.largura }}
                 />
@@ -424,8 +451,8 @@ function Diagnostico({ cliente }: { cliente: string }) {
             recorrente.
           </p>
           <p className="mt-4 border-t border-coral/20 pt-4 text-sm leading-relaxed text-cinza-suave">
-            Recuperar <strong className="text-azul-medico">uma</strong> delas por
-            semana já costuma pagar o investimento deste plano.
+            Recuperar <strong className="text-azul-medico">uma</strong> delas
+            por semana já costuma pagar o investimento deste plano.
           </p>
         </div>
       </div>
@@ -488,9 +515,11 @@ function Plataforma() {
       <div className="grid items-center gap-8 lg:grid-cols-[1fr_1.1fr]">
         <div>
           <Rotulo escuro>A plataforma</Rotulo>
-          <Titulo escuro>Não é só agência. É o sistema que roda a clínica.</Titulo>
+          <Titulo escuro>
+            Não é só agência. É o sistema que roda a clínica.
+          </Titulo>
           <p className="mt-3 text-white/70">
-            Um painel para gestor, secretária e médico — cada um vendo o que
+            Um painel para gestor, secretária e médico, cada um vendo o que
             precisa. Incluído em todos os planos, sem custo à parte.
           </p>
 
@@ -514,7 +543,9 @@ function Plataforma() {
           </p>
         </div>
 
-        <PainelMockup />
+        <Notebook>
+          <PainelMockup semMoldura />
+        </Notebook>
       </div>
     </Slide>
   );
@@ -593,7 +624,9 @@ function Numeros() {
             <dt className="font-heading text-3xl font-bold text-teal-claro">
               {valor}
             </dt>
-            <dd className="mt-1 text-sm leading-relaxed text-white/60">{label}</dd>
+            <dd className="mt-1 text-sm leading-relaxed text-white/60">
+              {label}
+            </dd>
           </div>
         ))}
       </dl>
@@ -685,7 +718,9 @@ function PorQueNos() {
               ["Retenção", "Raramente", "Régua ativa na base"],
             ].map(([o, a, b]) => (
               <tr key={o}>
-                <td className="px-4 py-2.5 font-medium text-azul-medico">{o}</td>
+                <td className="px-4 py-2.5 font-medium text-azul-medico">
+                  {o}
+                </td>
                 <td className="px-4 py-2.5 text-cinza-suave">{a}</td>
                 <td className="bg-verde-menta/40 px-4 py-2.5 font-medium text-azul-medico">
                   {b}
@@ -737,7 +772,7 @@ function Planos({ proposta: p }: { proposta: Proposta }) {
                 "relative flex flex-col rounded-2xl border p-5",
                 destaque
                   ? "border-teal bg-azul-medico text-white shadow-card"
-                  : "border-border bg-white shadow-soft"
+                  : "border-border bg-white shadow-soft",
               )}
             >
               {destaque && (
@@ -749,7 +784,7 @@ function Planos({ proposta: p }: { proposta: Proposta }) {
               <h3
                 className={cn(
                   "font-heading text-lg font-bold",
-                  destaque ? "text-white" : "text-azul-medico"
+                  destaque ? "text-white" : "text-azul-medico",
                 )}
               >
                 {plano.nome}
@@ -757,7 +792,7 @@ function Planos({ proposta: p }: { proposta: Proposta }) {
               <p
                 className={cn(
                   "mt-1 text-xs",
-                  destaque ? "text-white/60" : "text-cinza-suave"
+                  destaque ? "text-white/60" : "text-cinza-suave",
                 )}
               >
                 {plano.resumo}
@@ -767,7 +802,7 @@ function Planos({ proposta: p }: { proposta: Proposta }) {
                 <span
                   className={cn(
                     "font-heading text-3xl font-bold",
-                    destaque ? "text-teal-claro" : "text-azul-medico"
+                    destaque ? "text-teal-claro" : "text-azul-medico",
                   )}
                 >
                   {precoEmReais(valor)}
@@ -776,7 +811,7 @@ function Planos({ proposta: p }: { proposta: Proposta }) {
                   <span
                     className={cn(
                       "text-xs",
-                      destaque ? "text-white/50" : "text-cinza-suave"
+                      destaque ? "text-white/50" : "text-cinza-suave",
                     )}
                   >
                     /mês
@@ -790,13 +825,13 @@ function Planos({ proposta: p }: { proposta: Proposta }) {
                     key={i}
                     className={cn(
                       "flex gap-2 text-xs leading-relaxed",
-                      destaque ? "text-white/80" : "text-cinza-suave"
+                      destaque ? "text-white/80" : "text-cinza-suave",
                     )}
                   >
                     <Check
                       className={cn(
                         "mt-0.5 size-3.5 shrink-0",
-                        destaque ? "text-teal-claro" : "text-teal"
+                        destaque ? "text-teal-claro" : "text-teal",
                       )}
                     />
                     {i}
@@ -814,10 +849,26 @@ function Planos({ proposta: p }: { proposta: Proposta }) {
 /** A linha do tempo tira o medo do "e depois que eu assinar?". */
 function Implantacao() {
   const fases = [
-    ["Semana 1", "Diagnóstico e acessos", "Entendemos a rotina e configuramos a plataforma."],
-    ["Semana 2", "Base e equipe", "Importamos seus pacientes e treinamos quem atende."],
-    ["Semana 3", "Campanhas no ar", "Google e Meta rodando, com a agenda pronta para receber."],
-    ["Mês 2 em diante", "Ajuste e escala", "Régua de retenção ativa e reunião de resultado."],
+    [
+      "Semana 1",
+      "Diagnóstico e acessos",
+      "Entendemos a rotina e configuramos a plataforma.",
+    ],
+    [
+      "Semana 2",
+      "Base e equipe",
+      "Importamos seus pacientes e treinamos quem atende.",
+    ],
+    [
+      "Semana 3",
+      "Campanhas no ar",
+      "Google e Meta rodando, com a agenda pronta para receber.",
+    ],
+    [
+      "Mês 2 em diante",
+      "Ajuste e escala",
+      "Régua de retenção ativa e reunião de resultado.",
+    ],
   ];
 
   return (
@@ -844,7 +895,9 @@ function Implantacao() {
             <h3 className="mt-0.5 font-heading text-base font-semibold text-azul-medico">
               {titulo}
             </h3>
-            <p className="mt-1 text-sm leading-relaxed text-cinza-suave">{texto}</p>
+            <p className="mt-1 text-sm leading-relaxed text-cinza-suave">
+              {texto}
+            </p>
           </li>
         ))}
       </ol>
@@ -886,7 +939,7 @@ function Fechamento({
   whatsapp: string;
 }) {
   const [estado, setEstado] = useState<"aberta" | "enviando" | "aceita">(
-    p.status === "aceita" ? "aceita" : "aberta"
+    p.status === "aceita" ? "aceita" : "aberta",
   );
   const [erro, setErro] = useState<string | null>(null);
 
@@ -903,7 +956,7 @@ function Fechamento({
   }
 
   const zap = `https://wa.me/${whatsapp.replace(/\D/g, "")}?text=${encodeURIComponent(
-    `Olá! Sou da ${p.cliente_nome} e recebi a proposta. Quero conversar.`
+    `Olá! Sou da ${p.cliente_nome} e recebi a proposta. Quero conversar.`,
   )}`;
 
   return (
@@ -912,7 +965,9 @@ function Fechamento({
         {estado === "aceita" ? (
           <>
             <CheckCircle2 className="mx-auto size-14 text-teal" />
-            <h2 className="mt-4 text-2xl sm:text-3xl">Proposta aceita. Obrigado!</h2>
+            <h2 className="mt-4 text-2xl sm:text-3xl">
+              Proposta aceita. Obrigado!
+            </h2>
             <p className="mx-auto mt-3 max-w-md text-cinza-suave">
               Nossa equipe já foi avisada e entra em contato hoje mesmo para
               marcar o diagnóstico. Se preferir adiantar, chame no WhatsApp.
@@ -981,14 +1036,24 @@ function Fechamento({
               </Button>
             </div>
 
-            {erro && <p className="mt-3 text-sm text-vermelho-alerta">{erro}</p>}
+            {erro && (
+              <p className="mt-3 text-sm text-vermelho-alerta">{erro}</p>
+            )}
           </>
         )}
 
-        <p className="mt-10 flex items-center justify-center gap-1.5 text-xs text-cinza-suave">
-          <ArrowLeft className="size-3.5" />
-          Proposta preparada pela Medi Marketing para {p.cliente_nome}
-        </p>
+        <div className="mt-10 flex flex-col items-center gap-2">
+          <Image
+            src="/logo-medimarketing.svg"
+            alt="Medi Marketing"
+            width={170}
+            height={30}
+            className="h-7 w-auto"
+          />
+          <p className="text-xs text-cinza-suave">
+            Proposta preparada para {p.cliente_nome}
+          </p>
+        </div>
       </div>
     </Slide>
   );

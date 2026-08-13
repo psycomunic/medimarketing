@@ -47,7 +47,7 @@ export async function avisarConsultaMarcada(consultaId: string): Promise<void> {
 
   if (!org) return;
 
-  const endereco = [org.endereco, org.cidade].filter(Boolean).join(" — ") || null;
+  const endereco = [org.endereco, org.cidade].filter(Boolean).join(", ") || null;
   const envios: Promise<unknown>[] = [];
 
   if (emailConfigurado() && consulta.paciente_email) {

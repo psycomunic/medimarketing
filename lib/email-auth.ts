@@ -27,24 +27,25 @@ import {
   faixa,
 } from "@/lib/email-modelos";
 
-/** Marca da plataforma, desenhada em HTML para não depender de imagem. */
+/**
+ * Cabeçalho com a logo da plataforma.
+ *
+ * É PNG e não SVG porque cliente de e-mail não renderiza vetor de
+ * forma confiável: o Gmail simplesmente descarta. O arquivo é gerado
+ * a partir do SVG oficial em dobro do tamanho, para não borrar em tela
+ * retina, e mora no domínio público para o e-mail poder buscá-lo.
+ *
+ * O texto alternativo é o nome da marca: quem bloqueia imagens, e é
+ * muita gente, ainda lê de quem veio a mensagem.
+ */
 function cabecalho(): string {
+  const logo = `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://medimarketing.com.br"}/logo-medimarketing-email.png`;
+
   return `
   <tr>
     <td style="padding:28px 32px 20px;border-bottom:1px solid ${BORDA};">
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0">
-        <tr>
-          <td style="padding-right:12px;vertical-align:middle;">
-            <span style="display:inline-block;width:44px;height:44px;line-height:44px;
-              border-radius:10px;background:${AZUL};color:${TEAL};font-size:28px;
-              font-weight:700;text-align:center;">+</span>
-          </td>
-          <td style="vertical-align:middle;">
-            <span style="font-size:18px;font-weight:700;color:${AZUL};">Medi</span><span
-              style="font-size:18px;font-weight:700;color:${TEAL};">Marketing</span>
-          </td>
-        </tr>
-      </table>
+      <img src="${logo}" alt="Medi Marketing" height="34"
+        style="display:block;height:34px;width:auto;border:0;" />
     </td>
   </tr>`;
 }
@@ -132,7 +133,7 @@ export type ModeloAuth = {
 /* ------------------------------------------------------------------ */
 
 const NAO_FOI_VOCE_IGNORE =
-  "Se você não fez esta solicitação, pode ignorar este e-mail — nada acontece sem a confirmação acima.";
+  "Se você não fez esta solicitação, pode ignorar este e-mail. Nada acontece sem a confirmação acima.";
 
 export const MODELOS_AUTH: ModeloAuth[] = [
   {
@@ -143,7 +144,7 @@ export const MODELOS_AUTH: ModeloAuth[] = [
       bloco(`
         ${faixa(TEAL, MENTA, "Bem-vindo à Medi Marketing")}
         ${p(`Seu cadastro foi criado. Falta um passo: confirmar que este endereço é seu.`, TEXTO)}
-        ${p("Depois disso, sua conta fica aguardando a liberação da nossa equipe — avisamos assim que estiver pronta.")}
+        ${p("Depois disso, sua conta fica aguardando a liberação da nossa equipe, e avisamos assim que estiver pronta.")}
         ${botao("Confirmar meu e-mail", "{{ .ConfirmationURL }}")}
         ${codigo()}
         ${p(`<span style="font-size:13px;">O link vale por 24 horas.</span>`)}
@@ -164,7 +165,7 @@ export const MODELOS_AUTH: ModeloAuth[] = [
         ${codigo()}
         ${p(`<span style="font-size:13px;">O link vale por 1 hora e só pode ser usado uma vez.</span>`)}
       `),
-      "Se não foi você que pediu, ignore este e-mail — sua senha atual continua valendo e ninguém teve acesso à sua conta."
+      "Se não foi você que pediu, ignore este e-mail. Sua senha atual continua valendo e ninguém teve acesso à sua conta."
     ),
   },
   {
@@ -207,7 +208,7 @@ export const MODELOS_AUTH: ModeloAuth[] = [
         ${p("No botão abaixo você define sua senha e já entra. Agenda, confirmações e relatórios ficam disponíveis conforme a função que te deram.")}
         ${botao("Aceitar convite e criar senha", "{{ .ConfirmationURL }}")}
       `),
-      "Se você não esperava este convite, ignore este e-mail — nenhum acesso é criado sem você definir a senha."
+      "Se você não esperava este convite, ignore este e-mail. Nenhum acesso é criado sem você definir a senha."
     ),
   },
   {

@@ -340,7 +340,7 @@ export const automacoesDestaques = [
     icone: "Mail",
     titulo: "Com a sua marca no e-mail",
     texto:
-      "Logo da clínica no topo, nome dela no remetente. Para o paciente, quem cuida dele é você — a plataforma só assina discretamente no rodapé.",
+      "Logo da clínica no topo, nome dela no remetente. Para o paciente, quem cuida dele é você. A plataforma só assina discretamente no rodapé.",
   },
   {
     icone: "ShieldCheck",
@@ -595,12 +595,12 @@ export const faq = [
   {
     pergunta: "Como funciona a confirmação de consulta?",
     resposta:
-      "Um dia útil antes, o paciente recebe um lembrete pelo WhatsApp da sua clínica e por e-mail, com a data, o horário e o profissional. Ele confirma tocando num botão — sem instalar nada e sem precisar responder. A agenda muda de status na hora. Se pedir para remarcar, a sua equipe recebe um alerta no celular e no e-mail com o telefone dele já na mensagem, porque nesse caso a vaga só se salva se alguém ligar rápido.",
+      "Um dia útil antes, o paciente recebe um lembrete pelo WhatsApp da sua clínica e por e-mail, com a data, o horário e o profissional. Ele confirma tocando num botão, sem instalar nada e sem precisar responder. A agenda muda de status na hora. Se pedir para remarcar, a sua equipe recebe um alerta no celular e no e-mail com o telefone dele já na mensagem, porque nesse caso a vaga só se salva se alguém ligar rápido.",
   },
   {
     pergunta: "As mensagens saem com o nome da minha clínica?",
     resposta:
-      "Sim. No WhatsApp, saem do número da própria clínica. No e-mail, com o nome dela no remetente e a logo dela no topo da mensagem — o paciente vê a sua marca, não a nossa. Você sobe a logo em Configurações e ela passa a aparecer também no link de confirmação que o paciente abre.",
+      "Sim. No WhatsApp, saem do número da própria clínica. No e-mail, com o nome dela no remetente e a logo dela no topo da mensagem. O paciente vê a sua marca, não a nossa. Você sobe a logo em Configurações e ela passa a aparecer também no link de confirmação que o paciente abre.",
   },
   {
     pergunta: "Preciso trocar o sistema que já uso hoje?",

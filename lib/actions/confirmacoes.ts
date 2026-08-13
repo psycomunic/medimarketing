@@ -143,7 +143,7 @@ export async function enviarAgora(id: string): Promise<ActionResult> {
     dataHora: consulta.data_hora,
     medico: medico?.nome ?? null,
     clinica: org?.nome ?? "a clínica",
-    endereco: [org?.endereco, org?.cidade].filter(Boolean).join(" — ") || null,
+    endereco: [org?.endereco, org?.cidade].filter(Boolean).join(", ") || null,
     link: urlConfirmacao(r.conf.token),
     modelo: org?.mensagem_lembrete,
   });
@@ -338,7 +338,7 @@ export async function reagendarConsulta(
             ...dados,
             clinica: orgEnvio.nome,
             endereco:
-              [orgEnvio.endereco, orgEnvio.cidade].filter(Boolean).join(" — ") || null,
+              [orgEnvio.endereco, orgEnvio.cidade].filter(Boolean).join(", ") || null,
           })
         )
       );

@@ -129,7 +129,7 @@ export async function GET(req: NextRequest) {
       dataHora: consulta.data_hora,
       medico: medico?.nome ?? null,
       clinica: c.organizacao.nome,
-      endereco: [c.organizacao.endereco, c.organizacao.cidade].filter(Boolean).join(" — ") || null,
+      endereco: [c.organizacao.endereco, c.organizacao.cidade].filter(Boolean).join(", ") || null,
       link: urlConfirmacao(c.token),
       modelo: c.organizacao.mensagem_lembrete,
     });
@@ -147,7 +147,7 @@ export async function GET(req: NextRequest) {
           diaSemana: diaDaSemana(consulta.data_hora),
           medico: medico?.nome ?? null,
           endereco:
-            [c.organizacao.endereco, c.organizacao.cidade].filter(Boolean).join(" — ") ||
+            [c.organizacao.endereco, c.organizacao.cidade].filter(Boolean).join(", ") ||
             null,
           link: urlConfirmacao(c.token),
         });

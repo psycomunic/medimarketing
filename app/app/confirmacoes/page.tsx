@@ -57,7 +57,7 @@ export default async function ConfirmacoesPage() {
       medico: c.medico_nome,
       clinica: organizacao?.nome ?? "a clínica",
       endereco:
-        [organizacao?.endereco, organizacao?.cidade].filter(Boolean).join(" — ") ||
+        [organizacao?.endereco, organizacao?.cidade].filter(Boolean).join(", ") ||
         null,
       link: urlConfirmacao(c.token),
       modelo: organizacao?.mensagem_lembrete,

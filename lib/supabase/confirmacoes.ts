@@ -205,7 +205,7 @@ export async function getConfirmacaoPorToken(
       endereco:
         [demoOrganization.endereco, demoOrganization.cidade]
           .filter(Boolean)
-          .join(" — ") || null,
+          .join(", ") || null,
       telefoneClinica: demoOrganization.telefone,
       encerrada: new Date(conf.data_hora).getTime() < Date.now(),
     };
@@ -254,7 +254,7 @@ export async function getConfirmacaoPorToken(
     tipo: consulta.tipo,
     clinica: org?.nome ?? "a clínica",
     logoClinica: org?.logo_url ?? null,
-    endereco: partes.length ? partes.join(" — ") : null,
+    endereco: partes.length ? partes.join(", ") : null,
     telefoneClinica: org?.telefone ?? null,
     encerrada:
       consulta.status === "cancelada" ||
@@ -324,7 +324,7 @@ export async function getConfirmacoesDaAgenda(
         medico: c.medico_nome,
         clinica: demoOrganization.nome,
         endereco:
-          [demoOrganization.endereco, demoOrganization.cidade].filter(Boolean).join(" — ") || null,
+          [demoOrganization.endereco, demoOrganization.cidade].filter(Boolean).join(", ") || null,
         modelo: demoOrganization.mensagem_lembrete,
       });
     }
@@ -366,7 +366,7 @@ export async function getConfirmacoesDaAgenda(
       dataHora: consulta.data_hora,
       medico: nomeMedico.get(consulta.medico_id) ?? null,
       clinica: org?.nome ?? "a clínica",
-      endereco: [org?.endereco, org?.cidade].filter(Boolean).join(" — ") || null,
+      endereco: [org?.endereco, org?.cidade].filter(Boolean).join(", ") || null,
       modelo: org?.mensagem_lembrete ?? null,
     });
   }

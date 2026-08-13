@@ -223,7 +223,7 @@ export function emailPacienteAgendada(
   </td></tr>`;
 
   return {
-    assunto: `Consulta marcada — ${d.data} às ${d.hora}`,
+    assunto: `Consulta marcada para ${d.data}, às ${d.hora}`,
     html: layout(m, corpo),
     texto: `Ola, ${d.paciente}! Sua consulta na ${m.clinica} ficou marcada para ${d.data} as ${d.hora}${d.medico ? ` com ${d.medico}` : ""}. Na vespera enviamos um lembrete para confirmar.`,
   };
@@ -303,14 +303,14 @@ export function emailPacienteConfirmou(
       Pedimos que chegue com 15 minutos de antecedência.
     </p>
     <p style="margin:0;font-size:15px;color:${CINZA};line-height:1.6;">
-      Precisa mudar de horário? Use o botão abaixo — a clínica recebe o
+      Precisa mudar de horário? Use o botão abaixo: a clínica recebe o
       pedido na hora.
     </p>
     ${d.link ? botao("Ver ou remarcar minha consulta", d.link) : ""}
   </td></tr>`;
 
   return {
-    assunto: `Presença confirmada — ${d.data} às ${d.hora}`,
+    assunto: `Presença confirmada para ${d.data}, às ${d.hora}`,
     html: layout(m, corpo),
     texto: `Ola, ${d.paciente}! Recebemos sua confirmacao para ${d.data} as ${d.hora}${d.medico ? ` com ${d.medico}` : ""}. Chegue com 15 minutos de antecedencia. Para remarcar, acesse: ${d.link ?? ""}`,
   };
@@ -379,7 +379,7 @@ export function emailClinicaConfirmou(
   </td></tr>`;
 
   return {
-    assunto: `${d.paciente} confirmou — ${d.data} às ${d.hora}`,
+    assunto: `${d.paciente} confirmou a consulta de ${d.data}, às ${d.hora}`,
     html: layout(m, corpo),
     texto: `${d.paciente} confirmou a presenca para ${d.data} as ${d.hora}. A agenda ja foi atualizada.`,
   };
@@ -446,7 +446,7 @@ export function emailClinicaCancelou(
   </td></tr>`;
 
   return {
-    assunto: `Cancelada: ${d.paciente} — ${d.data} às ${d.hora}`,
+    assunto: `Cancelada: ${d.paciente}, ${d.data} às ${d.hora}`,
     html: layout(m, corpo),
     texto: `${d.paciente} avisou que nao podera comparecer em ${d.data} as ${d.hora}. O horario esta livre.`,
   };
