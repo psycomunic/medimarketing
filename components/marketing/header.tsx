@@ -32,11 +32,11 @@ export function Header() {
         comSombra && "border-border shadow-soft"
       )}
     >
-      <div className="container flex h-16 items-center justify-between md:h-20">
-        <Logo />
+      <div className="container flex h-16 items-center justify-between gap-6 md:h-20">
+        <Logo altura={30} className="shrink-0" />
 
         {/* Navegação desktop */}
-        <nav className="hidden items-center gap-6 lg:flex xl:gap-8">
+        <nav className="hidden items-center gap-5 lg:flex xl:gap-7">
           {navLinks.map((link) => (
             <a
               key={link.href}

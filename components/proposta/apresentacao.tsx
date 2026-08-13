@@ -17,8 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { Icone } from "@/components/marketing/icone";
-import { PainelMockup } from "@/components/marketing/painel-mockup";
-import { Notebook } from "@/components/comum/notebook";
+import { FotoPainel } from "@/components/comum/foto-painel";
 import { ConversaWhatsApp } from "@/components/comum/conversa-whatsapp";
 import { Button } from "@/components/ui/button";
 import { responderProposta } from "@/lib/actions/propostas";
@@ -361,9 +360,7 @@ function Capa({ proposta: p }: { proposta: Proposta }) {
             texto: espremer a versão inteira truncava o nome do
             paciente em "A…" e embolava a legenda no título. */}
         <div className="hidden lg:block">
-          <Notebook>
-            <PainelMockup semMoldura compacto />
-          </Notebook>
+          <FotoPainel emFundoEscuro />
         </div>
       </div>
     </Slide>
@@ -604,9 +601,7 @@ function Plataforma() {
           </p>
         </div>
 
-        <Notebook>
-          <PainelMockup semMoldura />
-        </Notebook>
+        <FotoPainel emFundoEscuro />
       </div>
     </Slide>
   );

@@ -55,28 +55,9 @@ const MAIOR = Math.max(...semana.map((s) => s.n));
  * `semMoldura` existe para quando ele entra dentro do notebook, que já
  * fornece a borda: sem isso ficariam duas molduras concêntricas.
  */
-export function PainelMockup({
-  semMoldura = false,
-  compacto = false,
-}: {
-  semMoldura?: boolean;
-  /**
-   * Mostra só o topo do painel: cabeçalho, indicadores e a semana.
-   *
-   * Serve à capa da proposta, onde o notebook divide a tela com o
-   * texto. Espremer o painel inteiro ali truncava o nome do paciente
-   * em "A…" e embolava a legenda no título — pior que mostrar menos.
-   */
-  compacto?: boolean;
-}) {
+export function PainelMockup() {
   return (
-    <div
-      className={
-        semMoldura
-          ? "bg-white"
-          : "overflow-hidden rounded-2xl border border-border bg-white shadow-card"
-      }
-    >
+    <div className="overflow-hidden rounded-2xl border border-border bg-white shadow-card">
       {/* Barra do navegador */}
       <div className="flex items-center gap-2 border-b border-border bg-branco-clinico px-4 py-3">
         <span className="size-2.5 rounded-full bg-coral/60" />
@@ -119,12 +100,7 @@ export function PainelMockup({
           </div>
 
           {/* Cartões de indicador */}
-          <div
-            className={
-              "mt-3 grid gap-2 " +
-              (compacto ? "grid-cols-2" : "grid-cols-2 lg:grid-cols-4")
-            }
-          >
+          <div className="mt-3 grid grid-cols-2 gap-2 lg:grid-cols-4">
             {kpis.map((k) => (
               <div
                 key={k.label}
@@ -178,85 +154,83 @@ export function PainelMockup({
             </div>
           </div>
 
-          {!compacto && (
-            <div className="mt-3 grid gap-3 lg:grid-cols-2">
-              {/* Funil comercial */}
-              <div className="rounded-lg border border-border p-3">
-                <p className="text-[11px] font-semibold text-cinza-suave">
-                  Funil do mês
-                </p>
-                <div className="mt-2.5 space-y-2">
-                  {funil.map((f) => (
-                    <div key={f.etapa}>
-                      <div className="flex justify-between text-[10px] text-cinza-suave">
-                        <span>{f.etapa}</span>
-                        <span className="font-semibold text-azul-medico">
-                          {f.n}
-                        </span>
-                      </div>
-                      <div className="mt-1 h-1.5 rounded-full bg-verde-menta">
-                        <div
-                          className="h-full rounded-full bg-teal"
-                          style={{ width: f.largura }}
-                        />
-                      </div>
+          <div className="mt-3 grid gap-3 lg:grid-cols-2">
+            {/* Funil comercial */}
+            <div className="rounded-lg border border-border p-3">
+              <p className="text-[11px] font-semibold text-cinza-suave">
+                Funil do mês
+              </p>
+              <div className="mt-2.5 space-y-2">
+                {funil.map((f) => (
+                  <div key={f.etapa}>
+                    <div className="flex justify-between text-[10px] text-cinza-suave">
+                      <span>{f.etapa}</span>
+                      <span className="font-semibold text-azul-medico">
+                        {f.n}
+                      </span>
                     </div>
-                  ))}
-                </div>
+                    <div className="mt-1 h-1.5 rounded-full bg-verde-menta">
+                      <div
+                        className="h-full rounded-full bg-teal"
+                        style={{ width: f.largura }}
+                      />
+                    </div>
+                  </div>
+                ))}
               </div>
+            </div>
 
-              {/* Agenda do dia */}
-              <div className="rounded-lg border border-border p-3">
-                <div className="flex items-baseline justify-between">
-                  <p className="text-[11px] font-semibold text-cinza-suave">
-                    Próximas consultas
-                  </p>
-                  <p className="flex items-center gap-2 text-[9px] text-cinza-suave">
-                    <span className="flex items-center gap-1">
-                      <span className="size-1.5 rounded-full bg-sucesso" />
-                      confirmada
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <span className="size-1.5 rounded-full bg-alerta" />
-                      pendente
-                    </span>
-                  </p>
-                </div>
-                <div className="mt-2.5 space-y-1.5">
-                  {/* O status virou ponto colorido: a palavra "confirmada"
+            {/* Agenda do dia */}
+            <div className="rounded-lg border border-border p-3">
+              <div className="flex items-baseline justify-between">
+                <p className="text-[11px] font-semibold text-cinza-suave">
+                  Próximas consultas
+                </p>
+                <p className="flex items-center gap-2 text-[9px] text-cinza-suave">
+                  <span className="flex items-center gap-1">
+                    <span className="size-1.5 rounded-full bg-sucesso" />
+                    confirmada
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="size-1.5 rounded-full bg-alerta" />
+                    pendente
+                  </span>
+                </p>
+              </div>
+              <div className="mt-2.5 space-y-1.5">
+                {/* O status virou ponto colorido: a palavra "confirmada"
                     ocupava a linha inteira e empurrava o nome do
                     paciente para fora, que é justamente o dado que a
                     recepção procura. */}
-                  {[
-                    { h: "08:30", p: "Ana Ribeiro", s: "confirmada" },
-                    { h: "09:15", p: "Carlos Menezes", s: "confirmada" },
-                    { h: "10:00", p: "Juliana Faria", s: "pendente" },
-                    { h: "11:00", p: "Marcos Lima", s: "confirmada" },
-                  ].map((c) => (
-                    <div
-                      key={c.h}
-                      className="flex items-center gap-1.5 rounded-md bg-branco-clinico px-2 py-1.5"
-                      title={`${c.h} · ${c.p} · ${c.s}`}
-                    >
-                      <span
-                        aria-hidden
-                        className={
-                          "size-1.5 shrink-0 rounded-full " +
-                          (c.s === "confirmada" ? "bg-sucesso" : "bg-alerta")
-                        }
-                      />
-                      <span className="shrink-0 font-mono text-[10px] font-semibold text-azul-medico">
-                        {c.h}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate text-[10px] text-cinza-texto">
-                        {c.p}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                {[
+                  { h: "08:30", p: "Ana Ribeiro", s: "confirmada" },
+                  { h: "09:15", p: "Carlos Menezes", s: "confirmada" },
+                  { h: "10:00", p: "Juliana Faria", s: "pendente" },
+                  { h: "11:00", p: "Marcos Lima", s: "confirmada" },
+                ].map((c) => (
+                  <div
+                    key={c.h}
+                    className="flex items-center gap-1.5 rounded-md bg-branco-clinico px-2 py-1.5"
+                    title={`${c.h} · ${c.p} · ${c.s}`}
+                  >
+                    <span
+                      aria-hidden
+                      className={
+                        "size-1.5 shrink-0 rounded-full " +
+                        (c.s === "confirmada" ? "bg-sucesso" : "bg-alerta")
+                      }
+                    />
+                    <span className="shrink-0 font-mono text-[10px] font-semibold text-azul-medico">
+                      {c.h}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-[10px] text-cinza-texto">
+                      {c.p}
+                    </span>
+                  </div>
+                ))}
               </div>
             </div>
-          )}
+          </div>
         </div>
       </div>
     </div>
