@@ -222,3 +222,64 @@ async function avisarEquipe(
     remetenteNome: "Medi Marketing",
   });
 }
+
+/* ------------------------------------------------------------------ */
+/* Logo do cliente                                                     */
+/* ------------------------------------------------------------------ */
+
+const TIPOS_IMAGEM = ["image/png", "image/jpeg", "image/webp", "image/svg+xml"];
+const MAX_LOGO = 2 * 1024 * 1024;
+
+export type ResultadoLogo =
+  | { ok: true; url: string }
+  | { ok: false; erro: string };
+
+/**
+ * Sobe a logo do cliente para uma proposta.
+ *
+ * Vai para o mesmo bucket público das logos de clínica, numa pasta
+ * `propostas/` — é material de marca, feito para ser visto por quem
+ * abre o link sem ter conta. A pasta é aleatória para que a logo de um
+ * prospecto não seja adivinhável a partir da de outro.
+ *
+ * O cliente da proposta ainda não existe no banco quando a imagem
+ * sobe, e é por isso que o caminho não usa o id dela.
+ */
+export async function salvarLogoProposta(
+  formData: FormData
+): Promise<ResultadoLogo> {
+  const ctx = await contexto(SOMENTE_EQUIPE);
+  if (ctx.estado !== "ok") return { ok: false, erro: "Sem permissão." };
+
+  const file = formData.get("logo");
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false, erro: "Escolha um arquivo de imagem." };
+  }
+  if (!TIPOS_IMAGEM.includes(file.type)) {
+    return { ok: false, erro: "Use PNG, JPG, WEBP ou SVG." };
+  }
+  if (file.size > MAX_LOGO) {
+    return { ok: false, erro: "A imagem precisa ter no máximo 2 MB." };
+  }
+
+  const ext = file.name.split(".").pop()?.toLowerCase() ?? "png";
+  const caminho = `propostas/${randomBytes(8).toString("hex")}/logo.${ext}`;
+
+  const { error } = await ctx.supabase.storage
+    .from("logos")
+    .upload(caminho, file, { contentType: file.type, upsert: true });
+
+  if (error) {
+    console.error("[propostas] Falha no upload da logo:", error.message);
+    if (/bucket/i.test(error.message)) {
+      return {
+        ok: false,
+        erro: "O bucket de logos não existe. Rode o bloco de logo em supabase/atualizacoes.sql.",
+      };
+    }
+    return { ok: false, erro: "Não foi possível enviar a imagem." };
+  }
+
+  const { data } = ctx.supabase.storage.from("logos").getPublicUrl(caminho);
+  return { ok: true, url: data.publicUrl };
+}

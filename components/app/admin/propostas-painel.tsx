@@ -1,17 +1,24 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
   Check,
   Copy,
   ExternalLink,
   Eye,
+  ImageUp,
   Loader2,
   Trash2,
   Wand2,
+  X,
 } from "lucide-react";
-import { criarProposta, removerProposta } from "@/lib/actions/propostas";
+import {
+  criarProposta,
+  removerProposta,
+  salvarLogoProposta,
+} from "@/lib/actions/propostas";
 import type { PlanoProposta, Proposta } from "@/lib/supabase/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -164,18 +171,11 @@ export function PropostasPainel({
             </div>
           </div>
 
-          <div className="grid gap-1.5">
-            <Label htmlFor="clienteLogoUrl">Logo do cliente (endereço)</Label>
-            <Input
-              id="clienteLogoUrl"
-              value={v.clienteLogoUrl}
-              onChange={(e) => campo("clienteLogoUrl", e.target.value)}
-              placeholder="https://…/logo.png"
-            />
-            <p className="text-xs text-cinza-suave">
-              Sem logo, a capa usa a inicial do nome num selo.
-            </p>
-          </div>
+          <CampoLogo
+            url={v.clienteLogoUrl}
+            aoMudar={(url) => campo("clienteLogoUrl", url)}
+            demo={demo}
+          />
 
           <fieldset className="grid gap-4 border-t border-border pt-4">
             <legend className="mb-1 text-xs font-semibold uppercase tracking-wide text-teal">
@@ -386,5 +386,116 @@ function Linha({
         </Button>
       </div>
     </li>
+  );
+}
+
+/**
+ * Escolha da logo do cliente.
+ *
+ * Antes isto era um campo de texto pedindo "endereço", e a primeira
+ * pessoa a usar digitou o endereço da rua — leitura correta da palavra.
+ * Agora é o que deveria ter sido desde o começo: escolher um arquivo.
+ *
+ * No celular, o seletor do sistema já oferece câmera e galeria; não é
+ * preciso nada além de `accept="image/*"`.
+ */
+function CampoLogo({
+  url,
+  aoMudar,
+  demo,
+}: {
+  url: string;
+  aoMudar: (url: string) => void;
+  demo: boolean;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [erro, setErro] = useState<string | null>(null);
+  const [enviando, setEnviando] = useState(false);
+
+  async function escolher(e: React.ChangeEvent<HTMLInputElement>) {
+    const arquivo = e.target.files?.[0];
+    setErro(null);
+    if (!arquivo) return;
+
+    if (arquivo.size > 2 * 1024 * 1024) {
+      setErro("A imagem precisa ter no máximo 2 MB.");
+      return;
+    }
+
+    setEnviando(true);
+    const fd = new FormData();
+    fd.append("logo", arquivo);
+    const res = await salvarLogoProposta(fd);
+    setEnviando(false);
+    if (inputRef.current) inputRef.current.value = "";
+
+    if (!res.ok) {
+      setErro(res.erro);
+      return;
+    }
+    aoMudar(res.url);
+  }
+
+  return (
+    <div className="grid gap-2">
+      <Label htmlFor="logo-proposta">Logo do cliente</Label>
+
+      {url ? (
+        <div className="flex items-center gap-3 rounded-lg border border-border bg-branco-clinico p-3">
+          <Image
+            src={url}
+            alt="Logo escolhida"
+            width={96}
+            height={48}
+            unoptimized
+            className="h-12 w-auto max-w-[7rem] object-contain"
+          />
+          <span className="flex-1 text-sm text-cinza-suave">Logo carregada</span>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => aoMudar("")}
+            aria-label="Remover logo"
+          >
+            <X className="size-4" />
+          </Button>
+        </div>
+      ) : (
+        <label
+          htmlFor="logo-proposta"
+          className={cn(
+            "flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-branco-clinico px-4 py-5 text-sm text-cinza-suave transition-colors hover:border-teal hover:text-teal",
+            (demo || enviando) && "cursor-not-allowed opacity-60"
+          )}
+        >
+          {enviando ? (
+            <>
+              <Loader2 className="size-4 animate-spin" /> Enviando…
+            </>
+          ) : (
+            <>
+              <ImageUp className="size-4" /> Escolher imagem do computador ou
+              celular
+            </>
+          )}
+        </label>
+      )}
+
+      <input
+        ref={inputRef}
+        id="logo-proposta"
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/svg+xml"
+        className="hidden"
+        disabled={demo || enviando}
+        onChange={escolher}
+      />
+
+      <p className="text-xs text-cinza-suave">
+        PNG, JPG, WEBP ou SVG, até 2 MB. Sem logo, a capa usa a inicial do nome
+        num selo.
+      </p>
+      {erro && <p className="text-sm text-vermelho-alerta">{erro}</p>}
+    </div>
   );
 }
