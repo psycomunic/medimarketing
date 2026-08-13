@@ -26,7 +26,7 @@ export function FotoPainel({ className }: { className?: string }) {
       )}
     >
       <Image
-        src="/mockup-laptopsemfundo.png"
+        src="/mockup-laptopfinal.png"
         alt="Notebook exibindo a agenda de consultas da plataforma Medi Marketing"
         width={1400}
         height={941}

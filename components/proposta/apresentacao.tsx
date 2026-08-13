@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import {
   ArrowLeft,
@@ -752,39 +752,75 @@ function PorQueNos() {
         ))}
       </div>
 
-      {/* A comparação explícita, que o cliente faria de qualquer jeito */}
-      <div className="mt-8 overflow-hidden rounded-xl border border-border bg-white shadow-soft">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-cinza-suave">
-              <th className="px-4 py-2.5 font-semibold">&nbsp;</th>
-              <th className="px-4 py-2.5 font-semibold">Agência comum</th>
-              <th className="bg-verde-menta px-4 py-2.5 font-semibold text-teal">
-                Medi Marketing
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {[
-              ["Entrega", "Relatório em PDF", "Sistema rodando a clínica"],
-              ["Atendimento", "Fica com você", "Equipe treinada atende"],
-              ["Agenda", "Não enxerga", "Integrada e confirmada"],
-              ["Retenção", "Raramente", "Régua ativa na base"],
-            ].map(([o, a, b]) => (
-              <tr key={o}>
-                <td className="px-4 py-2.5 font-medium text-azul-medico">
-                  {o}
-                </td>
-                <td className="px-4 py-2.5 text-cinza-suave">{a}</td>
-                <td className="bg-verde-menta/40 px-4 py-2.5 font-medium text-azul-medico">
-                  {b}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <Comparacao />
     </Slide>
+  );
+}
+
+/**
+ * A comparação com a agência comum, lado a lado.
+ *
+ * O cliente faz essa conta de cabeça de qualquer jeito; melhor fazê-la
+ * nós, e com a diferença visível de longe. A coluna da esquerda é
+ * apagada de propósito — cinza, riscada, com "x" — e a nossa é um
+ * bloco escuro em relevo. Numa tabela em que as duas colunas têm o
+ * mesmo peso, o olho não conclui nada; aqui conclui antes de ler.
+ */
+function Comparacao() {
+  const linhas = [
+    ["Entrega", "Relatório em PDF no fim do mês", "Sistema rodando a clínica, ao vivo"],
+    ["Atendimento", "Fica todo com você", "Sua equipe treinada para converter"],
+    ["Agenda", "A agência nem enxerga", "Integrada, com confirmação automática"],
+    ["Retenção", "Raramente alguém cuida", "Régua ativa na base o mês inteiro"],
+    ["Números", "Print de painel de anúncio", "Do investimento ao faturamento"],
+  ];
+
+  return (
+    <div className="mt-8 grid grid-cols-[auto_1fr_1.15fr] overflow-hidden rounded-xl border border-border bg-white text-sm shadow-soft">
+      {/* Cabeçalho */}
+      <div className="border-b border-border px-4 py-3" />
+      <div className="flex items-center gap-2 border-b border-border px-4 py-3 text-xs font-semibold uppercase tracking-wide text-cinza-suave">
+        <X className="size-3.5 shrink-0 text-coral" />
+        Agência comum
+      </div>
+      <div className="flex items-center gap-2 bg-azul-medico px-4 py-3 text-xs font-semibold uppercase tracking-wide text-white">
+        <Check className="size-3.5 shrink-0 text-teal-claro" />
+        Medi Marketing
+      </div>
+
+      {linhas.map(([rotulo, comum, nosso], i) => {
+        const ultima = i === linhas.length - 1;
+        return (
+          <Fragment key={rotulo}>
+            <div
+              className={cn(
+                "px-4 py-3 font-semibold text-azul-medico",
+                !ultima && "border-b border-border"
+              )}
+            >
+              {rotulo}
+            </div>
+            <div
+              className={cn(
+                "px-4 py-3 text-cinza-suave/70 line-through decoration-coral/40",
+                !ultima && "border-b border-border"
+              )}
+            >
+              {comum}
+            </div>
+            <div
+              className={cn(
+                "flex items-start gap-2 bg-azul-medico px-4 py-3 font-medium text-white",
+                !ultima && "border-b border-white/10"
+              )}
+            >
+              <Check className="mt-0.5 size-4 shrink-0 text-teal-claro" />
+              {nosso}
+            </div>
+          </Fragment>
+        );
+      })}
+    </div>
   );
 }
 
