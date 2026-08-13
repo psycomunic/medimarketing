@@ -1,45 +1,33 @@
 import Image from "next/image";
-import { cn } from "@/lib/utils";
 
 /**
  * A foto do painel rodando num notebook, a mesma do topo do site.
  *
- * O recorte é quadrado e ancorado à direita porque o arquivo original
- * é largo, com a marca-d'água ocupando a metade esquerda: num
- * enquadramento panorâmico o notebook fica pequeno e a água aparece.
+ * Ocupa a metade direita do slide inteira, de borda a borda, sobre uma
+ * faixa clara. O recorte deixa o notebook sangrar pela direita e por
+ * baixo de propósito: enquadrá-lo inteiro numa faixa vertical o
+ * obrigaria a encolher, e o pedido era o contrário. A faixa não é enfeite: o fundo do arquivo é o
+ * branco-clínico do site, e sem ela a foto vira um retângulo pálido
+ * boiando no azul. Com ela, a imagem se funde e o notebook fica tão
+ * grande quanto a tela permite.
  *
- * É um arquivo só, reaproveitado: refazer o notebook em CSS dava um
- * desenho parecido, nunca a mesma coisa — e duas versões da mesma
- * imagem envelhecem em ritmos diferentes.
- *
- * O fundo do arquivo é o branco-clínico do site, então sobre fundo
- * claro ele se funde sem emenda. Em fundo escuro precisa do cartão
- * branco em volta, senão aparece um retângulo pálido no meio do azul.
+ * Some abaixo de `lg` porque em tela estreita não sobra largura para
+ * dividir com o texto, e um notebook espremido não prova nada.
  */
-export function FotoPainel({
-  emFundoEscuro = false,
-  className,
-}: {
-  emFundoEscuro?: boolean;
-  className?: string;
-}) {
-  const foto = (
-    <div className={cn("relative aspect-square w-full", className)}>
+export function FotoPainel() {
+  return (
+    <div
+      aria-hidden
+      className="absolute inset-y-0 right-0 hidden w-1/2 overflow-hidden bg-branco-clinico lg:block"
+    >
       <Image
         src="/BANNER-FUNDO-HEROok.jpg"
         alt="Notebook exibindo a agenda de consultas da plataforma Medi Marketing"
         fill
-        sizes="(max-width: 1024px) 100vw, 50vw"
-        className="object-cover object-right"
+        sizes="50vw"
+        priority
+        className="object-cover object-[68%_50%]"
       />
-    </div>
-  );
-
-  if (!emFundoEscuro) return foto;
-
-  return (
-    <div className="overflow-hidden rounded-2xl bg-branco-clinico p-2 shadow-card">
-      <div className="overflow-hidden rounded-xl">{foto}</div>
     </div>
   );
 }

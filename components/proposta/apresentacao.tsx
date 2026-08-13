@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { Icone } from "@/components/marketing/icone";
 import { FotoPainel } from "@/components/comum/foto-painel";
+import { FotoCelular } from "@/components/comum/foto-celular";
 import { ConversaWhatsApp } from "@/components/comum/conversa-whatsapp";
 import { Button } from "@/components/ui/button";
 import { responderProposta } from "@/lib/actions/propostas";
@@ -277,7 +278,9 @@ function Capa({ proposta: p }: { proposta: Proposta }) {
         aria-hidden
         className="pointer-events-none absolute -right-40 -top-20 size-[520px] rounded-full bg-teal/20 blur-3xl"
       />
-      <div className="relative grid items-center gap-10 lg:grid-cols-[1.15fr_1fr]">
+      <FotoPainel />
+
+      <div className="relative lg:max-w-[46%]">
         <div>
           <div className="mb-7">
             {p.cliente_logo_url ? (
@@ -353,14 +356,6 @@ function Capa({ proposta: p }: { proposta: Proposta }) {
             height={26}
             className="mt-10 h-6 w-auto opacity-60"
           />
-        </div>
-
-        {/* O produto já na capa: promessa e prova na mesma tela.
-            Aqui o painel vai compacto, porque divide a largura com o
-            texto: espremer a versão inteira truncava o nome do
-            paciente em "A…" e embolava a legenda no título. */}
-        <div className="hidden lg:block">
-          <FotoPainel emFundoEscuro />
         </div>
       </div>
     </Slide>
@@ -477,9 +472,9 @@ function Metodo() {
         Um caminho único, já rodado em mais de cem clínicas
       </Titulo>
       <p className="mt-3 max-w-2xl text-white/70">
-        Não é um pacote de serviços soltos. É uma ordem: cada etapa só
-        começa quando a anterior está de pé, e é por isso que o faturamento
-        sobe em degrau em vez de oscilar.
+        Não é um pacote de serviços soltos. É uma ordem: cada etapa só começa
+        quando a anterior está de pé, e é por isso que o faturamento sobe em
+        degrau em vez de oscilar.
       </p>
 
       <ol className="relative mt-10 grid gap-6 md:grid-cols-5">
@@ -501,15 +496,17 @@ function Metodo() {
             <h3 className="mt-0.5 font-heading text-sm font-semibold text-white">
               {m.titulo}
             </h3>
-            <p className="mt-1 text-xs leading-relaxed text-white/60">{m.texto}</p>
+            <p className="mt-1 text-xs leading-relaxed text-white/60">
+              {m.texto}
+            </p>
           </li>
         ))}
       </ol>
 
       <p className="mt-9 rounded-xl border border-teal/25 bg-white/5 px-5 py-4 text-sm text-white/75">
         <strong className="font-semibold text-white">
-          O objetivo do método é um só: faturar mais com a estrutura que você
-          já tem.
+          O objetivo do método é um só: faturar mais com a estrutura que você já
+          tem.
         </strong>{" "}
         Primeiro parando a perda, depois aumentando a entrada, e só então
         escalando o investimento.
@@ -570,7 +567,7 @@ function Plataforma() {
 
   return (
     <Slide escuro>
-      <div className="grid items-center gap-8 lg:grid-cols-[1fr_1.1fr]">
+      <div className="grid items-center gap-8 lg:grid-cols-[1.15fr_1fr]">
         <div>
           <Rotulo escuro>A plataforma</Rotulo>
           <Titulo escuro>
@@ -601,7 +598,7 @@ function Plataforma() {
           </p>
         </div>
 
-        <FotoPainel emFundoEscuro />
+        <FotoCelular className="hidden h-[62vh] lg:block" />
       </div>
     </Slide>
   );
