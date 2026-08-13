@@ -439,3 +439,64 @@ drop trigger if exists organizations_protege_comercial on public.organizations;
 create trigger organizations_protege_comercial
   before update on public.organizations
   for each row execute function public.protege_campos_comerciais();
+
+-- ====================================================================
+-- 2026-08-12 (4) · Propostas comerciais
+--
+-- Cada proposta é uma página pública, aberta por token, com a marca do
+-- cliente e os preços combinados naquela conversa. O token é a única
+-- credencial: quem tem o link vê, e é assim que precisa ser — o médico
+-- vai abrir no celular, encaminhar para o sócio, e ninguém vai criar
+-- conta para ler uma proposta.
+--
+-- Por isso a leitura pública é por `token`, nunca por id, e a tabela
+-- não guarda nada sensível além do que já estaria no PDF que hoje se
+-- manda por WhatsApp.
+-- ====================================================================
+
+create table if not exists public.propostas (
+  id              uuid primary key default gen_random_uuid(),
+  token           text not null unique,
+
+  -- A marca do cliente, que a apresentação veste
+  cliente_nome    text not null,
+  cliente_logo_url text,
+  especialidade   text,
+  cidade          text,
+  responsavel     text,
+
+  -- Preços daquela conversa. Nulo = "sob consulta".
+  preco_essencial   numeric(10,2),
+  preco_performance numeric(10,2),
+  preco_full        numeric(10,2),
+  plano_destaque    text not null default 'performance'
+                      check (plano_destaque in ('essencial','performance','full')),
+
+  -- Parágrafo escrito à mão para aquele cliente, se houver
+  mensagem        text,
+  valida_ate      date,
+
+  status          text not null default 'enviada'
+                    check (status in ('enviada','vista','aceita','recusada')),
+  visualizacoes   integer not null default 0,
+  vista_em        timestamptz,
+  respondida_em   timestamptz,
+
+  criado_por      uuid references auth.users(id) on delete set null,
+  created_at      timestamptz not null default now()
+);
+
+create index if not exists propostas_token_idx on public.propostas (token);
+create index if not exists propostas_criada_idx on public.propostas (created_at desc);
+
+alter table public.propostas enable row level security;
+
+-- Só a equipe Medi Marketing cria, lê e edita pelo painel. A página
+-- pública não passa por aqui: ela lê com a service role, filtrando
+-- pelo token, porque quem abre a proposta não tem sessão.
+drop policy if exists "propostas_admin" on public.propostas;
+create policy "propostas_admin" on public.propostas
+  for all using (public.is_super_admin()) with check (public.is_super_admin());
+
+comment on table public.propostas is
+  'Propostas comerciais com link público por token.';

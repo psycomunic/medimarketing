@@ -571,6 +571,15 @@ export interface Database {
         Partial<Organization>
       >;
       profiles: Tabela<Profile, Partial<Profile> & { id: string }, Partial<Profile>>;
+      propostas: Tabela<
+        Proposta,
+        Omit<Proposta, "id" | "created_at" | "visualizacoes" | "status"> & {
+          id?: string;
+          status?: StatusProposta;
+          visualizacoes?: number;
+        },
+        Partial<Proposta>
+      >;
       consultas: Tabela<
         Consulta,
         Omit<Consulta, "id" | "created_at"> & { id?: string },
@@ -744,3 +753,39 @@ export interface Database {
     CompositeTypes: { [_ in never]: never };
   };
 }
+
+/* ------------------------------------------------------------------ */
+/* Propostas comerciais                                                */
+/* ------------------------------------------------------------------ */
+
+export type StatusProposta = "enviada" | "vista" | "aceita" | "recusada";
+export type PlanoProposta = "essencial" | "performance" | "full";
+
+/**
+ * Proposta com link público.
+ *
+ * Os preços são por proposta, não por plano: cada conversa fecha um
+ * valor, e a tabela de preços do site é só o ponto de partida. Nulo
+ * significa "sob consulta", que é como o Full costuma sair.
+ */
+export type Proposta = {
+  id: string;
+  token: string;
+  cliente_nome: string;
+  cliente_logo_url: string | null;
+  especialidade: string | null;
+  cidade: string | null;
+  responsavel: string | null;
+  preco_essencial: number | null;
+  preco_performance: number | null;
+  preco_full: number | null;
+  plano_destaque: PlanoProposta;
+  mensagem: string | null;
+  valida_ate: string | null;
+  status: StatusProposta;
+  visualizacoes: number;
+  vista_em: string | null;
+  respondida_em: string | null;
+  criado_por: string | null;
+  created_at: string;
+};

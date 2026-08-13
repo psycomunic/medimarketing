@@ -21,6 +21,7 @@ import {
   Settings,
   User,
   LibraryBig,
+  FileSignature,
   MessageSquareReply,
   UsersRound,
   type LucideIcon,
@@ -40,6 +41,7 @@ export type ModuloId =
   | "indicadores"
   | "financeiro"
   | "clinicas"
+  | "admin-propostas"
   | "admin-usuarios"
   | "admin-academy"
   | "admin-comentarios"
@@ -195,6 +197,16 @@ export const MODULOS: readonly Modulo[] = [
     fase: 1,
     grupo: "admin",
     resumo: "Todas as clínicas atendidas pela Medi Marketing.",
+  },
+  {
+    id: "admin-propostas",
+    label: "Propostas",
+    href: "/app/admin/propostas",
+    icone: FileSignature,
+    papeis: ["super_admin"],
+    fase: 1,
+    grupo: "admin",
+    resumo: "Gerar link de proposta com a marca e o preço do cliente.",
   },
   {
     id: "admin-usuarios",
