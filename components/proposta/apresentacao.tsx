@@ -11,6 +11,7 @@ import {
   ChevronRight,
   Loader2,
   Lock,
+  TrendingUp,
   MessageCircle,
   Sparkles,
   X,
@@ -23,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { responderProposta } from "@/lib/actions/propostas";
 import {
   entregas,
+  metodoProposta,
   planosProposta,
   porQueNos,
   proximosPassos,
@@ -123,6 +125,7 @@ export function Apresentacao({
       >
         <Capa proposta={proposta} />
         <Diagnostico cliente={proposta.cliente_nome} />
+        <Metodo />
         <Entregas />
         <Plataforma />
         <Automacao />
@@ -309,11 +312,11 @@ function Capa({ proposta: p }: { proposta: Proposta }) {
           <p className="mt-5 max-w-lg text-white/70">
             {p.mensagem?.trim()
               ? p.mensagem
-              : `Um plano para ${
+              : `Um método validado para ${
                   p.especialidade
                     ? `a sua ${p.especialidade.toLowerCase()}`
                     : "a sua clínica"
-                } atrair mais pacientes, atender melhor e enxergar os números, com marketing, equipe e plataforma no mesmo lugar.`}
+                } faturar mais com a estrutura que já tem: marketing que traz o paciente certo, equipe treinada para não perder nenhum e a plataforma que mantém tudo no lugar.`}
           </p>
 
           <dl className="mt-8 flex flex-wrap gap-x-8 gap-y-4 text-sm">
@@ -456,6 +459,64 @@ function Diagnostico({ cliente }: { cliente: string }) {
           </p>
         </div>
       </div>
+    </Slide>
+  );
+}
+
+/**
+ * O método, que é o que a clínica está comprando de fato.
+ *
+ * Sem esta tela a proposta parecia um cardápio de serviços avulsos:
+ * marketing, atendimento, retenção, cada um por si. O que justifica o
+ * preço é existir uma ordem entre eles, e ela ter sido rodada antes.
+ */
+function Metodo() {
+  return (
+    <Slide escuro>
+      <Rotulo escuro>
+        <TrendingUp className="size-3.5" />O método
+      </Rotulo>
+      <Titulo escuro>
+        Um caminho único, já rodado em mais de cem clínicas
+      </Titulo>
+      <p className="mt-3 max-w-2xl text-white/70">
+        Não é um pacote de serviços soltos. É uma ordem: cada etapa só
+        começa quando a anterior está de pé, e é por isso que o faturamento
+        sobe em degrau em vez de oscilar.
+      </p>
+
+      <ol className="relative mt-10 grid gap-6 md:grid-cols-5">
+        {metodoProposta.map((m, i) => (
+          <li key={m.etapa} className="relative">
+            {/* A linha liga uma etapa à seguinte, e para na última */}
+            {i < metodoProposta.length - 1 && (
+              <span
+                aria-hidden
+                className="absolute left-9 top-4 hidden w-[calc(100%-1.5rem)] border-t border-dashed border-teal-claro/40 md:block"
+              />
+            )}
+            <span className="relative z-10 grid size-8 place-items-center rounded-full bg-teal font-heading text-xs font-bold text-white">
+              {i + 1}
+            </span>
+            <p className="mt-3 text-[11px] font-bold uppercase tracking-wide text-teal-claro">
+              {m.quando}
+            </p>
+            <h3 className="mt-0.5 font-heading text-sm font-semibold text-white">
+              {m.titulo}
+            </h3>
+            <p className="mt-1 text-xs leading-relaxed text-white/60">{m.texto}</p>
+          </li>
+        ))}
+      </ol>
+
+      <p className="mt-9 rounded-xl border border-teal/25 bg-white/5 px-5 py-4 text-sm text-white/75">
+        <strong className="font-semibold text-white">
+          O objetivo do método é um só: faturar mais com a estrutura que você
+          já tem.
+        </strong>{" "}
+        Primeiro parando a perda, depois aumentando a entrada, e só então
+        escalando o investimento.
+      </p>
     </Slide>
   );
 }

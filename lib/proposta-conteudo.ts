@@ -52,12 +52,12 @@ export const entregas = [
   },
   {
     icone: "Headset",
-    titulo: "Atendimento humano em todos os canais",
+    titulo: "Sua equipe treinada para não perder paciente",
     itens: [
-      "Atendentes treinadas respondendo por você",
-      "WhatsApp, Instagram e Facebook numa caixa só",
-      "Agendamento registrado na hora, na sua agenda",
-      "Cobertura no horário em que o paciente procura",
+      "Formação da recepção: script, tom e condução até o agendamento",
+      "Time comercial da clínica preparado para não deixar contato sem resposta",
+      "Rotina de retorno para orçamento em aberto e paciente que sumiu",
+      "Padrão de atendimento que transmite valor e profissionalismo",
     ],
   },
   {
@@ -79,6 +79,52 @@ export const entregas = [
       "Ticket médio, retorno e faturamento",
       "Relatório para exportar e apresentar",
     ],
+  },
+] as const;
+
+/**
+ * O método, em cinco tempos.
+ *
+ * É o que diferencia um plano de um pacote de serviços avulsos: existe
+ * uma ordem, e ela foi testada em mais de cem clínicas. Cada etapa só
+ * começa quando a anterior está de pé, e é por isso que o faturamento
+ * cresce em vez de oscilar.
+ */
+export const metodoProposta = [
+  {
+    quando: "Semana 1",
+    etapa: "Diagnóstico",
+    titulo: "Entender antes de mexer",
+    texto:
+      "Agenda, origem dos pacientes, processo de atendimento e números atuais. Você sai com um plano escrito e metas de 30, 90, 180 e 360 dias.",
+  },
+  {
+    quando: "30 dias",
+    etapa: "Implantação",
+    titulo: "Estrutura no ar",
+    texto:
+      "Plataforma configurada, equipe treinada, campanhas publicadas e a confirmação rodando. A clínica passa a operar num lugar só.",
+  },
+  {
+    quando: "90 dias",
+    etapa: "Conversão",
+    titulo: "O atendimento vira comercial",
+    texto:
+      "Script, funil e follow-up em uso diário. A recepção deixa de ser tiradora de pedido e passa a conduzir o paciente até a consulta.",
+  },
+  {
+    quando: "180 dias",
+    etapa: "Retenção",
+    titulo: "Faturar de novo com quem já é seu",
+    texto:
+      "Réguas de retorno, recall e reativação ligadas. O paciente que já custou caro para chegar volta a gerar receita.",
+  },
+  {
+    quando: "360 dias",
+    etapa: "Escala",
+    titulo: "Previsibilidade",
+    texto:
+      "Com histórico no painel, dá para prever quanto investir para faturar quanto. A partir daí é escalar o que já funciona.",
   },
 ] as const;
 
@@ -155,9 +201,9 @@ export const planosProposta = [
     resumo: "O método completo: aquisição, atendimento e retenção.",
     itens: [
       "Tudo do Essencial",
-      "Central de atendimento com equipe humana",
+      "Central de atendimento: WhatsApp, Instagram e Facebook num lugar só",
       "Réguas de retenção e reativação de base",
-      "Academy liberada para toda a equipe",
+      "Academy: formação contínua da recepção e do comercial",
       "Reunião mensal de resultado",
       "Scripts comerciais da sua especialidade",
     ],
