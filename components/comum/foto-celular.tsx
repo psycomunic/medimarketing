@@ -21,7 +21,7 @@ export function FotoCelular({ className }: { className?: string }) {
         width={588}
         height={768}
         priority
-        className="mx-auto h-full w-auto object-contain drop-shadow-2xl"
+        className="mx-auto max-h-[68vh] w-auto object-contain drop-shadow-2xl"
       />
     </div>
   );

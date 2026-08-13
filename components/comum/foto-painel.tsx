@@ -1,32 +1,27 @@
 import Image from "next/image";
+import { cn } from "@/lib/utils";
 
 /**
- * A foto do painel rodando num notebook, a mesma do topo do site.
+ * O painel rodando num notebook, em foto com fundo transparente.
  *
- * Ocupa a metade direita do slide inteira, de borda a borda, sobre uma
- * faixa clara. O recorte deixa o notebook sangrar pela direita e por
- * baixo de propósito: enquadrá-lo inteiro numa faixa vertical o
- * obrigaria a encolher, e o pedido era o contrário. A faixa não é enfeite: o fundo do arquivo é o
- * branco-clínico do site, e sem ela a foto vira um retângulo pálido
- * boiando no azul. Com ela, a imagem se funde e o notebook fica tão
- * grande quanto a tela permite.
+ * A transparência é o que dispensa a faixa clara que existia aqui
+ * antes: o aparelho flutua direto sobre o azul, sem retângulo pálido
+ * nem moldura. E o ajuste é `contain`, então ele aparece inteiro —
+ * cortar o notebook para caber era o defeito da versão anterior.
  *
  * Some abaixo de `lg` porque em tela estreita não sobra largura para
  * dividir com o texto, e um notebook espremido não prova nada.
  */
-export function FotoPainel() {
+export function FotoPainel({ className }: { className?: string }) {
   return (
-    <div
-      aria-hidden
-      className="absolute inset-y-0 right-0 hidden w-1/2 overflow-hidden bg-branco-clinico lg:block"
-    >
+    <div className={cn("relative", className)}>
       <Image
-        src="/BANNER-FUNDO-HEROok.jpg"
+        src="/mockup-laptopsemfundo.png"
         alt="Notebook exibindo a agenda de consultas da plataforma Medi Marketing"
-        fill
-        sizes="50vw"
+        width={1000}
+        height={667}
         priority
-        className="object-cover object-[68%_50%]"
+        className="max-h-[68vh] w-full object-contain drop-shadow-2xl"
       />
     </div>
   );
