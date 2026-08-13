@@ -20,15 +20,18 @@ import {
   HeartHandshake,
   Hourglass,
   Layers,
+  LayoutDashboard,
   LineChart,
   Mail,
   Megaphone,
+  MessageCircle,
   MessageSquareX,
   MessagesSquare,
   MonitorSmartphone,
   MousePointerClick,
   PhoneMissed,
   Repeat,
+  ScrollText,
   ShieldCheck,
   Smartphone,
   Stethoscope,
@@ -41,6 +44,9 @@ import {
 } from "lucide-react";
 
 const ICONES: Record<string, LucideIcon> = {
+  ScrollText,
+  MessageCircle,
+  LayoutDashboard,
   Banknote,
   BarChart3,
   BellRing,

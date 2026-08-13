@@ -31,7 +31,7 @@ export function FotoPainel({ className }: { className?: string }) {
         width={1400}
         height={941}
         priority
-        className="max-h-[86vh] w-full object-contain drop-shadow-2xl"
+        className="max-h-[78vh] w-full object-contain drop-shadow-2xl"
       />
     </div>
   );

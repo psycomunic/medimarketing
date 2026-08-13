@@ -522,7 +522,7 @@ function Entregas() {
       <Rotulo>O que entregamos</Rotulo>
       <Titulo>Quatro frentes, operadas por gente, num sistema só</Titulo>
 
-      <div className="mt-8 grid gap-4 sm:grid-cols-2">
+      <div className="mt-6 grid gap-3.5 sm:grid-cols-2">
         {entregas.map((e, i) => (
           <div
             key={e.titulo}
@@ -834,6 +834,17 @@ function precoEmReais(valor: number | null): string {
   });
 }
 
+/**
+ * Os planos, com o preço no rodapé do cartão.
+ *
+ * O valor vem depois da lista, não antes: lido primeiro, ele vira o
+ * único critério e a comparação acaba ali. Lido depois de seis linhas
+ * do que está incluído, é consequência.
+ *
+ * O plano recomendado é um bloco escuro em relevo, um degrau acima dos
+ * outros. Três cartões de mesmo peso deixam a escolha por conta do
+ * cliente; a proposta existe justamente para recomendar um.
+ */
 function Planos({ proposta: p }: { proposta: Proposta }) {
   const precos: Record<PlanoProposta, number | null> = {
     essencial: p.preco_essencial,
@@ -845,12 +856,8 @@ function Planos({ proposta: p }: { proposta: Proposta }) {
     <Slide>
       <Rotulo>Investimento</Rotulo>
       <Titulo>Os planos preparados para a {p.cliente_nome}</Titulo>
-      <p className="mt-2 text-sm text-cinza-suave sm:text-base">
-        Sem taxa de implantação e sem fidelidade. A plataforma está incluída em
-        todos.
-      </p>
 
-      <div className="mt-7 grid gap-4 lg:grid-cols-3">
+      <div className="mt-4 grid items-stretch gap-3.5 lg:grid-cols-3">
         {planosProposta.map((plano) => {
           const destaque = plano.id === p.plano_destaque;
           const valor = precos[plano.id];
@@ -859,84 +866,143 @@ function Planos({ proposta: p }: { proposta: Proposta }) {
             <div
               key={plano.id}
               className={cn(
-                "relative flex flex-col rounded-2xl border p-5",
+                "relative flex flex-col overflow-hidden rounded-2xl border",
                 destaque
-                  ? "border-teal bg-azul-medico text-white shadow-card"
-                  : "border-border bg-white shadow-soft",
+                  ? "border-teal bg-azul-medico text-white shadow-card lg:-my-3"
+                  : "border-border bg-white shadow-soft"
               )}
             >
               {destaque && (
-                <span className="absolute -top-2.5 left-5 rounded-full bg-teal px-2.5 py-1 text-[10px] font-bold uppercase leading-none tracking-wide text-white">
-                  Recomendado
-                </span>
+                <p className="bg-teal py-1.5 text-center text-[10px] font-bold uppercase tracking-widest text-white">
+                  Recomendado para você
+                </p>
               )}
 
-              <h3
-                className={cn(
-                  "font-heading text-lg font-bold",
-                  destaque ? "text-white" : "text-azul-medico",
-                )}
-              >
-                {plano.nome}
-              </h3>
-              <p
-                className={cn(
-                  "mt-1 text-xs",
-                  destaque ? "text-white/60" : "text-cinza-suave",
-                )}
-              >
-                {plano.resumo}
-              </p>
-
-              <p className="mt-4 flex items-baseline gap-1">
-                <span
+              <div className="flex flex-1 flex-col p-4">
+                <p
                   className={cn(
-                    "font-heading text-3xl font-bold",
-                    destaque ? "text-teal-claro" : "text-azul-medico",
+                    "text-[10px] font-bold uppercase tracking-wide",
+                    destaque ? "text-teal-claro" : "text-teal"
                   )}
                 >
-                  {precoEmReais(valor)}
-                </span>
-                {valor !== null && (
-                  <span
-                    className={cn(
-                      "text-xs",
-                      destaque ? "text-white/50" : "text-cinza-suave",
-                    )}
-                  >
-                    /mês
-                  </span>
-                )}
-              </p>
+                  {plano.para}
+                </p>
+                <h3
+                  className={cn(
+                    "mt-1 font-heading text-xl font-bold",
+                    destaque ? "text-white" : "text-azul-medico"
+                  )}
+                >
+                  {plano.nome}
+                </h3>
+                <p
+                  className={cn(
+                    "mt-1 text-xs leading-relaxed",
+                    destaque ? "text-white/60" : "text-cinza-suave"
+                  )}
+                >
+                  {plano.resumo}
+                </p>
 
-              <ul className="mt-4 grid flex-1 gap-1.5">
-                {plano.itens.map((i) => (
-                  <li
-                    key={i}
+                <ul
+                  className={cn(
+                    "mt-3 grid flex-1 gap-2 border-t pt-3",
+                    destaque ? "border-white/15" : "border-border"
+                  )}
+                >
+                  {plano.itens.map((item) => (
+                    <li key={item.texto} className="flex items-start gap-2.5">
+                      <span
+                        className={cn(
+                          "mt-0.5 grid size-6 shrink-0 place-items-center rounded-md",
+                          destaque
+                            ? "bg-teal/25 text-teal-claro"
+                            : "bg-verde-menta text-teal"
+                        )}
+                      >
+                        <Icone nome={item.icone} className="size-3.5" />
+                      </span>
+                      <span
+                        className={cn(
+                          "text-xs leading-snug",
+                          destaque ? "text-white/85" : "text-cinza-texto"
+                        )}
+                      >
+                        {item.texto}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+
+                {/* O preço fecha o cartão, depois do que ele entrega */}
+                <div
+                  className={cn(
+                    "mt-4 rounded-xl px-4 py-2.5 text-center",
+                    destaque ? "bg-white/10" : "bg-branco-clinico"
+                  )}
+                >
+                  <p
                     className={cn(
-                      "flex gap-2 text-xs leading-relaxed",
-                      destaque ? "text-white/80" : "text-cinza-suave",
+                      "text-[10px] font-semibold uppercase tracking-wide",
+                      destaque ? "text-white/50" : "text-cinza-suave"
                     )}
                   >
-                    <Check
+                    {valor === null ? "Investimento" : "Investimento mensal"}
+                  </p>
+                  <p className="mt-0.5 flex items-baseline justify-center gap-1">
+                    <span
                       className={cn(
-                        "mt-0.5 size-3.5 shrink-0",
-                        destaque ? "text-teal-claro" : "text-teal",
+                        "font-heading text-3xl font-bold leading-none",
+                        destaque ? "text-teal-claro" : "text-azul-medico"
                       )}
-                    />
-                    {i}
-                  </li>
-                ))}
-              </ul>
+                    >
+                      {precoEmReais(valor)}
+                    </span>
+                    {valor !== null && (
+                      <span
+                        className={cn(
+                          "text-xs",
+                          destaque ? "text-white/50" : "text-cinza-suave"
+                        )}
+                      >
+                        /mês
+                      </span>
+                    )}
+                  </p>
+                  <p
+                    className={cn(
+                      "mt-1 text-[10px]",
+                      destaque ? "text-white/45" : "text-cinza-suave"
+                    )}
+                  >
+                    {valor === null
+                      ? "Desenhado caso a caso"
+                      : "Plataforma inclusa"}
+                  </p>
+                </div>
+              </div>
             </div>
           );
         })}
+      </div>
+
+      {/* A faixa que responde ao que trava a assinatura */}
+      <div className="mt-4 flex flex-wrap items-center justify-center gap-x-6 gap-y-1.5 rounded-xl border border-border bg-white px-5 py-2.5 text-xs text-cinza-suave shadow-soft">
+        {[
+          "Sem taxa de implantação",
+          "Sem fidelidade: cancele quando quiser",
+          "Plataforma inclusa em todos os planos",
+        ].map((g) => (
+          <span key={g} className="flex items-center gap-1.5">
+            <Check className="size-3.5 shrink-0 text-teal" />
+            {g}
+          </span>
+        ))}
       </div>
     </Slide>
   );
 }
 
-/** A linha do tempo tira o medo do "e depois que eu assinar?". */
 function Implantacao() {
   const fases = [
     [

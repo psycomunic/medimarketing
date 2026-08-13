@@ -180,45 +180,54 @@ export const porQueNos = [
   },
 ] as const;
 
-/** Tela 8 — o que cada plano entrega, na linguagem da proposta. */
+/**
+ * Tela 8 — o que cada plano entrega.
+ *
+ * Cada item carrega o próprio ícone. Numa lista de seis checks iguais
+ * o olho não separa "Google Ads" de "Relatório mensal", e é justamente
+ * a diferença entre os planos que o cliente está tentando enxergar.
+ */
 export const planosProposta = [
   {
     id: "essencial" as const,
     nome: "Essencial",
     resumo: "Organizar a casa e começar a atrair paciente.",
+    para: "Para quem ainda não tem processo",
     itens: [
-      "Plataforma completa: agenda, CRM e confirmações",
-      "Lembrete e confirmação automáticos pelo seu WhatsApp",
-      "Google Ads e Meta Ads",
-      "Landing page de captação",
-      "Relatório mensal de resultado",
-      "Suporte por WhatsApp",
+      { icone: "LayoutDashboard", texto: "Plataforma completa: agenda, CRM e confirmações" },
+      { icone: "CalendarCheck", texto: "Lembrete e confirmação automáticos pelo seu WhatsApp" },
+      { icone: "Megaphone", texto: "Google Ads e Meta Ads" },
+      { icone: "MonitorSmartphone", texto: "Landing page de captação" },
+      { icone: "BarChart3", texto: "Relatório mensal de resultado" },
+      { icone: "MessageCircle", texto: "Suporte por WhatsApp" },
     ],
   },
   {
     id: "performance" as const,
     nome: "Performance",
     resumo: "O método completo: aquisição, atendimento e retenção.",
+    para: "O plano da maioria das clínicas",
     itens: [
-      "Tudo do Essencial",
-      "Central de atendimento: WhatsApp, Instagram e Facebook num lugar só",
-      "Réguas de retenção e reativação de base",
-      "Academy: formação contínua da recepção e do comercial",
-      "Reunião mensal de resultado",
-      "Scripts comerciais da sua especialidade",
+      { icone: "Layers", texto: "Tudo do Essencial" },
+      { icone: "MessagesSquare", texto: "Central de atendimento: WhatsApp, Instagram e Facebook" },
+      { icone: "Repeat", texto: "Réguas de retenção e reativação de base" },
+      { icone: "GraduationCap", texto: "Academy: formação da recepção e do comercial" },
+      { icone: "Users", texto: "Reunião mensal de resultado" },
+      { icone: "ScrollText", texto: "Scripts comerciais da sua especialidade" },
     ],
   },
   {
     id: "full" as const,
     nome: "Full / Parceria",
     resumo: "Escalar com time e inteligência dedicados.",
+    para: "Para clínicas com meta agressiva",
     itens: [
-      "Tudo do Performance",
-      "Estruturação comercial da clínica",
-      "Recepção remota e SDR dedicado",
-      "Mentoria com o time de gestão",
-      "BI avançado e metas por período",
-      "Acompanhamento semanal",
+      { icone: "Layers", texto: "Tudo do Performance" },
+      { icone: "Target", texto: "Estruturação comercial da clínica" },
+      { icone: "Headset", texto: "Recepção remota e SDR dedicado" },
+      { icone: "HeartHandshake", texto: "Mentoria com o time de gestão" },
+      { icone: "LineChart", texto: "BI avançado e metas por período" },
+      { icone: "CalendarDays", texto: "Acompanhamento semanal" },
     ],
   },
 ] as const;
