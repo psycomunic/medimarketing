@@ -199,10 +199,13 @@ export function Apresentacao({
 function Slide({
   children,
   escuro = false,
+  amplo = false,
   className,
 }: {
   children: React.ReactNode;
   escuro?: boolean;
+  /** Container mais largo, para conteúdo em três colunas. */
+  amplo?: boolean;
   className?: string;
 }) {
   return (
@@ -214,7 +217,12 @@ function Slide({
         className,
       )}
     >
-      <div className="mx-auto flex min-h-full w-full max-w-5xl items-center px-5 pb-24 pt-12 sm:px-8 md:pb-28 md:pt-16">
+      <div
+        className={cn(
+          "mx-auto flex min-h-full w-full items-center px-5 pb-24 pt-12 sm:px-8 md:pb-28 md:pt-16",
+          amplo ? "max-w-6xl" : "max-w-5xl"
+        )}
+      >
         <div className="w-full">{children}</div>
       </div>
     </section>
@@ -776,51 +784,77 @@ function Comparacao() {
   ];
 
   return (
-    <div className="mt-8 grid grid-cols-[auto_1fr_1.15fr] overflow-hidden rounded-xl border border-border bg-white text-sm shadow-soft">
-      {/* Cabeçalho */}
-      <div className="border-b border-border px-4 py-3" />
-      <div className="flex items-center gap-2 border-b border-border px-4 py-3 text-xs font-semibold uppercase tracking-wide text-cinza-suave">
-        <X className="size-3.5 shrink-0 text-coral" />
-        Agência comum
-      </div>
-      <div className="flex items-center gap-2 bg-azul-medico px-4 py-3 text-xs font-semibold uppercase tracking-wide text-white">
-        <Check className="size-3.5 shrink-0 text-teal-claro" />
-        Medi Marketing
-      </div>
-
-      {linhas.map(([rotulo, comum, nosso], i) => {
-        const ultima = i === linhas.length - 1;
-        return (
-          <Fragment key={rotulo}>
-            <div
-              className={cn(
-                "px-4 py-3 font-semibold text-azul-medico",
-                !ultima && "border-b border-border"
-              )}
-            >
+    <>
+      {/* Empilhado no celular: três colunas em 375px espremem as duas
+          respostas a ponto de nenhuma ser legível, e a comparação
+          depende justamente de ler as duas lado a lado. */}
+      <div className="mt-7 grid gap-3 md:hidden">
+        {linhas.map(([rotulo, comum, nosso]) => (
+          <div
+            key={rotulo}
+            className="overflow-hidden rounded-xl border border-border bg-white shadow-soft"
+          >
+            <p className="border-b border-border px-4 py-2 text-xs font-bold uppercase tracking-wide text-azul-medico">
               {rotulo}
-            </div>
-            <div
-              className={cn(
-                "px-4 py-3 text-cinza-suave/70 line-through decoration-coral/40",
-                !ultima && "border-b border-border"
-              )}
-            >
-              {comum}
-            </div>
-            <div
-              className={cn(
-                "flex items-start gap-2 bg-azul-medico px-4 py-3 font-medium text-white",
-                !ultima && "border-b border-white/10"
-              )}
-            >
+            </p>
+            <p className="flex items-start gap-2 px-4 py-2.5 text-[13px] text-cinza-suave/70">
+              <X className="mt-0.5 size-3.5 shrink-0 text-coral" />
+              <span className="line-through decoration-coral/40">{comum}</span>
+            </p>
+            <p className="flex items-start gap-2 bg-azul-medico px-4 py-2.5 text-[13px] font-medium text-white">
               <Check className="mt-0.5 size-4 shrink-0 text-teal-claro" />
               {nosso}
-            </div>
-          </Fragment>
-        );
-      })}
-    </div>
+            </p>
+          </div>
+        ))}
+      </div>
+
+      {/* Lado a lado onde há largura */}
+      <div className="mt-8 hidden grid-cols-[auto_1fr_1.15fr] overflow-hidden rounded-xl border border-border bg-white text-sm shadow-soft md:grid">
+        <div className="border-b border-border px-4 py-3" />
+        <div className="flex items-center gap-2 border-b border-border px-4 py-3 text-xs font-semibold uppercase tracking-wide text-cinza-suave">
+          <X className="size-3.5 shrink-0 text-coral" />
+          Agência comum
+        </div>
+        <div className="flex items-center gap-2 bg-azul-medico px-4 py-3 text-xs font-semibold uppercase tracking-wide text-white">
+          <Check className="size-3.5 shrink-0 text-teal-claro" />
+          Medi Marketing
+        </div>
+
+        {linhas.map(([rotulo, comum, nosso], i) => {
+          const ultima = i === linhas.length - 1;
+          return (
+            <Fragment key={rotulo}>
+              <div
+                className={cn(
+                  "px-4 py-3 font-semibold text-azul-medico",
+                  !ultima && "border-b border-border"
+                )}
+              >
+                {rotulo}
+              </div>
+              <div
+                className={cn(
+                  "px-4 py-3 text-cinza-suave/70 line-through decoration-coral/40",
+                  !ultima && "border-b border-border"
+                )}
+              >
+                {comum}
+              </div>
+              <div
+                className={cn(
+                  "flex items-start gap-2 bg-azul-medico px-4 py-3 font-medium text-white",
+                  !ultima && "border-b border-white/10"
+                )}
+              >
+                <Check className="mt-0.5 size-4 shrink-0 text-teal-claro" />
+                {nosso}
+              </div>
+            </Fragment>
+          );
+        })}
+      </div>
+    </>
   );
 }
 
@@ -835,15 +869,21 @@ function precoEmReais(valor: number | null): string {
 }
 
 /**
- * Os planos, com o preço no rodapé do cartão.
+ * Os planos.
  *
- * O valor vem depois da lista, não antes: lido primeiro, ele vira o
- * único critério e a comparação acaba ali. Lido depois de seis linhas
- * do que está incluído, é consequência.
+ * Três decisões governam este slide:
  *
- * O plano recomendado é um bloco escuro em relevo, um degrau acima dos
- * outros. Três cartões de mesmo peso deixam a escolha por conta do
- * cliente; a proposta existe justamente para recomendar um.
+ * O preço fica no rodapé. Lido antes da lista vira o único critério e
+ * a comparação acaba ali; lido depois do que está incluído, ele é
+ * consequência.
+ *
+ * O recomendado é um degrau acima, com selo flutuante em vez de faixa:
+ * a faixa atravessando o cartão parecia cabeçalho de tabela e roubava
+ * a atenção do nome do plano.
+ *
+ * E o container é mais largo que o dos outros slides. Em 1024px cada
+ * item quebrava em duas linhas, os cartões cresciam, e a altura extra
+ * comia justamente o respiro entre o título e eles.
  */
 function Planos({ proposta: p }: { proposta: Proposta }) {
   const precos: Record<PlanoProposta, number | null> = {
@@ -853,11 +893,19 @@ function Planos({ proposta: p }: { proposta: Proposta }) {
   };
 
   return (
-    <Slide>
-      <Rotulo>Investimento</Rotulo>
-      <Titulo>Os planos preparados para a {p.cliente_nome}</Titulo>
+    <Slide amplo>
+      <div className="mx-auto max-w-2xl text-center">
+        <Rotulo>Investimento</Rotulo>
+        <h2 className="mt-3 text-[1.6rem] leading-tight sm:text-3xl md:text-[2.1rem]">
+          Os planos preparados para a {p.cliente_nome}
+        </h2>
+        <p className="mt-2 text-sm text-cinza-suave">
+          Escolha o ponto de partida. Dá para subir de plano quando quiser, sem
+          recomeçar nada.
+        </p>
+      </div>
 
-      <div className="mt-4 grid items-stretch gap-3.5 lg:grid-cols-3">
+      <div className="mt-9 grid items-stretch gap-5 md:mt-10 lg:grid-cols-3">
         {planosProposta.map((plano) => {
           const destaque = plano.id === p.plano_destaque;
           const valor = precos[plano.id];
@@ -866,128 +914,127 @@ function Planos({ proposta: p }: { proposta: Proposta }) {
             <div
               key={plano.id}
               className={cn(
-                "relative flex flex-col overflow-hidden rounded-2xl border",
+                "relative flex flex-col rounded-2xl p-5 sm:p-6",
                 destaque
-                  ? "border-teal bg-azul-medico text-white shadow-card lg:-my-3"
-                  : "border-border bg-white shadow-soft"
+                  ? "bg-azul-medico text-white shadow-card ring-2 ring-teal lg:-my-4 lg:py-8"
+                  : "border border-border bg-white shadow-soft"
               )}
             >
               {destaque && (
-                <p className="bg-teal py-1.5 text-center text-[10px] font-bold uppercase tracking-widest text-white">
-                  Recomendado para você
-                </p>
+                <span className="absolute -top-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-teal px-3.5 py-1 text-[10px] font-bold uppercase tracking-widest text-white shadow-soft">
+                  Recomendado
+                </span>
               )}
 
-              <div className="flex flex-1 flex-col p-4">
-                <p
-                  className={cn(
-                    "text-[10px] font-bold uppercase tracking-wide",
-                    destaque ? "text-teal-claro" : "text-teal"
-                  )}
-                >
-                  {plano.para}
-                </p>
-                <h3
-                  className={cn(
-                    "mt-1 font-heading text-xl font-bold",
-                    destaque ? "text-white" : "text-azul-medico"
-                  )}
-                >
-                  {plano.nome}
-                </h3>
-                <p
-                  className={cn(
-                    "mt-1 text-xs leading-relaxed",
-                    destaque ? "text-white/60" : "text-cinza-suave"
-                  )}
-                >
-                  {plano.resumo}
-                </p>
+              <p
+                className={cn(
+                  "text-[10px] font-bold uppercase tracking-wider",
+                  destaque ? "text-teal-claro" : "text-teal"
+                )}
+              >
+                {plano.para}
+              </p>
+              <h3
+                className={cn(
+                  "mt-1.5 font-heading text-2xl font-bold leading-none",
+                  destaque ? "text-white" : "text-azul-medico"
+                )}
+              >
+                {plano.nome}
+              </h3>
+              <p
+                className={cn(
+                  "mt-2 text-[13px] leading-relaxed",
+                  destaque ? "text-white/65" : "text-cinza-suave"
+                )}
+              >
+                {plano.resumo}
+              </p>
 
-                <ul
-                  className={cn(
-                    "mt-3 grid flex-1 gap-2 border-t pt-3",
-                    destaque ? "border-white/15" : "border-border"
-                  )}
-                >
-                  {plano.itens.map((item) => (
-                    <li key={item.texto} className="flex items-start gap-2.5">
-                      <span
-                        className={cn(
-                          "mt-0.5 grid size-6 shrink-0 place-items-center rounded-md",
-                          destaque
-                            ? "bg-teal/25 text-teal-claro"
-                            : "bg-verde-menta text-teal"
-                        )}
-                      >
-                        <Icone nome={item.icone} className="size-3.5" />
-                      </span>
-                      <span
-                        className={cn(
-                          "text-xs leading-snug",
-                          destaque ? "text-white/85" : "text-cinza-texto"
-                        )}
-                      >
-                        {item.texto}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-
-                {/* O preço fecha o cartão, depois do que ele entrega */}
-                <div
-                  className={cn(
-                    "mt-4 rounded-xl px-4 py-2.5 text-center",
-                    destaque ? "bg-white/10" : "bg-branco-clinico"
-                  )}
-                >
-                  <p
-                    className={cn(
-                      "text-[10px] font-semibold uppercase tracking-wide",
-                      destaque ? "text-white/50" : "text-cinza-suave"
-                    )}
-                  >
-                    {valor === null ? "Investimento" : "Investimento mensal"}
-                  </p>
-                  <p className="mt-0.5 flex items-baseline justify-center gap-1">
+              <ul
+                className={cn(
+                  "mt-5 grid flex-1 gap-3 border-t pt-5",
+                  destaque ? "border-white/15" : "border-border"
+                )}
+              >
+                {plano.itens.map((item) => (
+                  <li key={item.texto} className="flex items-start gap-3">
                     <span
                       className={cn(
-                        "font-heading text-3xl font-bold leading-none",
-                        destaque ? "text-teal-claro" : "text-azul-medico"
+                        "mt-px grid size-7 shrink-0 place-items-center rounded-lg",
+                        destaque
+                          ? "bg-teal/25 text-teal-claro"
+                          : "bg-verde-menta text-teal"
                       )}
                     >
-                      {precoEmReais(valor)}
+                      <Icone nome={item.icone} className="size-4" />
                     </span>
-                    {valor !== null && (
-                      <span
-                        className={cn(
-                          "text-xs",
-                          destaque ? "text-white/50" : "text-cinza-suave"
-                        )}
-                      >
-                        /mês
-                      </span>
-                    )}
-                  </p>
-                  <p
+                    <span
+                      className={cn(
+                        "text-[13px] leading-snug",
+                        destaque ? "text-white/90" : "text-cinza-texto"
+                      )}
+                    >
+                      {item.texto}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+
+              {/* O preço fecha o cartão, depois do que ele entrega */}
+              <div
+                className={cn(
+                  "mt-6 border-t pt-5 text-center",
+                  destaque ? "border-white/15" : "border-border"
+                )}
+              >
+                <p
+                  className={cn(
+                    "text-[10px] font-semibold uppercase tracking-wider",
+                    destaque ? "text-white/45" : "text-cinza-suave"
+                  )}
+                >
+                  {valor === null ? "Investimento" : "Investimento mensal"}
+                </p>
+                <p className="mt-1 flex items-baseline justify-center gap-1">
+                  <span
                     className={cn(
-                      "mt-1 text-[10px]",
-                      destaque ? "text-white/45" : "text-cinza-suave"
+                      "font-heading font-bold leading-none",
+                      valor === null ? "text-3xl" : "text-[2.4rem]",
+                      destaque ? "text-teal-claro" : "text-azul-medico"
                     )}
                   >
-                    {valor === null
-                      ? "Desenhado caso a caso"
-                      : "Plataforma inclusa"}
-                  </p>
-                </div>
+                    {precoEmReais(valor)}
+                  </span>
+                  {valor !== null && (
+                    <span
+                      className={cn(
+                        "text-sm",
+                        destaque ? "text-white/50" : "text-cinza-suave"
+                      )}
+                    >
+                      /mês
+                    </span>
+                  )}
+                </p>
+                <p
+                  className={cn(
+                    "mt-1.5 text-[11px]",
+                    destaque ? "text-white/45" : "text-cinza-suave"
+                  )}
+                >
+                  {valor === null
+                    ? "Escopo desenhado caso a caso"
+                    : "Plataforma inclusa, sem custo à parte"}
+                </p>
               </div>
             </div>
           );
         })}
       </div>
 
-      {/* A faixa que responde ao que trava a assinatura */}
-      <div className="mt-4 flex flex-wrap items-center justify-center gap-x-6 gap-y-1.5 rounded-xl border border-border bg-white px-5 py-2.5 text-xs text-cinza-suave shadow-soft">
+      {/* As objeções que travam a assinatura, respondidas numa linha */}
+      <div className="mt-7 flex flex-wrap items-center justify-center gap-x-8 gap-y-2 text-xs text-cinza-suave">
         {[
           "Sem taxa de implantação",
           "Sem fidelidade: cancele quando quiser",
@@ -1002,6 +1049,7 @@ function Planos({ proposta: p }: { proposta: Proposta }) {
     </Slide>
   );
 }
+
 
 function Implantacao() {
   const fases = [
