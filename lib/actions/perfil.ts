@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { emModoDemo, getSessao, supabaseConfigurado } from "@/lib/supabase/queries";
+import { emModoDemo, getSessao } from "@/lib/supabase/queries";
 import { MSG_DEMO, type ActionResult } from "@/lib/actions/contexto";
 
 const perfilSchema = z.object({
@@ -89,7 +89,10 @@ export async function alterarSenha(input: SenhaInput): Promise<ActionResult> {
     return { ok: false, erro: parsed.error.errors[0]?.message ?? "Dados inválidos" };
   }
 
-  if (!supabaseConfigurado()) return { ok: false, erro: MSG_DEMO };
+  // Pelo modo demo, e não pela ausência de Supabase: a demonstração
+  // comercial roda com o banco conectado, e trocar senha ali não faz
+  // sentido nenhum.
+  if (await emModoDemo()) return { ok: false, erro: MSG_DEMO };
 
   const supabase = await createClient();
   const {

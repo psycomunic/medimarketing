@@ -35,6 +35,12 @@ export async function login(formData: {
     redirect(formData.redirectTo || "/app");
   }
 
+  // Login de verdade encerra qualquer demonstração aberta: sem isso o
+  // cookie de demo continuaria mandando e a pessoa entraria na conta
+  // certa para ver dados fictícios.
+  const cookieStore = await cookies();
+  cookieStore.delete(DEMO_COOKIE);
+
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword({
     email: formData.email,

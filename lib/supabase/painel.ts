@@ -264,7 +264,7 @@ async function painelClinica(
     if (ra.naoLidas > 0) {
       pendencias.push({
         chave: "nao-lidas",
-        titulo: `${ra.naoLidas} mensagem${ra.naoLidas === 1 ? "" : "ns"} sem resposta`,
+        titulo: `${ra.naoLidas} mensage${ra.naoLidas === 1 ? "m" : "ns"} sem resposta`,
         detalhe:
           ra.semResponsavel > 0
             ? `${ra.semResponsavel} conversa${ra.semResponsavel === 1 ? "" : "s"} ainda sem responsável.`

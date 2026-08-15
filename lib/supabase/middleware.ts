@@ -12,25 +12,36 @@ type CookieItem = { name: string; value: string; options?: CookieOptions };
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
 
-  // Sem Supabase configurado: opera em MODO DEMONSTRAÇÃO, protegendo /app
-  // com base no cookie de demo.
+  /**
+   * MODO DEMONSTRAÇÃO — vale mesmo com o Supabase configurado.
+   *
+   * O cookie sozinho libera o painel, porque a demonstração comercial
+   * roda em produção e a visita não tem conta. Não há risco de vazar
+   * dado real: com o cookie, a sessão inteira vem do `lib/demo` e as
+   * actions que escrevem param em `contexto()`.
+   */
+  const temDemo =
+    papelDemoValido(request.cookies.get(DEMO_COOKIE)?.value) !== null;
+
+  if (temDemo) {
+    if (request.nextUrl.pathname === "/login") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/app";
+      return NextResponse.redirect(url);
+    }
+    return response;
+  }
+
+  // Sem Supabase configurado e sem demonstração: só resta barrar /app.
   if (
     !process.env.NEXT_PUBLIC_SUPABASE_URL ||
     !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   ) {
-    const temDemo =
-      papelDemoValido(request.cookies.get(DEMO_COOKIE)?.value) !== null;
     const { pathname: p } = request.nextUrl;
-
-    if (!temDemo && p.startsWith("/app")) {
+    if (p.startsWith("/app")) {
       const url = request.nextUrl.clone();
       url.pathname = "/login";
       url.searchParams.set("redirect", p);
-      return NextResponse.redirect(url);
-    }
-    if (temDemo && p === "/login") {
-      const url = request.nextUrl.clone();
-      url.pathname = "/app";
       return NextResponse.redirect(url);
     }
     return response;

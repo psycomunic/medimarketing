@@ -9,7 +9,7 @@ import type { NivelTrilha, Profile, Role } from "@/lib/supabase/types";
 export type ActionResult = { ok: true } | { ok: false; erro: string };
 
 const MSG_DEMO =
-  "Modo demonstração: as alterações não são salvas. Conecte o Supabase para persistir.";
+  "Modo demonstração: nada é salvo aqui. Numa conta de verdade, esta alteração já estaria valendo.";
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 

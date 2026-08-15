@@ -7,7 +7,7 @@ import type { Anexo } from "@/lib/supabase/types";
 
 const BUCKET = "anexos";
 const MSG_DEMO =
-  "Modo demonstração: o anexo não é salvo. Conecte o Supabase para armazenar documentos.";
+  "Modo demonstração: o anexo não é guardado. Numa conta de verdade ele ficaria no prontuário do paciente.";
 
 export type AnexoComUrl = Anexo & { url: string | null };
 

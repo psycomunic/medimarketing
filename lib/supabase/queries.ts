@@ -6,6 +6,7 @@ import type {
   Disponibilidade,
   Organization,
   Profile,
+  Role,
 } from "@/lib/supabase/types";
 import {
   DEMO_COOKIE,
@@ -27,11 +28,27 @@ export function supabaseConfigurado() {
   );
 }
 
-/** Sessão de demonstração ativa (sem Supabase + cookie de demo válido). */
-export async function emModoDemo(): Promise<boolean> {
-  if (supabaseConfigurado()) return false;
+/**
+ * Papel da sessão de demonstração, se houver.
+ *
+ * Quem manda é o cookie, mesmo com o Supabase configurado. Isso é o que
+ * permite abrir a demonstração comercial em produção: o link de
+ * /demonstracao grava o papel escolhido e a pessoa navega no painel
+ * inteiro com dados fictícios, sem conta e sem tocar no banco.
+ *
+ * A porta de saída é sempre o mesmo cookie: apagá-lo devolve a sessão
+ * real de quem já estava logado. E como `contexto()` — por onde passam
+ * todas as server actions que escrevem — devolve `demo` enquanto ele
+ * existir, nada do que a visita fizer chega ao banco.
+ */
+export async function papelDaDemo(): Promise<Role | null> {
   const cookieStore = await cookies();
-  return papelDemoValido(cookieStore.get(DEMO_COOKIE)?.value) !== null;
+  return papelDemoValido(cookieStore.get(DEMO_COOKIE)?.value);
+}
+
+/** Sessão de demonstração ativa. */
+export async function emModoDemo(): Promise<boolean> {
+  return (await papelDaDemo()) !== null;
 }
 
 export type Sessao = {
@@ -42,12 +59,10 @@ export type Sessao = {
 
 /** Retorna o usuário autenticado, o profile e a clínica dele (ou nulos). */
 export async function getSessao(): Promise<Sessao> {
-  // Modo demonstração: sessão fictícia conforme o papel gravado no cookie
-  if (!supabaseConfigurado()) {
-    const cookieStore = await cookies();
-    const papel = papelDemoValido(cookieStore.get(DEMO_COOKIE)?.value);
-    if (!papel) return { userId: null, profile: null, organizacao: null };
-
+  // Modo demonstração: sessão fictícia conforme o papel gravado no cookie.
+  // Vem antes do Supabase de propósito — é o cookie que decide.
+  const papel = await papelDaDemo();
+  if (papel) {
     const profile = demoProfilePorPapel(papel);
     return {
       userId: profile.id,
@@ -55,6 +70,11 @@ export async function getSessao(): Promise<Sessao> {
       // Super admin não pertence a uma clínica específica
       organizacao: profile.organization_id ? demoOrganization : null,
     };
+  }
+
+  // Sem Supabase e sem cookie não há sessão possível
+  if (!supabaseConfigurado()) {
+    return { userId: null, profile: null, organizacao: null };
   }
 
   const supabase = await createClient();

@@ -1,4 +1,5 @@
 import { Info } from "lucide-react";
+import { BarraDemo } from "@/components/app/barra-demo";
 import { Sidebar } from "@/components/app/sidebar";
 import { exigirSessao } from "@/lib/acesso";
 import { emModoDemo } from "@/lib/supabase/queries";
@@ -31,14 +32,20 @@ export default async function AppLayout({
       />
       <main className="min-w-0 flex-1 overflow-x-hidden">
         {demo && (
-          <div className="flex items-center justify-center gap-2 bg-azul-medico px-4 py-2 text-center text-xs font-medium text-white">
-            <Info className="size-4 shrink-0" />
+          /* Um parágrafo só, e não três caixas flex: no celular cada
+             trecho virava uma coluna e a frase quebrava no meio. */
+          <p className="bg-azul-medico px-4 py-2 text-center text-xs font-medium text-white">
+            <Info className="mr-1.5 inline size-4 align-text-bottom" />
             Você está no <strong>modo demonstração</strong>: dados fictícios,
             alterações não são salvas.
-          </div>
+          </p>
         )}
         {children}
+        {/* Espaço para a barra flutuante não cobrir o fim da página */}
+        {demo && <div aria-hidden className="h-20" />}
       </main>
+
+      {demo && <BarraDemo papelAtual={role} />}
     </div>
   );
 }

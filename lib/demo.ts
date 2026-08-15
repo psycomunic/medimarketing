@@ -1,9 +1,15 @@
 /**
  * MODO DEMONSTRAÇÃO
  * ----------------------------------------------------------------------
- * Quando o Supabase NÃO está configurado, o sistema entra em modo demo:
- * logins de teste fixos (um por papel) e dados fictícios, para navegar
- * pela plataforma sem banco de dados. Alterações não são persistidas.
+ * Uma clínica inteira de mentira: contas por papel, agenda, pacientes,
+ * conversas e números. Serve a dois usos.
+ *
+ * Em desenvolvimento, sem Supabase configurado, permite navegar pela
+ * plataforma sem banco de dados, entrando pelos logins de teste.
+ *
+ * Em produção, é a demonstração comercial: quem abre /demonstracao
+ * escolhe um papel, recebe o cookie e passeia pelo painel como se
+ * fosse dono, médico ou atendente. Nada é persistido em nenhum dos dois.
  *
  * Este arquivo é "puro" (sem next/headers) para poder ser importado tanto
  * no middleware (Edge) quanto em Server Components/Actions.
@@ -188,6 +194,42 @@ export const CONTAS_DEMO: readonly ContaDemo[] = [
   },
 ] as const;
 
+/**
+ * Os papéis oferecidos na demonstração comercial.
+ *
+ * O super admin fica de fora de propósito: aquele é o painel da agência,
+ * com a carteira inteira de clientes à vista. Mostrar para um prospecto
+ * seria expor o negócio dos outros.
+ *
+ * A ordem segue a de quem decide a compra: o dono primeiro.
+ */
+export const PAPEIS_DEMONSTRACAO = [
+  {
+    role: "gestor" as Role,
+    titulo: "Dono da clínica",
+    curto: "Dono",
+    quem: "Dr. Paulo Andrade",
+    resumo:
+      "Vê tudo: faturamento, retorno do marketing, equipe, agenda e os números da clínica inteira.",
+  },
+  {
+    role: "medico" as Role,
+    titulo: "Médico",
+    curto: "Médico",
+    quem: "Dra. Marina Alves",
+    resumo:
+      "Vê a própria agenda, os pacientes dele e o histórico de cada atendimento. Sem dinheiro e sem a equipe.",
+  },
+  {
+    role: "secretaria" as Role,
+    titulo: "Atendente",
+    curto: "Atendente",
+    quem: "Camila Rocha",
+    resumo:
+      "Opera o dia a dia: agenda de todos os médicos, confirmações, CRM e o WhatsApp da clínica.",
+  },
+] as const;
+
 // O médico continua sendo a conta padrão da demonstração
 export const DEMO_EMAIL = CONTAS_DEMO[0].email;
 export const DEMO_USER_ID = CONTAS_DEMO[0].profile.id;
@@ -240,10 +282,39 @@ export function demoNomeMedico(id: string): string {
 }
 
 // Monta uma data relativa a hoje (offset de dias + hora)
+/**
+ * Horário fictício ancorado em Brasília.
+ *
+ * `setHours` usava o fuso do servidor, e a Vercel roda em UTC: a agenda
+ * de demonstração abria às 5h30 em produção. Como o Brasil não tem mais
+ * horário de verão desde 2019, somar três horas basta para converter a
+ * hora de parede brasileira em instante UTC — e `Date.UTC` cuida da
+ * virada de dia quando a conta passa da meia-noite.
+ */
 function em(diasOffset: number, hora: number, minuto = 0): string {
-  const d = new Date();
-  d.setDate(d.getDate() + diasOffset);
-  d.setHours(hora, minuto, 0, 0);
+  const agoraEmBrasilia = new Date(Date.now() - 3 * 3600_000);
+  return new Date(
+    Date.UTC(
+      agoraEmBrasilia.getUTCFullYear(),
+      agoraEmBrasilia.getUTCMonth(),
+      agoraEmBrasilia.getUTCDate() + diasOffset,
+      hora + 3,
+      minuto
+    )
+  ).toISOString();
+}
+
+/**
+ * Consulta daqui a N minutos, arredondada para o quarto de hora.
+ *
+ * O dia de hoje anda junto com o relógio de propósito. Com horário fixo,
+ * quem abrisse a demonstração às sete da noite encontraria "agenda
+ * livre" e nenhuma próxima consulta — justamente a tela que não vende.
+ * Sendo um instante absoluto, também aparece certo em qualquer fuso.
+ */
+function daquiA(minutos: number): string {
+  const d = new Date(Date.now() + minutos * 60_000);
+  d.setMinutes(Math.round(d.getMinutes() / 15) * 15, 0, 0);
   return d.toISOString();
 }
 
@@ -267,11 +338,11 @@ export function demoConsultas(): Consulta[] {
 
   return [
     // Hoje
-    base({ id: "d1", paciente_nome: "Ana Ribeiro", paciente_telefone: "(11) 99111-2233", paciente_email: "ana.ribeiro@email.com", paciente_nascimento: "1990-04-12", convenio: "Unimed", data_hora: em(0, 8, 30), duracao_min: 40, tipo: "primeira", status: "confirmada", motivo: "Avaliação de manchas na pele", valor: 350 }),
-    base({ id: "d2", paciente_nome: "Carlos Menezes", paciente_telefone: "(11) 99222-3344", paciente_email: "carlos.m@email.com", paciente_nascimento: "1978-11-03", convenio: "Bradesco Saúde", data_hora: em(0, 9, 15), tipo: "retorno", status: "confirmada", motivo: "Retorno pós-tratamento", observacao: "Trazer exames anteriores.", valor: 0 }),
-    base({ id: "d3", paciente_nome: "Juliana Faria", paciente_nascimento: "1995-07-21", data_hora: em(0, 10, 0), duracao_min: 20, tipo: "teleconsulta", status: "pendente", motivo: "Orientação sobre rotina de skincare", valor: 250 }),
-    base({ id: "d4", paciente_nome: "Marcos Lima", paciente_telefone: "(11) 99333-4455", convenio: "SulAmérica", data_hora: em(0, 11, 0), tipo: "retorno", status: "confirmada", valor: 0 }),
-    base({ id: "d5", paciente_nome: "Beatriz Souza", paciente_telefone: "(11) 99444-5566", paciente_email: "bia.souza@email.com", paciente_nascimento: "1985-01-30", data_hora: em(0, 14, 30), duracao_min: 45, tipo: "primeira", status: "realizada", motivo: "Lesão suspeita no braço", observacao: "Encaminhada para biópsia.", valor: 350 }),
+    base({ id: "d1", paciente_nome: "Ana Ribeiro", paciente_telefone: "(11) 99111-2233", paciente_email: "ana.ribeiro@email.com", paciente_nascimento: "1990-04-12", convenio: "Unimed", data_hora: daquiA(45), duracao_min: 40, tipo: "primeira", status: "confirmada", motivo: "Avaliação de manchas na pele", valor: 350 }),
+    base({ id: "d2", paciente_nome: "Carlos Menezes", paciente_telefone: "(11) 99222-3344", paciente_email: "carlos.m@email.com", paciente_nascimento: "1978-11-03", convenio: "Bradesco Saúde", data_hora: daquiA(90), tipo: "retorno", status: "confirmada", motivo: "Retorno pós-tratamento", observacao: "Trazer exames anteriores.", valor: 0 }),
+    base({ id: "d3", paciente_nome: "Juliana Faria", paciente_nascimento: "1995-07-21", data_hora: daquiA(165), duracao_min: 20, tipo: "teleconsulta", status: "pendente", motivo: "Orientação sobre rotina de skincare", valor: 250 }),
+    base({ id: "d4", paciente_nome: "Marcos Lima", paciente_telefone: "(11) 99333-4455", convenio: "SulAmérica", data_hora: daquiA(240), tipo: "retorno", status: "confirmada", valor: 0 }),
+    base({ id: "d5", paciente_nome: "Beatriz Souza", paciente_telefone: "(11) 99444-5566", paciente_email: "bia.souza@email.com", paciente_nascimento: "1985-01-30", data_hora: daquiA(-105), duracao_min: 45, tipo: "primeira", status: "realizada", motivo: "Lesão suspeita no braço", observacao: "Encaminhada para biópsia.", valor: 350 }),
     // Amanhã
     base({ id: "d6", paciente_nome: "Rafael Costa", paciente_telefone: "(11) 99555-6677", paciente_nascimento: "2000-09-09", data_hora: em(1, 9, 0), tipo: "primeira", status: "pendente", motivo: "Acne persistente", valor: 350 }),
     base({ id: "d7", paciente_nome: "Patrícia Gomes", convenio: "Amil", data_hora: em(1, 10, 30), tipo: "retorno", status: "confirmada", valor: 0 }),
@@ -286,7 +357,7 @@ export function demoConsultas(): Consulta[] {
     base({ id: "d14", paciente_nome: "Bruno Almeida", paciente_telefone: "(11) 99000-1122", data_hora: em(-1, 14, 0), tipo: "primeira", status: "realizada", motivo: "Dermatite", valor: 350 }),
 
     // Segundo médico da mesma clínica — dá o que filtrar por profissional
-    base({ id: "d15", organization_id: DEMO_ORG_ID, medico_id: "med-vd-2", paciente_nome: "Camila Nogueira", paciente_telefone: "(11) 98111-2020", data_hora: em(0, 9, 0), tipo: "primeira", status: "confirmada", motivo: "Melasma", valor: 400 }),
+    base({ id: "d15", organization_id: DEMO_ORG_ID, medico_id: "med-vd-2", paciente_nome: "Camila Nogueira", paciente_telefone: "(11) 98111-2020", data_hora: daquiA(75), tipo: "primeira", status: "confirmada", motivo: "Melasma", valor: 400 }),
     base({ id: "d16", organization_id: DEMO_ORG_ID, medico_id: "med-vd-2", paciente_nome: "Rodrigo Salles", data_hora: em(1, 14, 0), tipo: "retorno", status: "pendente", valor: 0 }),
     base({ id: "d17", organization_id: DEMO_ORG_ID, medico_id: "med-vd-2", paciente_nome: "Tatiana Reis", paciente_telefone: "(11) 98222-3030", data_hora: em(2, 16, 30), tipo: "primeira", status: "confirmada", motivo: "Preenchimento facial", valor: 1200 }),
 
