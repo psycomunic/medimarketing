@@ -6,8 +6,8 @@ import { site } from "@/lib/site";
 import { whatsappLink, cn } from "@/lib/utils";
 
 /**
- * Planos — três níveis. Os valores em lib/conteudo.ts são placeholders
- * (TODO comercial) e devem ser preenchidos antes de publicar.
+ * Planos — três níveis. Os valores vêm de lib/conteudo.ts; o Full é o
+ * único sem preço fixo, porque o escopo muda de clínica para clínica.
  */
 export function Planos() {
   return (

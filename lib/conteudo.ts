@@ -461,14 +461,17 @@ export const diferenciais = [
 ] as const;
 
 /* ------------------------------------------------------------------ */
-/* Planos — TODO: confirmar valores e itens comerciais                 */
+/* Planos                                                              */
+/*                                                                     */
+/* Os valores acompanham os padrões da proposta comercial (ver         */
+/* components/app/admin/propostas-painel.tsx). Mexeu aqui, confira lá. */
 /* ------------------------------------------------------------------ */
 export const planos = [
   {
     id: "essencial",
     nome: "Essencial",
     resumo: "Para organizar a casa e começar a atrair paciente.",
-    preco: "R$ 0.000", // TODO: valor real
+    preco: "R$ 1.497",
     periodo: "/mês",
     destaque: false,
     itens: [
@@ -485,7 +488,7 @@ export const planos = [
     id: "performance",
     nome: "Performance",
     resumo: "O método completo: aquisição, atendimento e retenção.",
-    preco: "R$ 0.000", // TODO: valor real
+    preco: "R$ 1.997",
     periodo: "/mês",
     destaque: true,
     itens: [
