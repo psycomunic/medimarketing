@@ -187,10 +187,12 @@ export const porQueNos = [
  * o olho não separa "Google Ads" de "Relatório mensal", e é justamente
  * a diferença entre os planos que o cliente está tentando enxergar.
  *
- * `nota` é a condição de investimento que não cabe no número: o Full
- * é parceria, e o combinado com a clínica soma mensalidade e um
- * percentual sobre o crescimento. Aparece embaixo do preço, que é onde
- * a pergunta "quanto custa" está sendo feita.
+ * O Full não se cobra por mês: é parceria, e o preço é um percentual
+ * sobre o quanto o faturamento crescer. `precoTexto` guarda o que
+ * entra no lugar do número quando a proposta não fixa mensalidade, e
+ * `nota` explica a condição logo abaixo, que é onde a pergunta
+ * "quanto custa" está sendo feita. Um valor gravado na proposta
+ * continua tendo preferência sobre os dois.
  */
 export const planosProposta = [
   {
@@ -206,6 +208,7 @@ export const planosProposta = [
       { icone: "BarChart3", texto: "Relatório mensal de resultado" },
       { icone: "MessageCircle", texto: "Suporte por WhatsApp" },
     ],
+    precoTexto: null,
     nota: null,
   },
   {
@@ -221,6 +224,7 @@ export const planosProposta = [
       { icone: "Users", texto: "Reunião mensal de resultado" },
       { icone: "ScrollText", texto: "Scripts comerciais da sua especialidade" },
     ],
+    precoTexto: null,
     nota: null,
   },
   {
@@ -240,7 +244,8 @@ export const planosProposta = [
       { icone: "LineChart", texto: "BI avançado e metas por período" },
       { icone: "HeartHandshake", texto: "Mentoria e acompanhamento semanal" },
     ],
-    nota: "Mensalidade + 5% sobre o aumento de faturamento",
+    precoTexto: "5%",
+    nota: "Sobre o quanto o faturamento crescer. Sem mensalidade.",
   },
 ] as const;
 

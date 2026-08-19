@@ -910,6 +910,12 @@ function Planos({ proposta: p }: { proposta: Proposta }) {
           const destaque = plano.id === p.plano_destaque;
           const valor = precos[plano.id];
 
+          /* O valor gravado na proposta manda; sem ele vale o modelo do
+             plano ("5%" no Full), e só então "Sob consulta". */
+          const preco =
+            valor !== null ? precoEmReais(valor) : plano.precoTexto ?? "Sob consulta";
+          const cobrado = valor !== null || plano.precoTexto !== null;
+
           return (
             <div
               key={plano.id}
@@ -1000,11 +1006,11 @@ function Planos({ proposta: p }: { proposta: Proposta }) {
                   <span
                     className={cn(
                       "font-heading font-bold leading-none",
-                      valor === null ? "text-3xl" : "text-[2.4rem]",
+                      cobrado ? "text-[2.4rem]" : "text-3xl",
                       destaque ? "text-teal-claro" : "text-azul-medico"
                     )}
                   >
-                    {precoEmReais(valor)}
+                    {preco}
                   </span>
                   {valor !== null && (
                     <span
