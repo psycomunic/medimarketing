@@ -953,7 +953,7 @@ function Planos({ proposta: p }: { proposta: Proposta }) {
 
               <ul
                 className={cn(
-                  "mt-5 grid flex-1 gap-3 border-t pt-5",
+                  "mt-5 grid flex-1 content-start gap-3 border-t pt-5",
                   destaque ? "border-white/15" : "border-border"
                 )}
               >
@@ -1023,9 +1023,10 @@ function Planos({ proposta: p }: { proposta: Proposta }) {
                     destaque ? "text-white/45" : "text-cinza-suave"
                   )}
                 >
-                  {valor === null
-                    ? "Escopo desenhado caso a caso"
-                    : "Plataforma inclusa, sem custo à parte"}
+                  {plano.nota ??
+                    (valor === null
+                      ? "Escopo desenhado caso a caso"
+                      : "Plataforma inclusa, sem custo à parte")}
                 </p>
               </div>
             </div>

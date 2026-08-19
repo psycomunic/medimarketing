@@ -186,6 +186,11 @@ export const porQueNos = [
  * Cada item carrega o próprio ícone. Numa lista de seis checks iguais
  * o olho não separa "Google Ads" de "Relatório mensal", e é justamente
  * a diferença entre os planos que o cliente está tentando enxergar.
+ *
+ * `nota` é a condição de investimento que não cabe no número: o Full
+ * é parceria, e o combinado com a clínica soma mensalidade e um
+ * percentual sobre o crescimento. Aparece embaixo do preço, que é onde
+ * a pergunta "quanto custa" está sendo feita.
  */
 export const planosProposta = [
   {
@@ -201,6 +206,7 @@ export const planosProposta = [
       { icone: "BarChart3", texto: "Relatório mensal de resultado" },
       { icone: "MessageCircle", texto: "Suporte por WhatsApp" },
     ],
+    nota: null,
   },
   {
     id: "performance" as const,
@@ -215,6 +221,7 @@ export const planosProposta = [
       { icone: "Users", texto: "Reunião mensal de resultado" },
       { icone: "ScrollText", texto: "Scripts comerciais da sua especialidade" },
     ],
+    nota: null,
   },
   {
     id: "full" as const,
@@ -223,12 +230,17 @@ export const planosProposta = [
     para: "Para clínicas com meta agressiva",
     itens: [
       { icone: "Layers", texto: "Tudo do Performance" },
+      { icone: "Globe", texto: "Site completo da clínica, além da landing page" },
+      { icone: "PenLine", texto: "Assessoria de conteúdo para as redes" },
+      { icone: "MapPin", texto: "Google Meu Negócio otimizado e gerenciado" },
+      { icone: "Bot", texto: "Presença nas buscas com IA, como o ChatGPT" },
+      { icone: "GraduationCap", texto: "Treinamento de vendas para a equipe" },
       { icone: "Target", texto: "Estruturação comercial da clínica" },
       { icone: "Headset", texto: "Recepção remota e SDR dedicado" },
-      { icone: "HeartHandshake", texto: "Mentoria com o time de gestão" },
       { icone: "LineChart", texto: "BI avançado e metas por período" },
-      { icone: "CalendarDays", texto: "Acompanhamento semanal" },
+      { icone: "HeartHandshake", texto: "Mentoria e acompanhamento semanal" },
     ],
+    nota: "Mensalidade + 5% sobre o aumento de faturamento",
   },
 ] as const;
 
