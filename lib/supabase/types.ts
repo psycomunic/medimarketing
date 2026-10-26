@@ -744,11 +744,37 @@ export interface Database {
         Omit<NotificacaoLeitura, "lida_em"> & { lida_em?: string },
         Partial<NotificacaoLeitura>
       >;
+      formularios_modelos: Tabela<
+        FormularioModelo,
+        Omit<FormularioModelo, "id" | "created_at"> & { id?: string },
+        Partial<FormularioModelo>
+      >;
+      formularios_respostas: Tabela<
+        FormularioResposta,
+        Pick<FormularioResposta, "modelo_id" | "organization_id"> &
+          Partial<FormularioResposta>,
+        Partial<FormularioResposta>
+      >;
+      formularios_notas: Tabela<
+        FormularioNota,
+        Pick<FormularioNota, "resposta_id" | "texto"> & Partial<FormularioNota>,
+        Partial<FormularioNota>
+      >;
+      formularios_eventos: Tabela<
+        FormularioEvento,
+        Pick<FormularioEvento, "resposta_id" | "tipo"> & Partial<FormularioEvento>,
+        Partial<FormularioEvento>
+      >;
     };
     // Empty-key form (não use Record<string, never>: isso faria keyof = string
     // e todo nome de tabela casaria com a sobrecarga de "view", quebrando os tipos).
     Views: { [_ in never]: never };
-    Functions: { [_ in never]: never };
+    Functions: {
+      enviar_formulario: { Args: { p_id: string }; Returns: undefined };
+      reabrir_formulario: { Args: { p_id: string }; Returns: undefined };
+      marcar_formulario_revisado: { Args: { p_id: string }; Returns: undefined };
+      liberar_formulario: { Args: { p_org: string; p_slug: string }; Returns: string };
+    };
     Enums: { [_ in never]: never };
     CompositeTypes: { [_ in never]: never };
   };
@@ -787,5 +813,61 @@ export type Proposta = {
   vista_em: string | null;
   respondida_em: string | null;
   criado_por: string | null;
+  created_at: string;
+};
+
+/* ------------------------------------------------------------------ */
+/* Formulários (diagnóstico da clínica)                                */
+/* ------------------------------------------------------------------ */
+
+export type StatusFormulario = "rascunho" | "enviado" | "revisado";
+
+/** O conteúdo do formulário, versionado. O schema é o de lib/formularios/tipos. */
+export type FormularioModelo = {
+  id: string;
+  slug: string;
+  versao: number;
+  titulo: string;
+  descricao: string | null;
+  schema: import("@/lib/formularios/tipos").SchemaFormulario;
+  ativo: boolean;
+  created_at: string;
+};
+
+/** As respostas de uma clínica a uma versão do formulário. */
+export type FormularioResposta = {
+  id: string;
+  modelo_id: string;
+  organization_id: string;
+  status: StatusFormulario;
+  respondente_nome: string | null;
+  respondente_cargo: string | null;
+  data_referencia: string | null;
+  respostas: import("@/lib/formularios/tipos").Respostas;
+  progresso: number;
+  enviado_em: string | null;
+  revisado_em: string | null;
+  revisado_por: string | null;
+  atualizado_por: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/** Anotação interna da equipe. Nunca chega à clínica. */
+export type FormularioNota = {
+  id: string;
+  resposta_id: string;
+  autor_id: string | null;
+  texto: string;
+  created_at: string;
+};
+
+export type TipoEventoFormulario = "liberado" | "enviado" | "reaberto" | "revisado";
+
+export type FormularioEvento = {
+  id: string;
+  resposta_id: string;
+  autor_id: string | null;
+  tipo: TipoEventoFormulario;
   created_at: string;
 };

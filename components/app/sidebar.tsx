@@ -157,7 +157,7 @@ export function Sidebar({
   return (
     <>
       {/* Topbar mobile */}
-      <div className="sticky top-0 z-40 flex items-center justify-between border-b border-border bg-white px-4 py-3 lg:hidden">
+      <div className="sticky top-0 z-40 flex items-center justify-between border-b border-border bg-white px-4 py-3 lg:hidden print:hidden">
         {organizacao ? (
           <MarcaClinica nome={organizacao} logoUrl={logoUrl} href="/app" tamanho="sm" />
         ) : (
@@ -191,7 +191,7 @@ export function Sidebar({
       </div>
 
       {/* Sidebar desktop */}
-      <aside className="hidden w-64 shrink-0 border-r border-border bg-white lg:block">
+      <aside className="hidden w-64 shrink-0 border-r border-border bg-white lg:block print:hidden">
         <div className="sticky top-0 h-screen">{conteudo}</div>
       </aside>
 

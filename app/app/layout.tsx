@@ -22,7 +22,7 @@ export default async function AppLayout({
   ]);
 
   return (
-    <div className="flex min-h-screen flex-col bg-branco-clinico lg:flex-row">
+    <div className="flex min-h-screen flex-col bg-branco-clinico lg:flex-row print:bg-white">
       <Sidebar
         nome={profile.nome || "Usuário"}
         role={role}
@@ -34,7 +34,7 @@ export default async function AppLayout({
         {demo && (
           /* Um parágrafo só, e não três caixas flex: no celular cada
              trecho virava uma coluna e a frase quebrava no meio. */
-          <p className="bg-azul-medico px-4 py-2 text-center text-xs font-medium text-white">
+          <p className="bg-azul-medico px-4 py-2 text-center text-xs font-medium text-white print:hidden">
             <Info className="mr-1.5 inline size-4 align-text-bottom" />
             Você está no <strong>modo demonstração</strong>: dados fictícios,
             alterações não são salvas.
@@ -45,7 +45,11 @@ export default async function AppLayout({
         {demo && <div aria-hidden className="h-20" />}
       </main>
 
-      {demo && <BarraDemo papelAtual={role} />}
+      {demo && (
+        <div className="print:hidden">
+          <BarraDemo papelAtual={role} />
+        </div>
+      )}
     </div>
   );
 }

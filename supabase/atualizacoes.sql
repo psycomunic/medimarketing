@@ -500,3 +500,692 @@ create policy "propostas_admin" on public.propostas
 
 comment on table public.propostas is
   'Propostas comerciais com link público por token.';
+
+-- ====================================================================
+-- 2026-10-26 · Diagnóstico da clínica (formulários por schema)
+--
+-- O diagnóstico inicial deixa de ser um HTML que o cliente preenche e
+-- baixa: passa a viver no painel, salvo no banco, com a equipe lendo,
+-- anotando e marcando como revisado.
+--
+-- O formulário é um JSON em `formularios_modelos`. Formulário novo é
+-- linha nova aqui, não código novo. Cada resposta aponta para a versão
+-- exata do modelo, então publicar a versão 2 não muda a leitura do que
+-- já foi respondido na 1.
+--
+-- Quem responde pela clínica: gestor e médico (o médico é o dono na
+-- maior parte da carteira, os consultórios de um profissional só). A
+-- secretária não vê: são números de faturamento e margem.
+-- ====================================================================
+
+create or replace function public.responde_formularios()
+returns boolean
+language sql stable security definer set search_path = public as $$
+  select coalesce(public.meu_papel() in ('gestor', 'medico'), false);
+$$;
+
+create table if not exists public.formularios_modelos (
+  id          uuid primary key default gen_random_uuid(),
+  slug        text not null,
+  versao      integer not null default 1,
+  titulo      text not null,
+  descricao   text,
+  schema      jsonb not null,
+  ativo       boolean not null default true,
+  created_at  timestamptz not null default now(),
+  unique (slug, versao)
+);
+
+create table if not exists public.formularios_respostas (
+  id                uuid primary key default gen_random_uuid(),
+  modelo_id         uuid not null references public.formularios_modelos(id) on delete restrict,
+  organization_id   uuid not null references public.organizations(id) on delete cascade,
+  status            text not null default 'rascunho'
+                      check (status in ('rascunho', 'enviado', 'revisado')),
+  respondente_nome  text,
+  respondente_cargo text,
+  data_referencia   date,
+  respostas         jsonb not null default '{}'::jsonb,
+  progresso         smallint not null default 0 check (progresso between 0 and 100),
+  enviado_em        timestamptz,
+  revisado_em       timestamptz,
+  revisado_por      uuid references public.profiles(id) on delete set null,
+  atualizado_por    uuid references public.profiles(id) on delete set null,
+  created_at        timestamptz not null default now(),
+  updated_at        timestamptz not null default now(),
+  unique (organization_id, modelo_id)
+);
+
+create index if not exists formularios_respostas_status_idx
+  on public.formularios_respostas (status, updated_at desc);
+
+create table if not exists public.formularios_notas (
+  id           uuid primary key default gen_random_uuid(),
+  resposta_id  uuid not null references public.formularios_respostas(id) on delete cascade,
+  autor_id     uuid references public.profiles(id) on delete set null,
+  texto        text not null check (length(trim(texto)) > 0),
+  created_at   timestamptz not null default now()
+);
+
+create table if not exists public.formularios_eventos (
+  id           uuid primary key default gen_random_uuid(),
+  resposta_id  uuid not null references public.formularios_respostas(id) on delete cascade,
+  autor_id     uuid references public.profiles(id) on delete set null,
+  tipo         text not null check (tipo in ('liberado', 'enviado', 'reaberto', 'revisado')),
+  created_at   timestamptz not null default now()
+);
+
+create index if not exists formularios_notas_resposta_idx on public.formularios_notas (resposta_id);
+create index if not exists formularios_eventos_resposta_idx on public.formularios_eventos (resposta_id);
+
+-- --------------------------------------------------------------------
+-- Guarda das colunas de controle
+--
+-- A política de update libera a linha do rascunho inteira. Sem este
+-- gatilho, a clínica poderia chamar a API direto e se dar "revisado",
+-- trocar de modelo ou mudar a data de envio. A interface não oferece;
+-- a interface não é a fronteira.
+--
+-- As transições legítimas passam pelas funções abaixo, que ligam a
+-- chave `app.formulario_transicao` só dentro da própria transação.
+-- --------------------------------------------------------------------
+create or replace function public.formularios_respostas_guarda()
+returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  new.updated_at := now();
+
+  if public.is_super_admin()
+     or coalesce(current_setting('app.formulario_transicao', true), '') = 'on' then
+    return new;
+  end if;
+
+  if new.status          is distinct from old.status
+  or new.enviado_em      is distinct from old.enviado_em
+  or new.revisado_em     is distinct from old.revisado_em
+  or new.revisado_por    is distinct from old.revisado_por
+  or new.organization_id is distinct from old.organization_id
+  or new.modelo_id       is distinct from old.modelo_id
+  or new.created_at      is distinct from old.created_at then
+    raise exception 'Somente a equipe Medi Marketing altera o status do diagnóstico';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists formularios_respostas_guarda on public.formularios_respostas;
+create trigger formularios_respostas_guarda
+  before update on public.formularios_respostas
+  for each row execute function public.formularios_respostas_guarda();
+
+-- --------------------------------------------------------------------
+-- RLS
+-- --------------------------------------------------------------------
+alter table public.formularios_modelos   enable row level security;
+alter table public.formularios_respostas enable row level security;
+alter table public.formularios_notas     enable row level security;
+alter table public.formularios_eventos   enable row level security;
+
+-- Modelos: lê o ativo, ou a versão antiga em que a própria clínica respondeu
+drop policy if exists "formularios_modelos_select" on public.formularios_modelos;
+create policy "formularios_modelos_select" on public.formularios_modelos
+  for select to authenticated
+  using (
+    ativo
+    or public.is_super_admin()
+    or exists (
+      select 1 from public.formularios_respostas r
+      where r.modelo_id = formularios_modelos.id
+        and r.organization_id = public.minha_org()
+    )
+  );
+
+drop policy if exists "formularios_modelos_admin" on public.formularios_modelos;
+create policy "formularios_modelos_admin" on public.formularios_modelos
+  for all to authenticated
+  using (public.is_super_admin()) with check (public.is_super_admin());
+
+-- Respostas: a clínica lê as suas; só edita enquanto é rascunho
+drop policy if exists "formularios_respostas_select" on public.formularios_respostas;
+create policy "formularios_respostas_select" on public.formularios_respostas
+  for select to authenticated
+  using (
+    public.is_super_admin()
+    or (organization_id = public.minha_org() and public.responde_formularios())
+  );
+
+drop policy if exists "formularios_respostas_update" on public.formularios_respostas;
+create policy "formularios_respostas_update" on public.formularios_respostas
+  for update to authenticated
+  using (
+    organization_id = public.minha_org()
+    and public.responde_formularios()
+    and status = 'rascunho'
+  )
+  with check (
+    organization_id = public.minha_org()
+    and public.responde_formularios()
+    and status = 'rascunho'
+  );
+
+-- Criar, apagar e mudar status: só a equipe (direto ou pelas funções)
+drop policy if exists "formularios_respostas_admin" on public.formularios_respostas;
+create policy "formularios_respostas_admin" on public.formularios_respostas
+  for all to authenticated
+  using (public.is_super_admin()) with check (public.is_super_admin());
+
+-- Notas internas e histórico: só a equipe. A clínica não lê nenhum dos dois.
+drop policy if exists "formularios_notas_admin" on public.formularios_notas;
+create policy "formularios_notas_admin" on public.formularios_notas
+  for all to authenticated
+  using (public.is_super_admin()) with check (public.is_super_admin());
+
+drop policy if exists "formularios_eventos_admin" on public.formularios_eventos;
+create policy "formularios_eventos_admin" on public.formularios_eventos
+  for all to authenticated
+  using (public.is_super_admin()) with check (public.is_super_admin());
+
+-- --------------------------------------------------------------------
+-- Transições de status
+-- --------------------------------------------------------------------
+create or replace function public.enviar_formulario(p_id uuid)
+returns void
+language plpgsql security definer set search_path = public as $$
+declare
+  r public.formularios_respostas;
+begin
+  select * into r from public.formularios_respostas where id = p_id for update;
+  if not found then
+    raise exception 'Diagnóstico não encontrado';
+  end if;
+  if not (
+    public.is_super_admin()
+    or (r.organization_id = public.minha_org() and public.responde_formularios())
+  ) then
+    raise exception 'Sem permissão para enviar este diagnóstico';
+  end if;
+  if r.status <> 'rascunho' then
+    raise exception 'Este diagnóstico já foi enviado';
+  end if;
+
+  perform set_config('app.formulario_transicao', 'on', true);
+  update public.formularios_respostas
+     set status = 'enviado', enviado_em = now(), atualizado_por = auth.uid()
+   where id = p_id;
+  perform set_config('app.formulario_transicao', 'off', true);
+
+  insert into public.formularios_eventos (resposta_id, autor_id, tipo)
+  values (p_id, auth.uid(), 'enviado');
+end;
+$$;
+
+create or replace function public.reabrir_formulario(p_id uuid)
+returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not public.is_super_admin() then
+    raise exception 'Somente a equipe Medi Marketing reabre um diagnóstico';
+  end if;
+
+  update public.formularios_respostas
+     set status = 'rascunho', enviado_em = null, revisado_em = null, revisado_por = null
+   where id = p_id and status in ('enviado', 'revisado');
+  if not found then
+    raise exception 'Só um diagnóstico enviado pode ser reaberto';
+  end if;
+
+  insert into public.formularios_eventos (resposta_id, autor_id, tipo)
+  values (p_id, auth.uid(), 'reaberto');
+end;
+$$;
+
+create or replace function public.marcar_formulario_revisado(p_id uuid)
+returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not public.is_super_admin() then
+    raise exception 'Somente a equipe Medi Marketing revisa um diagnóstico';
+  end if;
+
+  update public.formularios_respostas
+     set status = 'revisado', revisado_em = now(), revisado_por = auth.uid()
+   where id = p_id and status = 'enviado';
+  if not found then
+    raise exception 'Só um diagnóstico enviado pode ser marcado como revisado';
+  end if;
+
+  insert into public.formularios_eventos (resposta_id, autor_id, tipo)
+  values (p_id, auth.uid(), 'revisado');
+end;
+$$;
+
+-- Libera o formulário para uma clínica. Se ela já tem um (de qualquer
+-- versão daquele slug), devolve o existente em vez de duplicar.
+create or replace function public.liberar_formulario(p_org uuid, p_slug text)
+returns uuid
+language plpgsql security definer set search_path = public as $$
+declare
+  v_modelo uuid;
+  v_id     uuid;
+begin
+  if not public.is_super_admin() then
+    raise exception 'Somente a equipe Medi Marketing libera formulários';
+  end if;
+
+  select r.id into v_id
+    from public.formularios_respostas r
+    join public.formularios_modelos m on m.id = r.modelo_id
+   where r.organization_id = p_org and m.slug = p_slug
+   limit 1;
+  if v_id is not null then
+    return v_id;
+  end if;
+
+  select id into v_modelo
+    from public.formularios_modelos
+   where slug = p_slug and ativo
+   order by versao desc
+   limit 1;
+  if v_modelo is null then
+    raise exception 'Modelo de formulário não encontrado';
+  end if;
+
+  insert into public.formularios_respostas (modelo_id, organization_id)
+  values (v_modelo, p_org)
+  returning id into v_id;
+
+  insert into public.formularios_eventos (resposta_id, autor_id, tipo)
+  values (v_id, auth.uid(), 'liberado');
+
+  return v_id;
+end;
+$$;
+
+revoke all on function public.enviar_formulario(uuid)             from public, anon;
+revoke all on function public.reabrir_formulario(uuid)            from public, anon;
+revoke all on function public.marcar_formulario_revisado(uuid)    from public, anon;
+revoke all on function public.liberar_formulario(uuid, text)      from public, anon;
+grant execute on function public.enviar_formulario(uuid)          to authenticated;
+grant execute on function public.reabrir_formulario(uuid)         to authenticated;
+grant execute on function public.marcar_formulario_revisado(uuid) to authenticated;
+grant execute on function public.liberar_formulario(uuid, text)   to authenticated;
+
+-- --------------------------------------------------------------------
+-- Storage: anexos do diagnóstico
+--
+-- Pasta por clínica e por resposta: {organization_id}/{resposta_id}/...
+-- Diferente do bucket "anexos" (pasta por usuário), aqui a equipe
+-- precisa ler o que a clínica mandou. A clínica só sobe e apaga
+-- enquanto o diagnóstico é rascunho.
+-- --------------------------------------------------------------------
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'diagnosticos', 'diagnosticos', false, 10485760,
+  array[
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-excel',
+    'text/csv',
+    'image/png',
+    'image/jpeg'
+  ]
+)
+on conflict (id) do update
+  set public = false,
+      file_size_limit = excluded.file_size_limit,
+      allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "diagnosticos_leitura" on storage.objects;
+create policy "diagnosticos_leitura" on storage.objects
+  for select to authenticated
+  using (
+    bucket_id = 'diagnosticos'
+    and (
+      public.is_super_admin()
+      or (
+        public.responde_formularios()
+        and (storage.foldername(name))[1] = public.minha_org()::text
+      )
+    )
+  );
+
+drop policy if exists "diagnosticos_envio" on storage.objects;
+create policy "diagnosticos_envio" on storage.objects
+  for insert to authenticated
+  with check (
+    bucket_id = 'diagnosticos'
+    and (
+      public.is_super_admin()
+      or (
+        public.responde_formularios()
+        and (storage.foldername(name))[1] = public.minha_org()::text
+        and exists (
+          select 1 from public.formularios_respostas r
+          where r.id::text = (storage.foldername(name))[2]
+            and r.organization_id = public.minha_org()
+            and r.status = 'rascunho'
+        )
+      )
+    )
+  );
+
+drop policy if exists "diagnosticos_remocao" on storage.objects;
+create policy "diagnosticos_remocao" on storage.objects
+  for delete to authenticated
+  using (
+    bucket_id = 'diagnosticos'
+    and (
+      public.is_super_admin()
+      or (
+        public.responde_formularios()
+        and (storage.foldername(name))[1] = public.minha_org()::text
+        and exists (
+          select 1 from public.formularios_respostas r
+          where r.id::text = (storage.foldername(name))[2]
+            and r.organization_id = public.minha_org()
+            and r.status = 'rascunho'
+        )
+      )
+    )
+  );
+
+comment on table public.formularios_modelos is
+  'Formulários gerados por schema JSON (lib/formularios/tipos.ts), versionados.';
+comment on table public.formularios_respostas is
+  'Respostas de uma clínica a uma versão de formulário. Rascunho editável pela clínica.';
+
+-- --------------------------------------------------------------------
+-- Seed: diagnóstico da clínica, versão 1
+-- Gerado por `npx tsx scripts/seed-formularios.mts` a partir de
+-- lib/formularios/diagnostico-clinica.ts. Não edite à mão.
+-- --------------------------------------------------------------------
+insert into public.formularios_modelos (slug, versao, titulo, descricao, schema, ativo)
+values (
+  'diagnostico-clinica', 1, 'Diagnóstico inicial',
+  'Estratégia para o crescimento da clínica',
+  $schema${
+  "intro": {
+    "eyebrow": "Estratégia para o crescimento da clínica",
+    "titulo": "Vamos entender o seu negócio.",
+    "destaque": "E planejar o próximo passo.",
+    "texto": "Este questionário nos ajuda a conhecer a operação da {clinica} e definir prioridades para aumentar o faturamento, considerando margem, capacidade de atendimento e experiência dos pacientes."
+  },
+  "aviso": "Use os três últimos meses completos. Indique “não medimos” quando não houver dados e “estimativa” para valores aproximados. Não inclua nomes ou dados pessoais de pacientes.",
+  "agradecimento": "Obrigado pelo preenchimento. As respostas vão orientar a definição de prioridades, metas e indicadores de acompanhamento junto à MediMarketing.",
+  "etapas": [
+    {
+      "id": "objetivos",
+      "rotulo": "Objetivos",
+      "titulo": "Objetivos e prioridades",
+      "campos": [
+        {
+          "tipo": "texto",
+          "id": "meta_faturamento",
+          "pergunta": "Qual é a meta de faturamento mensal e em quanto tempo desejam alcançá-la?",
+          "ajuda": "Informe também se a prioridade é aumentar faturamento, lucro, ocupação da agenda ou uma combinação desses objetivos."
+        },
+        {
+          "tipo": "texto",
+          "id": "principal_obstaculo",
+          "pergunta": "O que vocês consideram o principal obstáculo ao crescimento hoje?",
+          "ajuda": "Exemplos: poucos contatos, dificuldade para agendar, faltas, baixa adesão ao tratamento ou agenda cheia."
+        },
+        {
+          "tipo": "texto",
+          "id": "servicos_prioritarios",
+          "pergunta": "Quais serviços querem priorizar e por quê?",
+          "ajuda": "Considerem todos os serviços que estejam ativos."
+        },
+        {
+          "tipo": "texto",
+          "id": "aumento_procura",
+          "pergunta": "Se a procura aumentasse no próximo mês, o que precisaria mudar para atender bem?"
+        }
+      ]
+    },
+    {
+      "id": "servicos",
+      "rotulo": "Serviços",
+      "titulo": "Serviços e capacidade de atendimento",
+      "instrucao": "Preencha uma linha por serviço ativo. Se as técnicas fizerem parte de uma mesma sessão, registre o serviço cobrado, sem duplicar a receita. Adicione linhas se necessário.",
+      "campos": [
+        {
+          "tipo": "tabela",
+          "id": "servicos",
+          "rotulo": "Serviço",
+          "colunas": [
+            {
+              "id": "preco",
+              "titulo": "Preço praticado (R$)"
+            },
+            {
+              "id": "duracao",
+              "titulo": "Duração (minutos)"
+            },
+            {
+              "id": "vagas",
+              "titulo": "Vagas por semana (total / ocupadas)"
+            }
+          ],
+          "linhas": [
+            "Avaliação inicial",
+            "Quiropraxia",
+            "Fisioterapia",
+            "Pilates",
+            "Outros"
+          ],
+          "permite_linhas": true,
+          "rotulo_editavel": true,
+          "nota": "Em serviços recorrentes, como Pilates, informe se o valor corresponde à aula ou à mensalidade e se as vagas representam pessoas ou turmas."
+        },
+        {
+          "tipo": "texto",
+          "id": "primeira_consulta",
+          "pergunta": "Como funciona a primeira consulta de quem procura o serviço principal?",
+          "ajuda": "O que está incluído, quem atende e como a proposta é explicada antes do agendamento?"
+        },
+        {
+          "tipo": "texto",
+          "id": "margem_servicos",
+          "pergunta": "Quais serviços deixam maior margem para a clínica?",
+          "ajuda": "Se possível, informe os custos diretos ou repasses por serviço. Não é necessário calcular caso esse controle ainda não exista."
+        },
+        {
+          "tipo": "texto",
+          "id": "planos_pagamento",
+          "pergunta": "Há planos, pacotes, convênios ou parcelamento? Como funcionam?",
+          "ajuda": "Informe valores, descontos e formas de pagamento mais utilizadas."
+        },
+        {
+          "tipo": "texto",
+          "id": "vagas_espera",
+          "pergunta": "Quais horários e profissionais têm vagas? Qual é a espera para uma primeira consulta?"
+        },
+        {
+          "tipo": "texto",
+          "id": "clinica_ou_profissional",
+          "pergunta": "Os pacientes procuram a clínica ou um profissional específico?",
+          "ajuda": "Quando a agenda desse profissional está cheia, aceitam atendimento com outro membro da equipe?"
+        }
+      ]
+    },
+    {
+      "id": "captacao",
+      "rotulo": "Captação",
+      "titulo": "Do primeiro contato ao atendimento",
+      "campos": [
+        {
+          "tipo": "texto",
+          "id": "perfil_publico",
+          "pergunta": "Quem costuma procurar a clínica e de onde essas pessoas vêm?",
+          "ajuda": "Principais necessidades, faixa etária, bairros e cidades. Quais perfis a equipe está mais preparada para atender?"
+        },
+        {
+          "tipo": "texto",
+          "id": "canais_origem",
+          "pergunta": "De quais canais vêm os novos pacientes e como vocês registram essa origem?",
+          "ajuda": "Exemplos: indicação, Google, Instagram, anúncios, parceiros e outros."
+        },
+        {
+          "tipo": "texto",
+          "id": "tempo_resposta",
+          "pergunta": "Quem responde aos contatos e qual é o tempo médio de primeira resposta?",
+          "ajuda": "Informe como funciona durante o expediente, à noite e nos fins de semana."
+        },
+        {
+          "tipo": "texto",
+          "id": "motivos_nao_agendar",
+          "pergunta": "Quais são os motivos mais frequentes para um interessado não agendar?",
+          "ajuda": "Exemplos: preço, localização, falta de horário, dúvidas sobre o atendimento ou ausência de resposta."
+        },
+        {
+          "tipo": "texto",
+          "id": "acompanhamento_interessados",
+          "pergunta": "Como acompanham quem pediu informações e não agendou?",
+          "ajuda": "Existe responsável, prazo para novo contato e registro do resultado?"
+        },
+        {
+          "tipo": "texto",
+          "id": "confirmacao_cancelamento",
+          "pergunta": "Como funcionam a confirmação, os cancelamentos e os reagendamentos?",
+          "ajuda": "Há lista de espera ou outra forma de preencher horários liberados?"
+        },
+        {
+          "tipo": "texto",
+          "id": "foco_anuncios",
+          "pergunta": "Qual serviço é o foco dos anúncios atuais? Por quê?",
+          "ajuda": "O que já funcionou ou não funcionou? Os contatos procuram uma sessão pontual ou entendem a proposta de avaliação e tratamento?"
+        }
+      ]
+    },
+    {
+      "id": "continuidade",
+      "rotulo": "Continuidade",
+      "titulo": "Continuidade e experiência do paciente",
+      "nota_final": "A continuidade deve acompanhar a necessidade clínica e a orientação da equipe. Para este diagnóstico, alta adequada e abandono são situações diferentes.",
+      "campos": [
+        {
+          "tipo": "texto",
+          "id": "apresentacao_proposta",
+          "pergunta": "Quando há indicação de tratamento após a avaliação, como a proposta é apresentada?",
+          "ajuda": "Quem explica objetivos, frequência, valores e próximos passos? Quais são as dúvidas ou objeções mais comuns?"
+        },
+        {
+          "tipo": "texto",
+          "id": "adesao_tratamento",
+          "pergunta": "Quantos pacientes iniciam o tratamento indicado e quantos deixam de iniciar?",
+          "ajuda": "Use o mesmo período de referência. Se não houver números, descreva sua percepção e identifique como estimativa."
+        },
+        {
+          "tipo": "texto",
+          "id": "duracao_gasto_tratamento",
+          "pergunta": "Qual é a duração habitual e o gasto médio por tratamento em cada serviço?",
+          "ajuda": "Diferencie duração de cada atendimento, número de sessões realizadas e tempo total em semanas ou meses."
+        },
+        {
+          "tipo": "texto",
+          "id": "alta_interrupcao",
+          "pergunta": "Como diferenciam pacientes que receberam alta daqueles que interromperam o tratamento?",
+          "ajuda": "Quais motivos de interrupção são conhecidos? Como acompanham faltas e continuidade quando indicada pela equipe?"
+        },
+        {
+          "tipo": "texto",
+          "id": "servicos_recorrentes",
+          "pergunta": "Como funcionam os serviços recorrentes (ex.: Pilates, planos mensais) atualmente?",
+          "ajuda": "Informe alunos ou pacientes ativos, frequência semanal, mensalidade média, permanência média e motivos de saída. Se não houver, indique isso."
+        },
+        {
+          "tipo": "texto",
+          "id": "percepcao_pacientes",
+          "pergunta": "O que os pacientes mais valorizam e quais reclamações aparecem com frequência?",
+          "ajuda": "Como essas opiniões são coletadas? O que diferencia a {clinica} na percepção dos pacientes?"
+        }
+      ]
+    },
+    {
+      "id": "indicadores",
+      "rotulo": "Indicadores",
+      "titulo": "Números para orientar o planejamento",
+      "instrucao": "Preencha os três últimos meses completos. Considere pacientes únicos separadamente do número de sessões: uma pessoa atendida quatro vezes representa um paciente e quatro atendimentos.",
+      "campos": [
+        {
+          "tipo": "tabela_mensal",
+          "id": "indicadores",
+          "rotulo": "Indicador",
+          "meses": 3,
+          "linhas": [
+            {
+              "id": "faturamento_total",
+              "rotulo": "Faturamento total (R$)"
+            },
+            {
+              "por_tabela": "servicos",
+              "modelo": "Receita de {item} (R$)",
+              "ignorar": [
+                "Avaliação inicial"
+              ]
+            },
+            {
+              "id": "pacientes_unicos",
+              "rotulo": "Pacientes únicos atendidos"
+            },
+            {
+              "id": "novos_pacientes",
+              "rotulo": "Novos pacientes atendidos"
+            },
+            {
+              "id": "total_atendimentos",
+              "rotulo": "Total de atendimentos realizados"
+            },
+            {
+              "id": "ticket_medio",
+              "rotulo": "Ticket médio por atendimento (R$)"
+            },
+            {
+              "id": "gasto_medio_paciente",
+              "rotulo": "Gasto médio por paciente no mês (R$)"
+            },
+            {
+              "id": "novos_interessados",
+              "rotulo": "Novos interessados que entraram em contato"
+            },
+            {
+              "id": "consultas_agendadas",
+              "rotulo": "Primeiras consultas agendadas"
+            },
+            {
+              "id": "consultas_realizadas",
+              "rotulo": "Primeiras consultas realizadas"
+            },
+            {
+              "id": "investimento_anuncios",
+              "rotulo": "Investimento em anúncios (R$)"
+            }
+          ],
+          "nota": "Use o mesmo critério financeiro nos três meses e evite somar a mesma receita em mais de um serviço. Os contatos e agendamentos do mês podem se referir a pessoas de períodos diferentes."
+        },
+        {
+          "tipo": "texto",
+          "id": "fonte_dados",
+          "pergunta": "Os valores acima representam serviços vendidos, realizados ou dinheiro recebido?",
+          "ajuda": "Informe a fonte dos dados e sinalize estimativas. Se houver relatórios dos últimos seis meses, anexe aqui.",
+          "anexos": true
+        },
+        {
+          "tipo": "texto",
+          "id": "sistemas_planilhas",
+          "pergunta": "Quais sistemas ou planilhas usam para agenda, atendimento e financeiro?",
+          "ajuda": "Conseguem relacionar a origem do contato ao atendimento e à receita? Informe também quem pode esclarecer os dados e qualquer informação importante que tenha faltado."
+        }
+      ]
+    }
+  ]
+}$schema$::jsonb,
+  true
+)
+on conflict (slug, versao) do update
+  set titulo = excluded.titulo,
+      descricao = excluded.descricao,
+      schema = excluded.schema,
+      ativo = excluded.ativo;

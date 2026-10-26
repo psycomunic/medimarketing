@@ -24,6 +24,8 @@ import {
   FileSignature,
   MessageSquareReply,
   UsersRound,
+  ClipboardList,
+  ClipboardCheck,
   type LucideIcon,
 } from "lucide-react";
 import type { Role } from "@/lib/supabase/types";
@@ -41,7 +43,9 @@ export type ModuloId =
   | "indicadores"
   | "financeiro"
   | "clinicas"
+  | "diagnostico"
   | "admin-propostas"
+  | "admin-diagnosticos"
   | "admin-usuarios"
   | "admin-academy"
   | "admin-comentarios"
@@ -189,6 +193,18 @@ export const MODULOS: readonly Modulo[] = [
       "Faturamento por procedimento, ticket médio e valor do paciente ao longo do tempo.",
   },
   {
+    id: "diagnostico",
+    label: "Diagnóstico",
+    href: "/app/diagnostico",
+    icone: ClipboardList,
+    // Quem responde pela clínica. A secretária fica de fora: o
+    // questionário pede faturamento, margem e metas.
+    papeis: ["gestor", "medico"],
+    fase: 1,
+    grupo: "crescimento",
+    resumo: "Questionário inicial que orienta metas, prioridades e indicadores.",
+  },
+  {
     id: "clinicas",
     label: "Clientes",
     href: "/app/clinicas",
@@ -207,6 +223,16 @@ export const MODULOS: readonly Modulo[] = [
     fase: 1,
     grupo: "admin",
     resumo: "Gerar link de proposta com a marca e o preço do cliente.",
+  },
+  {
+    id: "admin-diagnosticos",
+    label: "Diagnósticos",
+    href: "/app/admin/diagnosticos",
+    icone: ClipboardCheck,
+    papeis: ["super_admin"],
+    fase: 1,
+    grupo: "admin",
+    resumo: "Liberar o diagnóstico para cada clínica, ler, anotar e revisar.",
   },
   {
     id: "admin-usuarios",
