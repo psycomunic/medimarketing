@@ -1243,3 +1243,77 @@ begin
   return new;
 end;
 $$;
+
+-- ====================================================================
+-- 2026-10-27 (2) · Evolução do cliente a partir do diagnóstico
+--
+-- Os números da Etapa 05 do diagnóstico viram os primeiros meses de
+-- `indicadores_mensais` (depois de a equipe revisar) e o marco zero do
+-- acompanhamento. Daqui em diante, cada mês lançado é comparado com
+-- esse ponto de partida e com a meta combinada.
+-- ====================================================================
+
+-- Indicadores que o diagnóstico traz e a tabela ainda não tinha.
+-- Nulo = não informado (diferente de zero).
+alter table public.indicadores_mensais
+  add column if not exists pacientes_unicos      integer,
+  add column if not exists novos_pacientes       integer,
+  add column if not exists atendimentos          integer,
+  add column if not exists ticket_medio          numeric(12,2),
+  add column if not exists gasto_medio_paciente  numeric(12,2),
+  -- {"Quiropraxia": 31000, "Pilates": 8000}
+  add column if not exists receitas_servico      jsonb not null default '{}'::jsonb,
+  -- De onde o número veio: lançado à mão, importado do diagnóstico,
+  -- trazido por integração ou pelo check-in mensal
+  add column if not exists origem                text not null default 'manual',
+  -- Campos que a clínica informou como aproximados, e os que ela não mede
+  add column if not exists campos_estimados      text[] not null default '{}',
+  add column if not exists campos_sem_dado       text[] not null default '{}';
+
+alter table public.indicadores_mensais drop constraint if exists indicadores_mensais_origem_check;
+alter table public.indicadores_mensais add constraint indicadores_mensais_origem_check
+  check (origem in ('manual', 'diagnostico', 'integracao', 'checkin'));
+
+-- --------------------------------------------------------------------
+-- Plano do cliente: marco zero, metas e o resumo do diagnóstico
+--
+-- Um por clínica. O marco zero não é uma cópia dos números: é o
+-- intervalo de meses que serve de base, para que uma correção feita
+-- depois em `indicadores_mensais` apareça também na comparação.
+-- --------------------------------------------------------------------
+create table if not exists public.planos_cliente (
+  organization_id    uuid primary key references public.organizations(id) on delete cascade,
+  resposta_id        uuid references public.formularios_respostas(id) on delete set null,
+  base_inicio        date,
+  base_fim           date,
+  meta_faturamento   numeric(12,2),
+  meta_leads         integer,
+  meta_consultas     integer,
+  prazo              date,
+  criterio_financeiro text,
+  prioridades        text,
+  obstaculo          text,
+  observacoes        text,
+  importado_em       timestamptz,
+  atualizado_em      timestamptz not null default now(),
+  atualizado_por     uuid references public.profiles(id) on delete set null
+);
+
+alter table public.planos_cliente enable row level security;
+
+-- Metas e faturamento: quem responde pela clínica e a equipe.
+drop policy if exists "planos_cliente_select" on public.planos_cliente;
+create policy "planos_cliente_select" on public.planos_cliente
+  for select to authenticated
+  using (
+    public.is_super_admin()
+    or (organization_id = public.minha_org() and public.responde_formularios())
+  );
+
+drop policy if exists "planos_cliente_admin" on public.planos_cliente;
+create policy "planos_cliente_admin" on public.planos_cliente
+  for all to authenticated
+  using (public.is_super_admin()) with check (public.is_super_admin());
+
+comment on table public.planos_cliente is
+  'Marco zero (meses de base), metas e resumo do diagnóstico de cada clínica.';

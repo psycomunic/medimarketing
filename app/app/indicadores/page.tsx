@@ -14,6 +14,8 @@ import { GraficoFunil, GraficoRetorno } from "@/components/app/indicadores/grafi
 import { FormLancamento } from "@/components/app/indicadores/form-lancamento";
 import { exigirModulo } from "@/lib/acesso";
 import { getIndicadores } from "@/lib/supabase/indicadores";
+import { getPlano } from "@/lib/supabase/evolucao";
+import { PainelEvolucao } from "@/components/app/evolucao/painel-evolucao";
 import {
   calcularKpis,
   etapasDoMetodo,
@@ -55,7 +57,13 @@ function Variacao({ valor, inverter }: { valor: number; inverter?: boolean }) {
 
 export default async function IndicadoresPage() {
   const { organizacao, role } = await exigirModulo("indicadores");
-  const meses = await getIndicadores(organizacao?.id ?? null, 12);
+  // 36 meses para o marco zero continuar no gráfico depois de um ano;
+  // os cartões e gráficos de sempre olham só os 12 últimos
+  const [historico, plano] = await Promise.all([
+    getIndicadores(organizacao?.id ?? null, 36),
+    getPlano(organizacao?.id ?? null),
+  ]);
+  const meses = historico.slice(-12);
 
   const podeLancar = role === "gestor" || role === "super_admin";
 
@@ -205,6 +213,8 @@ export default async function IndicadoresPage() {
           <FormLancamento organizationId={organizacao.id} historico={meses} />
         )}
       </header>
+
+      <PainelEvolucao meses={historico} plano={plano} />
 
       {/* Cartões do mês */}
       <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

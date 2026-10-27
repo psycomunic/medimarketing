@@ -100,6 +100,22 @@ export default async function DiagnosticoAdminPage({
             <div className="mt-4">
               <AcoesStatus id={resposta.id} status={resposta.status} demo={demo} />
             </div>
+            {resposta.status !== "rascunho" && (
+              <div className="mt-3 grid gap-2 border-t border-border pt-3">
+                <Link
+                  href={`/app/admin/diagnosticos/${resposta.id}/importar`}
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-coral px-6 text-sm font-semibold text-white shadow-cta hover:bg-[#ff5252]"
+                >
+                  Levar para o painel
+                </Link>
+                <Link
+                  href={`/app/clinicas/${resposta.organization_id}`}
+                  className="text-center text-sm font-medium text-teal hover:underline"
+                >
+                  Ver evolução da clínica
+                </Link>
+              </div>
+            )}
           </section>
 
           <section className="rounded-lg border border-border bg-white p-5 shadow-soft">

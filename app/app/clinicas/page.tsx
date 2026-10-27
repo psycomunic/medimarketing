@@ -162,9 +162,12 @@ export default async function ClinicasPage() {
                             )}
                           />
                           <div className="min-w-0">
-                            <p className="truncate font-semibold text-azul-medico">
+                            <Link
+                              href={`/app/clinicas/${c.id}`}
+                              className="block truncate font-semibold text-azul-medico hover:text-teal hover:underline"
+                            >
                               {c.nome}
-                            </p>
+                            </Link>
                             <p className="truncate text-xs text-cinza-suave">
                               {[c.especialidade, c.cidade]
                                 .filter(Boolean)
@@ -226,7 +229,7 @@ export default async function ClinicasPage() {
                             c.ativo ? "text-sucesso" : "text-cinza-suave/50",
                           )}
                         />
-                        <span className="truncate">{c.nome}</span>
+                        <Link href={`/app/clinicas/${c.id}`} className="truncate hover:text-teal hover:underline">{c.nome}</Link>
                       </p>
                       <p className="mt-0.5 text-xs text-cinza-suave">
                         {[c.especialidade, c.cidade]

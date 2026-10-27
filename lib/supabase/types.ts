@@ -551,6 +551,44 @@ export type IndicadorMensal = {
   faturamento: number;
   observacao: string | null;
   atualizado_em: string;
+  /*
+   * Detalhes que o diagnóstico e o check-in mensal trazem. Opcionais:
+   * lançamentos antigos e manuais não têm, e nulo é "não informado".
+   */
+  pacientes_unicos?: number | null;
+  novos_pacientes?: number | null;
+  atendimentos?: number | null;
+  ticket_medio?: number | null;
+  gasto_medio_paciente?: number | null;
+  /** Receita do mês por serviço: {"Quiropraxia": 31000}. */
+  receitas_servico?: Record<string, number>;
+  origem?: OrigemIndicador;
+  /** Campos que a clínica informou como aproximados. */
+  campos_estimados?: string[];
+  /** Campos que a clínica não mede (gravados como zero). */
+  campos_sem_dado?: string[];
+};
+
+export type OrigemIndicador = "manual" | "diagnostico" | "integracao" | "checkin";
+
+/** Marco zero, metas e resumo do diagnóstico de uma clínica. */
+export type PlanoCliente = {
+  organization_id: string;
+  resposta_id: string | null;
+  /** Primeiro e último mês da base ("YYYY-MM-01"). */
+  base_inicio: string | null;
+  base_fim: string | null;
+  meta_faturamento: number | null;
+  meta_leads: number | null;
+  meta_consultas: number | null;
+  prazo: string | null;
+  criterio_financeiro: string | null;
+  prioridades: string | null;
+  obstaculo: string | null;
+  observacoes: string | null;
+  importado_em: string | null;
+  atualizado_em: string;
+  atualizado_por: string | null;
 };
 
 // Cada tabela precisa expor Relationships para o supabase-js inferir os tipos.
@@ -743,6 +781,11 @@ export interface Database {
         NotificacaoLeitura,
         Omit<NotificacaoLeitura, "lida_em"> & { lida_em?: string },
         Partial<NotificacaoLeitura>
+      >;
+      planos_cliente: Tabela<
+        PlanoCliente,
+        Pick<PlanoCliente, "organization_id"> & Partial<PlanoCliente>,
+        Partial<PlanoCliente>
       >;
       formularios_modelos: Tabela<
         FormularioModelo,
