@@ -1317,3 +1317,159 @@ create policy "planos_cliente_admin" on public.planos_cliente
 
 comment on table public.planos_cliente is
   'Marco zero (meses de base), metas e resumo do diagnóstico de cada clínica.';
+
+-- ====================================================================
+-- 2026-10-27 (3) · Check-in mensal
+--
+-- Formulários periódicos: a mesma clínica responde o check-in todo mês,
+-- então a resposta passa a ter um período de referência ("2026-10") e a
+-- unicidade vira (clínica, modelo, período). O diagnóstico continua com
+-- referência nula — uma resposta só por clínica, como antes.
+--
+-- `importado_em` registra quando a equipe levou as respostas ao painel.
+-- ====================================================================
+
+alter table public.formularios_respostas
+  add column if not exists referencia   text check (referencia ~ '^\d{4}-\d{2}$'),
+  add column if not exists importado_em timestamptz;
+
+alter table public.formularios_respostas
+  drop constraint if exists formularios_respostas_organization_id_modelo_id_key;
+
+create unique index if not exists formularios_respostas_periodo_idx
+  on public.formularios_respostas (organization_id, modelo_id, coalesce(referencia, ''));
+
+-- A referência também é coluna de controle: a clínica não troca o mês
+-- de um check-in pela API.
+create or replace function public.formularios_respostas_guarda()
+returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  new.updated_at := now();
+
+  if public.is_super_admin()
+     or coalesce(auth.role(), '') = 'service_role'
+     or coalesce(current_setting('app.formulario_transicao', true), '') = 'on' then
+    return new;
+  end if;
+
+  if new.status          is distinct from old.status
+  or new.enviado_em      is distinct from old.enviado_em
+  or new.revisado_em     is distinct from old.revisado_em
+  or new.revisado_por    is distinct from old.revisado_por
+  or new.organization_id is distinct from old.organization_id
+  or new.modelo_id       is distinct from old.modelo_id
+  or new.token           is distinct from old.token
+  or new.referencia      is distinct from old.referencia
+  or new.importado_em    is distinct from old.importado_em
+  or new.created_at      is distinct from old.created_at then
+    raise exception 'Somente a equipe Medi Marketing altera o status do diagnóstico';
+  end if;
+
+  return new;
+end;
+$$;
+
+-- Seed: check-in mensal, versão 1
+-- Gerado por `npx tsx scripts/seed-formularios.mts checkin-mensal`.
+insert into public.formularios_modelos (slug, versao, titulo, descricao, schema, ativo)
+values (
+  'checkin-mensal', 1, 'Check-in mensal',
+  'Os números do mês para acompanhar a evolução',
+  $schema${
+  "intro": {
+    "eyebrow": "Acompanhamento mensal",
+    "titulo": "Como foi o último mês?",
+    "destaque": "Leva poucos minutos.",
+    "texto": "Os números do mês alimentam o painel da {clinica} e mostram a evolução desde o diagnóstico. Use o mesmo critério dos meses anteriores e marque o que for estimativa."
+  },
+  "aviso": "Indique “não medimos” quando não houver dados e “estimativa” para valores aproximados. Não inclua nomes ou dados pessoais de pacientes.",
+  "agradecimento": "Obrigado! Os números vão para o painel depois da revisão da MediMarketing, e a evolução do mês aparece nos seus Indicadores.",
+  "etapas": [
+    {
+      "id": "numeros",
+      "rotulo": "Números",
+      "titulo": "Números do mês",
+      "instrucao": "Confira o mês no cabeçalho da tabela. Considere pacientes únicos separadamente do número de sessões.",
+      "campos": [
+        {
+          "tipo": "tabela_mensal",
+          "id": "indicadores",
+          "rotulo": "Indicador",
+          "meses": 1,
+          "linhas": [
+            {
+              "id": "faturamento_total",
+              "rotulo": "Faturamento total (R$)"
+            },
+            {
+              "id": "investimento_anuncios",
+              "rotulo": "Investimento em anúncios (R$)"
+            },
+            {
+              "id": "novos_interessados",
+              "rotulo": "Novos interessados que entraram em contato"
+            },
+            {
+              "id": "consultas_agendadas",
+              "rotulo": "Primeiras consultas agendadas"
+            },
+            {
+              "id": "consultas_realizadas",
+              "rotulo": "Primeiras consultas realizadas"
+            },
+            {
+              "id": "pacientes_unicos",
+              "rotulo": "Pacientes únicos atendidos"
+            },
+            {
+              "id": "novos_pacientes",
+              "rotulo": "Novos pacientes atendidos"
+            },
+            {
+              "id": "total_atendimentos",
+              "rotulo": "Total de atendimentos realizados"
+            },
+            {
+              "id": "ticket_medio",
+              "rotulo": "Ticket médio por atendimento (R$)"
+            },
+            {
+              "id": "gasto_medio_paciente",
+              "rotulo": "Gasto médio por paciente no mês (R$)"
+            }
+          ]
+        },
+        {
+          "tipo": "tabela",
+          "id": "receitas",
+          "rotulo": "Serviço",
+          "colunas": [
+            {
+              "id": "valor",
+              "titulo": "Receita no mês (R$)"
+            }
+          ],
+          "linhas": [],
+          "permite_linhas": true,
+          "rotulo_editavel": true,
+          "nota": "Evite somar a mesma receita em mais de um serviço."
+        },
+        {
+          "tipo": "texto",
+          "id": "destaques",
+          "pergunta": "O que mudou no mês?",
+          "ajuda": "Algo fora do comum: equipe, agenda, preço, uma campanha, feriados. Ajuda a ler os números."
+        }
+      ]
+    }
+  ]
+}$schema$::jsonb,
+  true
+)
+on conflict (slug, versao) do update
+  set titulo = excluded.titulo,
+      descricao = excluded.descricao,
+      schema = excluded.schema,
+      ativo = excluded.ativo;
+

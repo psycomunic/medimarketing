@@ -49,7 +49,8 @@ export function CapaFormulario({
         <div>
           <dt>Conteúdo</dt>
           <dd className="mt-0.5 text-sm font-semibold normal-case tracking-normal text-azul-medico">
-            {schema.etapas.length} etapas · {totalPerguntas(schema)} perguntas
+            {schema.etapas.length} {schema.etapas.length === 1 ? "etapa" : "etapas"} ·{" "}
+            {totalPerguntas(schema)} {totalPerguntas(schema) === 1 ? "pergunta" : "perguntas"}
           </dd>
         </div>
       </dl>

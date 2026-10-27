@@ -30,6 +30,8 @@ const schema = z.object({
     )
     .min(1, "Nenhum mês com data para importar.")
     .max(12),
+  /** Comentário da equipe sobre o mês (check-in). Vai para `observacao`. */
+  comentario: z.string().max(2000).optional(),
   plano: z.object({
     metaFaturamento: numero,
     metaLeads: numero,
@@ -39,7 +41,7 @@ const schema = z.object({
     prioridades: z.string().max(2000),
     obstaculo: z.string().max(2000),
     observacoes: z.string().max(4000),
-  }),
+  }).nullable(),
 });
 
 export type ImportacaoInput = z.input<typeof schema>;
@@ -63,11 +65,14 @@ export async function importarDiagnostico(input: ImportacaoInput): Promise<Resul
   const d = parsed.data;
   const { data: resposta } = await ctx.supabase
     .from("formularios_respostas")
-    .select("id,organization_id")
+    .select("id,organization_id,status,referencia")
     .eq("id", d.respostaId)
     .maybeSingle();
-  if (!resposta) return { ok: false, erro: "Diagnóstico não encontrado." };
+  if (!resposta) return { ok: false, erro: "Formulário não encontrado." };
   const org = resposta.organization_id;
+  // Check-in (tem mês de referência) só acrescenta o mês; o diagnóstico
+  // também define o marco zero e as metas
+  const checkin = !!resposta.referencia;
 
   const inteiro = (v: number | null | undefined) => (v == null ? null : Math.round(v));
   const so = (lista: string[]) => lista.filter((c) => (CAMPOS as string[]).includes(c));
@@ -89,10 +94,12 @@ export async function importarDiagnostico(input: ImportacaoInput): Promise<Resul
       ticket_medio: v.ticket_medio ?? null,
       gasto_medio_paciente: v.gasto_medio_paciente ?? null,
       receitas_servico: m.receitas,
-      origem: "diagnostico" as const,
+      origem: checkin ? ("checkin" as const) : ("diagnostico" as const),
       campos_estimados: so(m.estimados),
       campos_sem_dado: so(m.semDado),
-      observacao: "Informado pela clínica no diagnóstico inicial.",
+      observacao:
+        d.comentario?.trim() ||
+        (checkin ? "Informado pela clínica no check-in mensal." : "Informado pela clínica no diagnóstico inicial."),
       atualizado_em: new Date().toISOString(),
     };
   });
@@ -108,6 +115,23 @@ export async function importarDiagnostico(input: ImportacaoInput): Promise<Resul
         ? "O banco ainda não tem as colunas novas. Rode o bloco 2026-10-27 (2) de supabase/atualizacoes.sql."
         : "Não foi possível gravar os meses.",
     };
+  }
+
+  const agora = new Date().toISOString();
+  await ctx.supabase
+    .from("formularios_respostas")
+    .update({
+      importado_em: agora,
+      ...(resposta.status === "enviado"
+        ? { status: "revisado" as const, revisado_em: agora, revisado_por: ctx.profile.id }
+        : {}),
+    })
+    .eq("id", resposta.id);
+
+  if (checkin || !d.plano) {
+    revalidatePath("/app/indicadores");
+    revalidatePath(`/app/clinicas/${org}`);
+    return { ok: true, organizationId: org };
   }
 
   const meses = d.meses.map((m) => m.mes).sort();

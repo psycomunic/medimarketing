@@ -8,6 +8,7 @@ import { getIndicadores } from "@/lib/supabase/indicadores";
 import { getPlano } from "@/lib/supabase/evolucao";
 import { planoSugerido, propostaImportacao } from "@/lib/evolucao";
 import { ImportarDiagnostico } from "@/components/app/evolucao/importar";
+import { valorTexto } from "@/lib/formularios/tipos";
 
 export const metadata = { title: "Levar diagnóstico para o painel" };
 
@@ -56,6 +57,7 @@ export default async function ImportarPage({ params }: { params: { id: string } 
         </span>
         <div>
           <h1 className="text-2xl md:text-3xl">Levar para o painel · {d.clinica}</h1>
+          <p className="mt-1 text-sm font-medium text-teal">{modelo.titulo}</p>
           <p className="mt-1 max-w-2xl text-cinza-suave">
             Os números do diagnóstico viram os primeiros meses dos Indicadores da clínica e o marco
             zero do acompanhamento. Nada é gravado antes de você confirmar.
@@ -70,6 +72,8 @@ export default async function ImportarPage({ params }: { params: { id: string } 
         existentes={existentes}
         planoInicial={planoInicial}
         metaTexto={sugerido.metaTexto}
+        checkin={!!resposta.referencia}
+        comentarioInicial={valorTexto(resposta.respostas, "destaques")}
         demo={demo}
       />
     </div>

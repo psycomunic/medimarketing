@@ -10,9 +10,11 @@ import { calcularKpis, variacao, type Kpis } from "@/lib/indicadores";
 import { inteiro, lerValor, type ValorLido } from "@/lib/formularios/numeros";
 import {
   linhasMensais,
+  linhasTabela,
   valorMensal,
   valorTexto,
   type CampoMensal,
+  type CampoTabela,
   type Respostas,
   type SchemaFormulario,
 } from "@/lib/formularios/tipos";
@@ -76,6 +78,9 @@ export function propostaImportacao(
 
   const valor = valorMensal(respostas, campo);
   const linhas = linhasMensais(schema, respostas, campo);
+  const receitasTabela = schema.etapas
+    .flatMap((e) => e.campos)
+    .find((c): c is CampoTabela => c.tipo === "tabela" && c.id === "receitas");
 
   return valor.meses
     .map((mes, i) => {
@@ -93,6 +98,14 @@ export function propostaImportacao(
       for (const l of linhas) {
         const [tabela, ...nome] = l.chave.split(":");
         if (nome.length && tabela) receitas[nome.join(":")] = celula(l.chave, false);
+      }
+      // No check-in a receita por serviço vem numa tabela própria
+      // (serviço → valor), e vale para o único mês do formulário
+      if (receitasTabela && i === 0) {
+        for (const l of linhasTabela(respostas, receitasTabela)) {
+          const nome = l.rotulo.trim();
+          if (nome) receitas[nome] = { ...lerValor(l.valor ?? ""), texto: l.valor ?? "" };
+        }
       }
 
       return { mes: `${mes}-01`, campos, receitas };

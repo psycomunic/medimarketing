@@ -19,7 +19,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const f = await getFormularioPorToken(params.token);
   return {
-    title: f ? `Diagnóstico · ${f.clinica}` : "Diagnóstico",
+    title: f ? `${f.modelo.titulo} · ${f.clinica}` : "MediMarketing",
     // Respostas de faturamento e margem: nunca em busca
     robots: { index: false, follow: false },
   };
@@ -48,7 +48,7 @@ export default async function DiagnosticoLinkPage({
         <div className="mx-auto flex max-w-4xl items-center justify-between px-5 py-4 md:px-8">
           <Logo href="/" altura={30} />
           <span className="text-xs font-semibold uppercase tracking-[0.14em] text-azul-medico">
-            Diagnóstico inicial
+            {modelo.titulo}
           </span>
         </div>
       </header>
@@ -103,7 +103,9 @@ export default async function DiagnosticoLinkPage({
       </main>
 
       <footer className="mx-auto flex max-w-4xl flex-wrap justify-between gap-2 px-5 pb-10 text-xs text-cinza-suave md:px-8 print:hidden">
-        <span>{clinica} · Questionário de diagnóstico</span>
+        <span>
+          {clinica} · {modelo.titulo}
+        </span>
         <span>MediMarketing</span>
       </footer>
     </div>

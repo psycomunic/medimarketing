@@ -890,6 +890,10 @@ export type FormularioResposta = {
   progresso: number;
   /** Credencial do link público. Quem tem o link preenche sem conta. */
   token: string;
+  /** Período de formulários mensais ("2026-10"). Nulo no diagnóstico. */
+  referencia?: string | null;
+  /** Quando a equipe levou as respostas para o painel. */
+  importado_em?: string | null;
   enviado_em: string | null;
   revisado_em: string | null;
   revisado_por: string | null;

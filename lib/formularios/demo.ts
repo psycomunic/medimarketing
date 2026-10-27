@@ -65,6 +65,8 @@ function resposta(
     respostas,
     progresso: progresso(DIAGNOSTICO_CLINICA, respostas),
     token: `demo-${id}`,
+    referencia: null,
+    importado_em: null,
     enviado_em: status === "rascunho" ? null : atualizado,
     revisado_em: status === "revisado" ? atualizado : null,
     revisado_por: null,

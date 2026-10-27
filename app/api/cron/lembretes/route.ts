@@ -17,6 +17,7 @@ import {
 import { emailConfigurado, enviarEmail } from "@/lib/email";
 import { emailPacienteLembrete } from "@/lib/email-modelos";
 import { marcaDaClinica } from "@/lib/supabase/destinatarios";
+import { gerarCheckinsDoMes } from "@/lib/formularios/periodico";
 
 /**
  * ROTINA DE LEMBRETES — chamada pelo Vercel Cron (ver vercel.json).
@@ -214,9 +215,20 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // Check-in mensal: depois dos lembretes e isolado deles — uma falha
+  // aqui não pode impedir o paciente de receber a confirmação
+  let checkins: { criados: number; falhas: number } | { erro: string };
+  try {
+    checkins = await gerarCheckinsDoMes(admin);
+  } catch (e) {
+    console.error("[cron/checkin]", e instanceof Error ? e.message : e);
+    checkins = { erro: "falhou" };
+  }
+
   return NextResponse.json({
     ok: true,
     em: new Date().toISOString(),
+    checkins,
     canalAutomatico: mergeConfigurado()
       ? "merge (número da própria clínica)"
       : whatsappConfigurado()

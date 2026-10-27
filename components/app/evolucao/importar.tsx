@@ -40,6 +40,8 @@ export function ImportarDiagnostico({
   existentes,
   planoInicial,
   metaTexto,
+  checkin,
+  comentarioInicial,
   demo,
 }: {
   respostaId: string;
@@ -49,6 +51,9 @@ export function ImportarDiagnostico({
   existentes: Record<string, string>;
   planoInicial: Plano;
   metaTexto: string;
+  /** Check-in mensal: só os números do mês, sem marco zero nem metas. */
+  checkin: boolean;
+  comentarioInicial: string;
   demo: boolean;
 }) {
   const router = useRouter();
@@ -61,6 +66,7 @@ export function ImportarDiagnostico({
     return ini;
   });
   const [plano, setPlano] = useState<Plano>(planoInicial);
+  const [comentario, setComentario] = useState(comentarioInicial);
   const [erro, setErro] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -95,7 +101,8 @@ export function ImportarDiagnostico({
           }
           return { mes: m.mes, valores, estimados, semDado, receitas };
         }),
-        plano: {
+        comentario,
+        plano: checkin ? null : {
           metaFaturamento: num(plano.metaFaturamento),
           metaLeads: num(plano.metaLeads),
           metaConsultas: num(plano.metaConsultas),
@@ -154,7 +161,9 @@ export function ImportarDiagnostico({
   return (
     <div className="mt-8 grid gap-6">
       <section className="rounded-lg border border-border bg-white p-5 shadow-soft md:p-6">
-        <h2 className="text-lg font-semibold text-azul-medico">Números dos três meses</h2>
+        <h2 className="text-lg font-semibold text-azul-medico">
+          {checkin ? "Números do mês" : "Números dos três meses"}
+        </h2>
         <p className="mt-1 text-sm text-cinza-suave">
           Lidos do que a {clinica} escreveu. Confira cada valor: use “~” na frente para marcar
           estimativa e deixe vazio (ou “não medimos”) quando não houver dado.
@@ -198,6 +207,22 @@ export function ImportarDiagnostico({
         )}
       </section>
 
+      <section className="rounded-lg border border-border bg-white p-5 shadow-soft md:p-6">
+        <h2 className="text-lg font-semibold text-azul-medico">Comentário do mês</h2>
+        <p className="mt-1 text-sm text-cinza-suave">
+          Aparece para a clínica no relatório do mês. Parte do que ela contou sobre o período.
+        </p>
+        <Textarea
+          className="mt-3"
+          rows={3}
+          value={comentario}
+          onChange={(e) => setComentario(e.target.value)}
+          aria-label="Comentário do mês"
+          placeholder="O que explica os números deste mês?"
+        />
+      </section>
+
+      {!checkin && (
       <section className="rounded-lg border border-border bg-white p-5 shadow-soft md:p-6">
         <h2 className="text-lg font-semibold text-azul-medico">Marco zero e metas</h2>
         <p className="mt-1 text-sm text-cinza-suave">
@@ -247,6 +272,7 @@ export function ImportarDiagnostico({
           </div>
         </div>
       </section>
+      )}
 
       {erro && <p className="text-sm text-coral">{erro}</p>}
 

@@ -10,7 +10,16 @@ import { Button } from "@/components/ui/button";
  * Quem tem o link preenche sem conta — por isso ele aparece só aqui,
  * para a equipe, e o texto do WhatsApp já vem pronto para colar.
  */
-export function CopiarLink({ url, clinica }: { url: string; clinica: string }) {
+export function CopiarLink({
+  url,
+  clinica,
+  assunto = "o questionário de diagnóstico",
+}: {
+  url: string;
+  clinica: string;
+  /** Como o link é chamado na mensagem do WhatsApp. */
+  assunto?: string;
+}) {
   const [copiado, setCopiado] = useState(false);
 
   async function copiar() {
@@ -24,7 +33,7 @@ export function CopiarLink({ url, clinica }: { url: string; clinica: string }) {
   }
 
   const mensagem = encodeURIComponent(
-    `Olá! Segue o questionário de diagnóstico da ${clinica}. Dá para preencher pelo celular, aos poucos: as respostas ficam salvas automaticamente. ${url}`
+    `Olá! Segue ${assunto} da ${clinica}. Dá para preencher pelo celular, aos poucos: as respostas ficam salvas automaticamente. ${url}`
   );
 
   return (

@@ -11,8 +11,10 @@ import { StatusBadge } from "@/components/app/formularios/admin-lista";
 import { AcoesStatus, NovaNota } from "@/components/app/formularios/admin-acoes";
 import { CopiarLink } from "@/components/app/formularios/copiar-link";
 import { urlBase } from "@/lib/lembretes";
+import { caminhoPublico } from "@/lib/formularios/periodico";
 import { CapaFormulario } from "@/components/app/formularios/comum";
 import { formatarData, formatarDataHora } from "@/lib/formularios/formato";
+import { mesPorExtenso } from "@/lib/indicadores";
 
 export const metadata = { title: "Diagnóstico" };
 
@@ -47,6 +49,10 @@ export default async function DiagnosticoAdminPage({
         <header className="mt-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div className="min-w-0">
             <h1 className="text-2xl md:text-3xl">{d.clinica}</h1>
+            <p className="mt-1 text-sm font-medium text-teal">
+              {modelo.titulo}
+              {resposta.referencia && ` · ${mesPorExtenso(`${resposta.referencia}-01`)}`}
+            </p>
             <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-cinza-suave">
               <StatusBadge status={resposta.status} />
               <span>{resposta.progresso}% preenchido</span>
@@ -123,7 +129,11 @@ export default async function DiagnosticoAdminPage({
               Link para a clínica
             </h2>
             <div className="mt-3">
-              <CopiarLink url={`${urlBase()}/diagnostico/${resposta.token}`} clinica={d.clinica} />
+              <CopiarLink
+                url={`${urlBase()}${caminhoPublico(resposta)}`}
+                clinica={d.clinica}
+                assunto={resposta.referencia ? "o check-in do mês" : undefined}
+              />
             </div>
           </section>
 

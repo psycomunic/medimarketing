@@ -61,15 +61,18 @@ export async function getMeuFormulario(
 export type LinhaListaFormulario = FormularioResposta & {
   clinica: string;
   modelo_titulo: string;
+  modelo_slug: string;
 };
 
 /** Todas as respostas, para a equipe. */
-export async function getFormulariosAdmin(): Promise<LinhaListaFormulario[]> {
+export async function getFormulariosAdmin(slug?: string): Promise<LinhaListaFormulario[]> {
   if (await emModoDemo()) {
+    if (slug && slug !== DEMO_MODELO.slug) return [];
     return demoRespostas().map((r) => ({
       ...r,
       clinica: DEMO_ORGANIZACOES.find((o) => o.id === r.organization_id)?.nome ?? "Clínica",
       modelo_titulo: DEMO_MODELO.titulo,
+      modelo_slug: DEMO_MODELO.slug,
     }));
   }
 
@@ -81,17 +84,20 @@ export async function getFormulariosAdmin(): Promise<LinhaListaFormulario[]> {
       .order("updated_at", { ascending: false })
       .limit(500),
     supabase.from("organizations").select("id,nome"),
-    supabase.from("formularios_modelos").select("id,titulo"),
+    supabase.from("formularios_modelos").select("id,titulo,slug"),
   ]);
 
   const nomeOrg = new Map((orgs ?? []).map((o) => [o.id, o.nome]));
-  const tituloModelo = new Map((modelos ?? []).map((m) => [m.id, m.titulo]));
+  const modelo = new Map((modelos ?? []).map((m) => [m.id, m]));
 
-  return (respostas ?? []).map((r) => ({
-    ...r,
-    clinica: nomeOrg.get(r.organization_id) ?? "Clínica removida",
-    modelo_titulo: tituloModelo.get(r.modelo_id) ?? "Formulário",
-  }));
+  return (respostas ?? [])
+    .map((r) => ({
+      ...r,
+      clinica: nomeOrg.get(r.organization_id) ?? "Clínica removida",
+      modelo_titulo: modelo.get(r.modelo_id)?.titulo ?? "Formulário",
+      modelo_slug: modelo.get(r.modelo_id)?.slug ?? "",
+    }))
+    .filter((r) => !slug || r.modelo_slug === slug);
 }
 
 export type NotaComAutor = FormularioNota & { autor: string | null };

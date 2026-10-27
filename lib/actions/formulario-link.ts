@@ -38,7 +38,7 @@ async function porToken(token: string) {
   const admin = createAdminClient();
   const { data } = await admin
     .from("formularios_respostas")
-    .select("id,organization_id,status")
+    .select("id,organization_id,status,modelo_id")
     .eq("token", token)
     .maybeSingle();
   return data ? { admin, r: data } : null;
@@ -81,17 +81,16 @@ export async function enviarFormularioLink(token: string): Promise<ActionResult>
 
   await admin.from("formularios_eventos").insert({ resposta_id: r.id, tipo: "enviado" });
 
-  const { data: org } = await admin
-    .from("organizations")
-    .select("nome")
-    .eq("id", r.organization_id)
-    .maybeSingle();
+  const [{ data: org }, { data: modelo }] = await Promise.all([
+    admin.from("organizations").select("nome").eq("id", r.organization_id).maybeSingle(),
+    admin.from("formularios_modelos").select("titulo").eq("id", r.modelo_id).maybeSingle(),
+  ]);
 
   await notificar({
     organizationId: null,
     tipo: "sistema",
     prioridade: "alta",
-    titulo: `${org?.nome ?? "Uma clínica"} enviou o diagnóstico`,
+    titulo: `${org?.nome ?? "Uma clínica"} enviou o ${(modelo?.titulo ?? "diagnóstico").toLowerCase()}`,
     descricao: "Preenchido pelo link. As respostas estão prontas para revisão.",
     href: `/app/admin/diagnosticos/${r.id}`,
     entidadeId: r.id,
@@ -99,6 +98,7 @@ export async function enviarFormularioLink(token: string): Promise<ActionResult>
   });
 
   revalidatePath(`/diagnostico/${token}`);
+  revalidatePath(`/checkin/${token}`);
   revalidatePath("/app/admin/diagnosticos");
   return { ok: true };
 }

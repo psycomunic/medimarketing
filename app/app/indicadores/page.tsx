@@ -1,3 +1,4 @@
+import Link from "next/link";
 import {
   BarChart3,
   TrendingUp,
@@ -209,9 +210,17 @@ export default async function IndicadoresPage() {
             </p>
           </div>
         </div>
-        {podeLancar && organizacao && (
-          <FormLancamento organizationId={organizacao.id} historico={meses} />
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href="/app/indicadores/relatorio"
+            className="inline-flex h-9 items-center gap-2 rounded-full border-2 border-azul-medico/20 bg-white px-4 text-sm font-semibold text-azul-medico hover:border-teal hover:text-teal"
+          >
+            Relatório do mês
+          </Link>
+          {podeLancar && organizacao && (
+            <FormLancamento organizationId={organizacao.id} historico={meses} />
+          )}
+        </div>
       </header>
 
       <PainelEvolucao meses={historico} plano={plano} />

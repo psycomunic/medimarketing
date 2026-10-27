@@ -10,7 +10,7 @@ export const metadata = { title: "Diagnósticos" };
 export default async function DiagnosticosAdminPage() {
   await exigirModulo("admin-diagnosticos");
   const [linhas, clinicas, demo] = await Promise.all([
-    getFormulariosAdmin(),
+    getFormulariosAdmin(SLUG_DIAGNOSTICO),
     getClinicasParaLiberar(),
     emModoDemo(),
   ]);

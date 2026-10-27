@@ -50,9 +50,12 @@ export async function enviarFormulario(id: string): Promise<ActionResult> {
 
   const { data: r } = await ctx.supabase
     .from("formularios_respostas")
-    .select("organization_id")
+    .select("organization_id,modelo_id")
     .eq("id", id)
     .maybeSingle();
+  const { data: modelo } = r
+    ? await ctx.supabase.from("formularios_modelos").select("titulo").eq("id", r.modelo_id).maybeSingle()
+    : { data: null };
   const { data: org } = r
     ? await ctx.supabase.from("organizations").select("nome").eq("id", r.organization_id).maybeSingle()
     : { data: null };
@@ -62,7 +65,7 @@ export async function enviarFormulario(id: string): Promise<ActionResult> {
     organizationId: null,
     tipo: "sistema",
     prioridade: "alta",
-    titulo: `${org?.nome ?? "Uma clínica"} enviou o diagnóstico`,
+    titulo: `${org?.nome ?? "Uma clínica"} enviou o ${(modelo?.titulo ?? "diagnóstico").toLowerCase()}`,
     descricao: "As respostas estão prontas para revisão.",
     href: `/app/admin/diagnosticos/${id}`,
     entidadeId: id,
