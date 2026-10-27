@@ -16,6 +16,12 @@ import {
   Trash2,
 } from "lucide-react";
 import { enviarFormulario, salvarRascunho } from "@/lib/actions/formularios";
+import {
+  autorizarAnexoLink,
+  enviarFormularioLink,
+  removerAnexoLink,
+  salvarRascunhoLink,
+} from "@/lib/actions/formulario-link";
 import { createClient } from "@/lib/supabase/client";
 import {
   etapaCompleta,
@@ -107,11 +113,14 @@ export function PreenchimentoFormulario({
   schema,
   clinica,
   demo,
+  token,
 }: {
   resposta: FormularioResposta;
   schema: SchemaFormulario;
   clinica: string;
   demo: boolean;
+  /** Preenchimento pelo link público: grava pelo token, sem sessão. */
+  token?: string;
 }) {
   const router = useRouter();
   const [dados, setDados] = useState<Dados>(() => ({
@@ -174,12 +183,15 @@ export function PreenchimentoFormulario({
 
     let res: Awaited<ReturnType<typeof salvarRascunho>>;
     try {
-      res = await salvarRascunho(resposta.id, versao.current, {
+      const input = {
         respondenteNome: d.nome,
         respondenteCargo: d.cargo,
         dataReferencia: d.data,
         respostas: d.respostas,
-      });
+      };
+      res = token
+        ? await salvarRascunhoLink(token, versao.current, input)
+        : await salvarRascunho(resposta.id, versao.current, input);
     } catch {
       res = { ok: false, erro: "Sem conexão com o servidor." };
     }
@@ -211,7 +223,7 @@ export function PreenchimentoFormulario({
     const espera = Math.min(30_000, 2000 * 2 ** tentativas.current);
     tentativas.current += 1;
     agendar(espera);
-  }, [demo, resposta.id, agendar, apagarCopia, guardarCopia]);
+  }, [demo, resposta.id, token, agendar, apagarCopia, guardarCopia]);
 
   salvarRef.current = salvar;
 
@@ -300,7 +312,7 @@ export function PreenchimentoFormulario({
         setErroEnvio("Não foi possível salvar as últimas alterações. Confira a conexão e tente de novo.");
         return;
       }
-      const res = await enviarFormulario(resposta.id);
+      const res = token ? await enviarFormularioLink(token) : await enviarFormulario(resposta.id);
       if (!res.ok) {
         setErroEnvio(res.erro);
         return;
@@ -457,6 +469,7 @@ export function PreenchimentoFormulario({
                         pasta={`${resposta.organization_id}/${resposta.id}`}
                         aoMudar={(l) => atualizarAnexos(campo.id, l)}
                         demo={demo}
+                        token={token}
                         desabilitado={bloqueado}
                       />
                     )}
@@ -526,7 +539,13 @@ export function PreenchimentoFormulario({
           {dados.cargo && ` · ${dados.cargo}`} · {dados.data.split("-").reverse().join("/")}
         </p>
         <div className="mt-8">
-          <LeituraFormulario schema={schema} respostas={dados.respostas} clinica={clinica} demo={demo} />
+          <LeituraFormulario
+            schema={schema}
+            respostas={dados.respostas}
+            clinica={clinica}
+            demo={demo}
+            token={token}
+          />
         </div>
       </div>
 
@@ -933,21 +952,25 @@ function TabelaMensalEditavel({
 /**
  * Envio de relatórios junto da resposta.
  *
- * O arquivo sobe direto do navegador para o Storage, com a sessão de
- * quem está preenchendo — a RLS do bucket confere a clínica e se o
- * diagnóstico ainda é rascunho. Só a referência entra nas respostas.
+ * O arquivo sobe direto do navegador para o Storage. No painel, com a
+ * sessão de quem está preenchendo — a RLS do bucket confere a clínica e
+ * se o diagnóstico ainda é rascunho. Pelo link, com uma URL de envio
+ * assinada que o servidor só entrega depois de conferir o token. Só a
+ * referência entra nas respostas.
  */
 function CampoAnexos({
   lista,
   pasta,
   aoMudar,
   demo,
+  token,
   desabilitado,
 }: {
   lista: Anexo[];
   pasta: string;
   aoMudar: (l: Anexo[]) => void;
   demo: boolean;
+  token?: string;
   desabilitado: boolean;
 }) {
   const [enviando, setEnviando] = useState(false);
@@ -975,11 +998,25 @@ function CampoAnexos({
         setErro(`${f.name}: use PDF, planilha (XLSX ou CSV) ou imagem (PNG ou JPG).`);
         continue;
       }
-      const seguro = f.name.normalize("NFD").replace(/[^\w.-]+/g, "-").slice(-80);
-      const caminho = `${pasta}/${Date.now()}-${seguro}`;
-      const { error } = await supabase.storage
-        .from(BUCKET_ANEXOS)
-        .upload(caminho, f, { contentType: tipo });
+      let caminho: string;
+      let error: unknown;
+      if (token) {
+        const aut = await autorizarAnexoLink(token, f.name, tipo, f.size);
+        if (!aut.ok) {
+          setErro(`${f.name}: ${aut.erro}`);
+          continue;
+        }
+        caminho = aut.caminho;
+        ({ error } = await supabase.storage
+          .from(BUCKET_ANEXOS)
+          .uploadToSignedUrl(caminho, aut.tokenEnvio, f, { contentType: tipo }));
+      } else {
+        const seguro = f.name.normalize("NFD").replace(/[^\w.-]+/g, "-").slice(-80);
+        caminho = `${pasta}/${Date.now()}-${seguro}`;
+        ({ error } = await supabase.storage
+          .from(BUCKET_ANEXOS)
+          .upload(caminho, f, { contentType: tipo }));
+      }
       if (error) {
         setErro(`${f.name}: não foi possível enviar.`);
         continue;
@@ -992,7 +1029,8 @@ function CampoAnexos({
   }
 
   async function remover(a: Anexo) {
-    if (!demo) await createClient().storage.from(BUCKET_ANEXOS).remove([a.caminho]);
+    if (token) await removerAnexoLink(token, a.caminho);
+    else if (!demo) await createClient().storage.from(BUCKET_ANEXOS).remove([a.caminho]);
     aoMudar(lista.filter((x) => x.caminho !== a.caminho));
   }
 
@@ -1002,7 +1040,7 @@ function CampoAnexos({
         <ul className="mb-3 grid gap-2">
           {lista.map((a) => (
             <li key={a.caminho} className="flex min-w-0 items-center gap-2">
-              <LinkAnexo anexo={a} demo={demo} />
+              <LinkAnexo anexo={a} demo={demo} token={token} />
               <button
                 type="button"
                 onClick={() => remover(a)}

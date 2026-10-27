@@ -31,11 +31,14 @@ export function LeituraFormulario({
   respostas,
   clinica,
   demo,
+  token,
 }: {
   schema: SchemaFormulario;
   respostas: Respostas;
   clinica: string;
   demo: boolean;
+  /** Leitura pelo link público: os anexos abrem pelo token. */
+  token?: string;
 }) {
   const nums = numeracao(schema);
 
@@ -71,7 +74,7 @@ export function LeituraFormulario({
                   {anexos.length > 0 && (
                     <div className="mt-3 flex flex-wrap gap-2">
                       {anexos.map((a) => (
-                        <LinkAnexo key={a.caminho} anexo={a} demo={demo} />
+                        <LinkAnexo key={a.caminho} anexo={a} demo={demo} token={token} />
                       ))}
                     </div>
                   )}

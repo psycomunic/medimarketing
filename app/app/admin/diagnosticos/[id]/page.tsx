@@ -9,6 +9,8 @@ import { LeituraFormulario } from "@/components/app/formularios/leitura";
 import { BotaoImprimir } from "@/components/app/formularios/botao-imprimir";
 import { StatusBadge } from "@/components/app/formularios/admin-lista";
 import { AcoesStatus, NovaNota } from "@/components/app/formularios/admin-acoes";
+import { CopiarLink } from "@/components/app/formularios/copiar-link";
+import { urlBase } from "@/lib/lembretes";
 import { CapaFormulario } from "@/components/app/formularios/comum";
 import { formatarData, formatarDataHora } from "@/lib/formularios/formato";
 
@@ -97,6 +99,15 @@ export default async function DiagnosticoAdminPage({
             </dl>
             <div className="mt-4">
               <AcoesStatus id={resposta.id} status={resposta.status} demo={demo} />
+            </div>
+          </section>
+
+          <section className="rounded-lg border border-border bg-white p-5 shadow-soft">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-teal">
+              Link para a clínica
+            </h2>
+            <div className="mt-3">
+              <CopiarLink url={`${urlBase()}/diagnostico/${resposta.token}`} clinica={d.clinica} />
             </div>
           </section>
 

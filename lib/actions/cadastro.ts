@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { gerarSlug } from "@/lib/slug";
 import { createClient } from "@/lib/supabase/server";
 import { urlBase } from "@/lib/lembretes";
 import { createAdminClient, adminDisponivel } from "@/lib/supabase/admin";
@@ -46,21 +47,6 @@ export type CadastroInput = z.input<typeof schema>;
 export type CadastroResult =
   | { ok: true; precisaConfirmarEmail: boolean }
   | { ok: false; erro: string };
-
-/** Transforma "Clínica Vida Derma" em "clinica-vida-derma". */
-function gerarSlug(nome: string): string {
-  const semAcento = [...nome.toLowerCase().normalize("NFD")]
-    .filter((c) => {
-      const cod = c.codePointAt(0) ?? 0;
-      return cod < 0x0300 || cod > 0x036f;
-    })
-    .join("");
-
-  return semAcento
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 50) || "clinica";
-}
 
 export async function cadastrar(input: CadastroInput): Promise<CadastroResult> {
   const parsed = schema.safeParse(input);

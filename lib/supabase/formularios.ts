@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
+import { adminDisponivel, createAdminClient } from "@/lib/supabase/admin";
 import { emModoDemo } from "@/lib/supabase/queries";
 import { DEMO_ORGANIZACOES } from "@/lib/demo";
 import { DEMO_MODELO, demoRespostas } from "@/lib/formularios/demo";
@@ -188,4 +189,42 @@ export async function getClinicasParaLiberar(): Promise<{ id: string; nome: stri
     .eq("ativo", true)
     .order("nome");
   return data ?? [];
+}
+
+/* ------------------------------------------------------------------ */
+/* Link público                                                        */
+/* ------------------------------------------------------------------ */
+
+/** Tokens gerados no banco: 64 caracteres hexadecimais. */
+export function tokenValido(token: string): boolean {
+  return /^[0-9a-f]{64}$/.test(token);
+}
+
+/**
+ * O diagnóstico aberto pelo link.
+ *
+ * Usa a service role porque quem abre o link não tem sessão — a
+ * autorização é o próprio token. Por isso a busca é sempre pelo token
+ * exato, e nunca pelo id.
+ */
+export async function getFormularioPorToken(
+  token: string
+): Promise<(FormularioComModelo & { clinica: string }) | null> {
+  if (!adminDisponivel() || !tokenValido(token)) return null;
+
+  const admin = createAdminClient();
+  const { data: resposta } = await admin
+    .from("formularios_respostas")
+    .select("*")
+    .eq("token", token)
+    .maybeSingle();
+  if (!resposta) return null;
+
+  const [{ data: modelo }, { data: org }] = await Promise.all([
+    admin.from("formularios_modelos").select("*").eq("id", resposta.modelo_id).single(),
+    admin.from("organizations").select("nome").eq("id", resposta.organization_id).maybeSingle(),
+  ]);
+  if (!modelo) return null;
+
+  return { resposta, modelo, clinica: org?.nome ?? "sua clínica" };
 }

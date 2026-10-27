@@ -1189,3 +1189,57 @@ on conflict (slug, versao) do update
       descricao = excluded.descricao,
       schema = excluded.schema,
       ativo = excluded.ativo;
+
+-- ====================================================================
+-- 2026-10-27 · Diagnóstico por link
+--
+-- O diagnóstico ganha um link próprio, como a proposta: a clínica
+-- preenche pelo celular sem criar conta. O token é a credencial — quem
+-- tem o link lê e edita aquele diagnóstico, e só aquele. Por isso ele é
+-- longo (duas UUIDs, 244 bits aleatórios) e a página pública busca
+-- sempre pelo token exato, nunca pelo id.
+--
+-- A página roda no servidor com a service role. O gatilho de guarda
+-- passa a confiar nela também: é o caminho que muda o status quando a
+-- clínica envia pelo link, depois de conferir o token.
+-- ====================================================================
+
+alter table public.formularios_respostas
+  add column if not exists token text
+  default replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', '');
+
+update public.formularios_respostas
+   set token = replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', '')
+ where token is null;
+
+alter table public.formularios_respostas alter column token set not null;
+
+create unique index if not exists formularios_respostas_token_idx
+  on public.formularios_respostas (token);
+
+create or replace function public.formularios_respostas_guarda()
+returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  new.updated_at := now();
+
+  if public.is_super_admin()
+     or coalesce(auth.role(), '') = 'service_role'
+     or coalesce(current_setting('app.formulario_transicao', true), '') = 'on' then
+    return new;
+  end if;
+
+  if new.status          is distinct from old.status
+  or new.enviado_em      is distinct from old.enviado_em
+  or new.revisado_em     is distinct from old.revisado_em
+  or new.revisado_por    is distinct from old.revisado_por
+  or new.organization_id is distinct from old.organization_id
+  or new.modelo_id       is distinct from old.modelo_id
+  or new.token           is distinct from old.token
+  or new.created_at      is distinct from old.created_at then
+    raise exception 'Somente a equipe Medi Marketing altera o status do diagnóstico';
+  end if;
+
+  return new;
+end;
+$$;

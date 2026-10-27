@@ -11,6 +11,7 @@ import { exigirModulo } from "@/lib/acesso";
 import { getClientes } from "@/lib/supabase/indicadores";
 import { emModoDemo } from "@/lib/supabase/queries";
 import { EditarMarca } from "@/components/app/clinicas/editar-marca";
+import { NovaClinica } from "@/components/app/clinicas/nova-clinica";
 import { listarConexoesMerge } from "@/lib/actions/configuracoes";
 import { formatarNumero, formatarReais } from "@/lib/indicadores";
 import { cn } from "@/lib/utils";
@@ -110,6 +111,7 @@ export default async function ClinicasPage() {
           <h2 className="text-lg font-semibold text-azul-medico">
             Carteira ({clientes.length})
           </h2>
+          <NovaClinica demo={demo} />
         </div>
 
         {clientes.length === 0 ? (

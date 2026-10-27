@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { FileText, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { abrirAnexoLink } from "@/lib/actions/formulario-link";
 import type { Anexo, SchemaFormulario } from "@/lib/formularios/tipos";
 import { substituirClinica, totalPerguntas } from "@/lib/formularios/tipos";
 import { tamanhoArquivo } from "@/lib/formularios/formato";
@@ -109,7 +110,16 @@ export function CartaoEtapa({
  * O bucket é privado: o link só é gerado na hora do clique, com a
  * sessão de quem clicou, e a RLS do Storage decide se ele pode ler.
  */
-export function LinkAnexo({ anexo, demo }: { anexo: Anexo; demo: boolean }) {
+export function LinkAnexo({
+  anexo,
+  demo,
+  token,
+}: {
+  anexo: Anexo;
+  demo: boolean;
+  /** Pelo link público não há sessão: o servidor assina depois de conferir o token. */
+  token?: string;
+}) {
   const [abrindo, setAbrindo] = useState(false);
   const [erro, setErro] = useState(false);
 
@@ -117,11 +127,18 @@ export function LinkAnexo({ anexo, demo }: { anexo: Anexo; demo: boolean }) {
     if (demo) return;
     setAbrindo(true);
     setErro(false);
-    const { data } = await createClient()
-      .storage.from(BUCKET_ANEXOS)
-      .createSignedUrl(anexo.caminho, 60);
+    let url: string | null = null;
+    if (token) {
+      const res = await abrirAnexoLink(token, anexo.caminho);
+      url = res.ok ? res.url : null;
+    } else {
+      const { data } = await createClient()
+        .storage.from(BUCKET_ANEXOS)
+        .createSignedUrl(anexo.caminho, 60);
+      url = data?.signedUrl ?? null;
+    }
     setAbrindo(false);
-    if (data?.signedUrl) window.open(data.signedUrl, "_blank", "noopener");
+    if (url) window.open(url, "_blank", "noopener");
     else setErro(true);
   }
 

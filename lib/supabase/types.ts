@@ -845,6 +845,8 @@ export type FormularioResposta = {
   data_referencia: string | null;
   respostas: import("@/lib/formularios/tipos").Respostas;
   progresso: number;
+  /** Credencial do link público. Quem tem o link preenche sem conta. */
+  token: string;
   enviado_em: string | null;
   revisado_em: string | null;
   revisado_por: string | null;

@@ -64,6 +64,7 @@ function resposta(
     data_referencia: atualizado.slice(0, 10),
     respostas,
     progresso: progresso(DIAGNOSTICO_CLINICA, respostas),
+    token: `demo-${id}`,
     enviado_em: status === "rascunho" ? null : atualizado,
     revisado_em: status === "revisado" ? atualizado : null,
     revisado_por: null,
