@@ -17,6 +17,9 @@ import { mesAnterior } from "@/lib/formularios/periodico";
 import { GerarCheckin } from "@/components/app/evolucao/gerar-checkin";
 import { emModoDemo } from "@/lib/supabase/queries";
 import { FileText } from "lucide-react";
+import { getUsuarios } from "@/lib/supabase/usuarios";
+import { adminDisponivel } from "@/lib/supabase/admin";
+import { AcessosClinica } from "@/components/app/clinicas/acessos-clinica";
 
 export const metadata = { title: "Cliente" };
 
@@ -30,13 +33,17 @@ export default async function ClientePage({ params }: { params: { id: string } }
   const cliente = await getCliente(params.id);
   if (!cliente) notFound();
 
-  const [meses, plano, diagnosticos, todosCheckins, demo] = await Promise.all([
+  const [meses, plano, diagnosticos, todosCheckins, usuarios, demo] = await Promise.all([
     getIndicadores(cliente.id, 36),
     getPlano(cliente.id),
     getFormulariosAdmin(SLUG_DIAGNOSTICO),
     getFormulariosAdmin(SLUG_CHECKIN),
+    getUsuarios({ organizationId: null, ehSuperAdmin: true }),
     emModoDemo(),
   ]);
+  const contasDeClinica = usuarios.filter((u) => u.role !== "super_admin");
+  const membros = contasDeClinica.filter((u) => u.organization_id === cliente.id);
+  const candidatos = contasDeClinica.filter((u) => u.organization_id !== cliente.id);
   const diagnostico = diagnosticos.find((d) => d.organization_id === cliente.id) ?? null;
   const checkins = todosCheckins
     .filter((c) => c.organization_id === cliente.id)
@@ -111,6 +118,14 @@ export default async function ClientePage({ params }: { params: { id: string } }
           )}
         </div>
       </section>
+
+      <AcessosClinica
+        clinicaId={cliente.id}
+        clinica={cliente.nome}
+        membros={membros}
+        candidatos={candidatos}
+        bloqueado={demo || !adminDisponivel()}
+      />
 
       <PainelEvolucao meses={meses} plano={plano} />
 

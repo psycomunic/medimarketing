@@ -35,6 +35,7 @@ const PAPEIS: readonly Role[] = ["super_admin", "gestor", "secretaria", "medico"
 
 function revalidar() {
   revalidatePath("/app/admin/usuarios");
+  revalidatePath("/app/clinicas", "layout");
   revalidatePath("/app/configuracoes");
   revalidatePath("/app", "layout");
 }
@@ -298,6 +299,63 @@ export async function transferirClinica(
     .eq("id", usuarioId);
 
   if (error) return { ok: false, erro: "Não foi possível transferir." };
+
+  revalidar();
+  return { ok: true };
+}
+
+/**
+ * Põe uma conta que já existe dentro de uma clínica da carteira (só super
+ * admin). É o que liga o login de alguém aos dados que a equipe já tem da
+ * clínica — diagnóstico, indicadores, check-ins: a partir daqui a pessoa
+ * enxerga tudo isso no painel dela.
+ *
+ * Faz junto o que sempre acompanha o vínculo: define o papel, tira da
+ * fila de liberação, devolve o acesso e ativa a clínica.
+ */
+export async function vincularClinica(
+  usuarioId: string,
+  organizationId: string,
+  papel: Role
+): Promise<ActionResult> {
+  if (papel === "super_admin" || !PAPEIS.includes(papel)) {
+    return { ok: false, erro: "Escolha o papel da pessoa na clínica." };
+  }
+
+  const r = await autorizar(usuarioId);
+  if (ehErro(r)) return r;
+
+  if (r.ctx.profile.role !== "super_admin") {
+    return { ok: false, erro: "Só a equipe Medi Marketing vincula contas a clínicas." };
+  }
+  if (r.alvo.role === "super_admin") {
+    return { ok: false, erro: "Contas da equipe Medi Marketing não pertencem a clínicas." };
+  }
+
+  const { data: org } = await r.admin
+    .from("organizations")
+    .select("id")
+    .eq("id", organizationId)
+    .maybeSingle();
+  if (!org) return { ok: false, erro: "Clínica não encontrada." };
+
+  const { error } = await r.admin
+    .from("profiles")
+    .update({
+      organization_id: organizationId,
+      role: papel,
+      ativo: true,
+      aguardando_liberacao: false,
+    })
+    .eq("id", usuarioId);
+
+  if (error) {
+    console.error("[usuarios] Erro ao vincular:", error.message);
+    return { ok: false, erro: "Não foi possível vincular a conta." };
+  }
+
+  await r.admin.from("organizations").update({ ativo: true }).eq("id", organizationId);
+  await r.admin.auth.admin.updateUserById(usuarioId, { ban_duration: "none" });
 
   revalidar();
   return { ok: true };

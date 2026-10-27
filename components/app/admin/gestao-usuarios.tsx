@@ -31,6 +31,7 @@ import {
   liberarAcesso,
   recusarCadastro,
   transferirClinica,
+  vincularClinica,
 } from "@/lib/actions/usuarios";
 import { rotuloPapel } from "@/lib/rbac";
 import { tempoRelativo } from "@/lib/rotulos";
@@ -65,7 +66,7 @@ const resumoPapel: Record<Role, string> = {
 };
 
 /** Senha provisória legível, para ditar por telefone sem confusão. */
-function senhaProvisoria(): string {
+export function senhaProvisoria(): string {
   const letras = "abcdefghijkmnpqrstuvwxyz";
   const numeros = "23456789";
   const parte = (fonte: string, n: number) =>
@@ -97,6 +98,8 @@ export function GestaoUsuarios({
   const [criando, setCriando] = useState(false);
   const [editando, setEditando] = useState<UsuarioGerenciavel | null>(null);
   const [senhaDe, setSenhaDe] = useState<UsuarioGerenciavel | null>(null);
+  // Clínica de destino escolhida para cada cadastro da fila
+  const [destino, setDestino] = useState<Record<string, string>>({});
   const [erro, setErro] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -215,6 +218,32 @@ export function GestaoUsuarios({
                   </div>
                 </div>
 
+                {/* O cadastro público cria uma clínica nova; se o cliente já
+                    está na carteira, a conta vai para a clínica existente e
+                    passa a ver os dados que a equipe já montou. */}
+                {ehSuperAdmin && clinicas.length > 1 && (
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-cinza-suave">Clínica:</span>
+                    <Select
+                      value={destino[u.id] ?? u.organization_id ?? ""}
+                      disabled={pending || bloqueado}
+                      onChange={(e) => setDestino({ ...destino, [u.id]: e.target.value })}
+                      className="h-9 w-auto min-w-[200px] text-xs"
+                      aria-label={`Clínica de ${u.nome}`}
+                    >
+                      <option value="" disabled>
+                        Sem clínica
+                      </option>
+                      {clinicas.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.nome}
+                          {c.id === u.organization_id ? " (criada no cadastro)" : ""}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+                )}
+
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <span className="text-xs text-cinza-suave">Liberar como:</span>
                   {(ehSuperAdmin
@@ -226,12 +255,16 @@ export function GestaoUsuarios({
                       variant={p === "gestor" ? "teal" : "outline"}
                       size="sm"
                       disabled={pending || bloqueado}
-                      onClick={() =>
+                      onClick={() => {
+                        const alvo = destino[u.id];
                         agir(
-                          () => liberarAcesso(u.id, p),
+                          () =>
+                            alvo && alvo !== u.organization_id
+                              ? vincularClinica(u.id, alvo, p)
+                              : liberarAcesso(u.id, p),
                           `${u.nome} liberado como ${rotuloPapel(p)}.`
-                        )
-                      }
+                        );
+                      }}
                     >
                       {rotuloPapel(p)}
                     </Button>
