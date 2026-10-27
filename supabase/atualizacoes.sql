@@ -1473,3 +1473,22 @@ on conflict (slug, versao) do update
       schema = excluded.schema,
       ativo = excluded.ativo;
 
+
+-- ====================================================================
+-- 2026-10-27 (4) · Diagnóstico sem a pergunta de vagas e espera
+--
+-- Sai "Quais horários e profissionais têm vagas? Qual é a espera para
+-- uma primeira consulta?" (id vagas_espera). Alterado na própria versão
+-- 1 porque ninguém tinha respondido; com respostas, o certo seria
+-- publicar a versão 2. A numeração das seguintes se ajusta sozinha.
+-- ====================================================================
+
+update public.formularios_modelos
+   set schema = jsonb_set(
+         schema,
+         '{etapas,1,campos}',
+         (select jsonb_agg(c order by i)
+            from jsonb_array_elements(schema->'etapas'->1->'campos') with ordinality as t(c, i)
+           where c->>'id' <> 'vagas_espera')
+       )
+ where slug = 'diagnostico-clinica' and versao = 1;

@@ -100,12 +100,6 @@ export const DIAGNOSTICO_CLINICA: SchemaFormulario = {
         },
         {
           tipo: "texto",
-          id: "vagas_espera",
-          pergunta:
-            "Quais horários e profissionais têm vagas? Qual é a espera para uma primeira consulta?",
-        },
-        {
-          tipo: "texto",
           id: "clinica_ou_profissional",
           pergunta: "Os pacientes procuram a clínica ou um profissional específico?",
           ajuda:
