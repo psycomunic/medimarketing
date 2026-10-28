@@ -36,6 +36,7 @@ const schema = z
         email: z.string().trim().toLowerCase().email("E-mail de acesso inválido."),
         senha: z.string().min(8, "A senha provisória precisa de pelo menos 8 caracteres.").max(72),
         papel: z.enum(["gestor", "medico"]),
+        enviarConvite: z.boolean().optional(),
       })
       .nullable(),
   });
@@ -119,8 +120,12 @@ export async function criarClinica(input: NovaClinicaInput): Promise<ResultadoNo
       papel: d.acesso.papel,
       organizationId,
       telefone: d.telefone,
+      enviarConvite: d.acesso.enviarConvite,
     });
     if (!res.ok) avisos.push(`O acesso não foi criado: ${res.erro}`);
+    else if (d.acesso.enviarConvite && !res.emailEnviado) {
+      avisos.push("O acesso foi criado, mas o e-mail de convite não saiu. Repasse a senha provisória.");
+    }
   }
 
   let linkDiagnostico: string | null = null;

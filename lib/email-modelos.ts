@@ -451,3 +451,52 @@ export function emailClinicaCancelou(
     texto: `${d.paciente} avisou que nao podera comparecer em ${d.data} as ${d.hora}. O horario esta livre.`,
   };
 }
+
+/* ------------------------------------------------------------------ */
+/* Acesso ao painel                                                    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Convite de quem ganhou acesso, ou o pedido de senha nova.
+ *
+ * Nenhum dos dois leva senha no corpo: o botão abre a tela de criar
+ * senha já autenticada. Assim o e-mail esquecido na caixa de entrada
+ * não vira a chave da conta.
+ */
+export function emailAcesso(
+  tipo: "convite" | "redefinir",
+  d: { nome: string; clinica?: string | null; link: string; email: string }
+): Modelo {
+  const m: MarcaEmail = { clinica: "Medi Marketing" };
+  const convite = tipo === "convite";
+  const corpo = `
+  <tr><td style="padding:24px 32px;">
+    ${faixa(TEAL, MENTA, convite ? "Seu acesso ao painel está pronto" : "Pedido de nova senha")}
+    <p style="margin:0 0 4px;font-size:16px;color:${TEXTO};">
+      Olá, ${esc(d.nome)}!
+    </p>
+    <p style="margin:0;font-size:15px;color:${CINZA};line-height:1.6;">
+      ${
+        convite
+          ? `A equipe Medi Marketing criou seu acesso${d.clinica ? ` à ${esc(d.clinica)}` : ""}.
+             Lá você acompanha o diagnóstico, os indicadores e a evolução da clínica.
+             Para entrar, crie sua senha no botão abaixo.`
+          : `Recebemos um pedido para trocar a senha da sua conta. Se foi você,
+             crie a senha nova no botão abaixo. Se não foi, ignore este e-mail:
+             a senha atual continua valendo.`
+      }
+    </p>
+    ${blocoDados([["Login", d.email]])}
+    ${botao(convite ? "Criar minha senha" : "Criar nova senha", d.link)}
+    <p style="margin:12px 0 0;font-size:13px;color:${CINZA};line-height:1.6;">
+      O link vale por 24 horas e funciona uma vez. Se expirar, use
+      “Esqueci minha senha” na tela de login.
+    </p>
+  </td></tr>`;
+
+  return {
+    assunto: convite ? "Seu acesso ao painel Medi Marketing" : "Crie sua nova senha",
+    html: layout(m, corpo),
+    texto: `${convite ? "Seu acesso ao painel Medi Marketing esta pronto." : "Pedido de nova senha."} Login: ${d.email}. Crie sua senha em: ${d.link}`,
+  };
+}

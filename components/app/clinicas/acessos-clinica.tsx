@@ -44,7 +44,7 @@ export function AcessosClinica({
   const [modo, setModo] = useState<"vincular" | "criar" | null>(null);
   const [contaId, setContaId] = useState("");
   const [papel, setPapel] = useState<PapelClinica>("gestor");
-  const [novo, setNovo] = useState({ nome: "", email: "", senha: senhaProvisoria() });
+  const [novo, setNovo] = useState({ nome: "", email: "", senha: senhaProvisoria(), enviarConvite: true });
   const [erro, setErro] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -90,13 +90,19 @@ export function AcessosClinica({
         senha: novo.senha,
         papel,
         organizationId: clinicaId,
+        enviarConvite: novo.enviarConvite,
       });
       if (!res.ok) {
         setErro(res.erro ?? "Não foi possível criar o acesso.");
         return;
       }
-      setAviso(`Acesso criado. Login: ${novo.email.trim().toLowerCase()} · senha provisória: ${novo.senha}`);
-      setNovo({ nome: "", email: "", senha: senhaProvisoria() });
+      const login = novo.email.trim().toLowerCase();
+      setAviso(
+        res.emailEnviado
+          ? `Acesso criado e convite enviado para ${login}. Se preferir, a senha provisória ${novo.senha} também funciona.`
+          : `Acesso criado. Login: ${login} · senha provisória: ${novo.senha}${novo.enviarConvite ? " (o e-mail de convite não saiu; repasse a senha)" : ""}`
+      );
+      setNovo({ nome: "", email: "", senha: senhaProvisoria(), enviarConvite: true });
       setModo(null);
       router.refresh();
     });
@@ -193,6 +199,20 @@ export function AcessosClinica({
               </Button>
             </div>
           </div>
+          <label className="flex items-start gap-2.5 rounded-md border border-border bg-white px-3 py-2.5 text-sm sm:col-span-2">
+            <input
+              type="checkbox"
+              checked={novo.enviarConvite}
+              onChange={(e) => setNovo({ ...novo, enviarConvite: e.target.checked })}
+              className="mt-0.5 size-4 accent-teal"
+            />
+            <span className="text-cinza-texto">
+              Enviar convite por e-mail
+              <span className="mt-0.5 block text-xs text-cinza-suave">
+                Chega um link para a pessoa criar a própria senha. A provisória continua valendo.
+              </span>
+            </span>
+          </label>
           <div className="flex justify-end sm:col-span-2">
             <Button type="submit" disabled={pending}>
               {pending && <Loader2 className="animate-spin" />} Criar acesso

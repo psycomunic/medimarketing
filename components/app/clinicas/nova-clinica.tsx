@@ -32,6 +32,7 @@ const VAZIO = {
   acessoEmail: "",
   acessoSenha: "",
   acessoPapel: "gestor" as "gestor" | "medico",
+  acessoConvite: true,
 };
 
 type Resultado = { nome: string; link: string | null; avisos: string[] };
@@ -83,6 +84,7 @@ export function NovaClinica({ demo }: { demo: boolean }) {
               email: v.acessoEmail,
               senha: v.acessoSenha,
               papel: v.acessoPapel,
+              enviarConvite: v.acessoConvite,
             }
           : null,
       });
@@ -219,6 +221,20 @@ export function NovaClinica({ demo }: { demo: boolean }) {
                     <Label htmlFor="nc-a-senha">Senha provisória</Label>
                     <Input id="nc-a-senha" type="text" value={v.acessoSenha} onChange={(e) => campo("acessoSenha", e.target.value)} minLength={8} required placeholder="Mínimo 8 caracteres" />
                   </div>
+                  <label className="flex items-start gap-2.5 rounded-md border border-border bg-white px-3 py-2.5 text-sm sm:col-span-2">
+            <input
+              type="checkbox"
+              checked={v.acessoConvite}
+              onChange={(e) => campo("acessoConvite", e.target.checked)}
+              className="mt-0.5 size-4 accent-teal"
+            />
+            <span className="text-cinza-texto">
+              Enviar convite por e-mail
+              <span className="mt-0.5 block text-xs text-cinza-suave">
+                Chega um link para a pessoa criar a própria senha. A provisória continua valendo.
+              </span>
+            </span>
+          </label>
                 </div>
               )}
             </div>

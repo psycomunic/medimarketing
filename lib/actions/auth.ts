@@ -6,6 +6,7 @@ import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { supabaseConfigurado } from "@/lib/supabase/queries";
 import { urlBase } from "@/lib/lembretes";
+import { enviarLinkDeSenha } from "@/lib/acesso-email";
 import { DEMO_COOKIE, checarCredenciaisDemo } from "@/lib/demo";
 
 export type AuthResult = { ok: false; erro: string } | { ok: true };
@@ -77,6 +78,13 @@ export async function logout() {
  * token no fragmento e nenhuma tela para digitar a senha nova.
  */
 export async function solicitarReset(email: string): Promise<AuthResult> {
+  // Pelo Resend sempre que der: o envio padrão do Supabase não chega a
+  // quem não é da equipe do projeto. A resposta é a mesma exista ou não
+  // a conta, para a tela não revelar quem tem cadastro.
+  const envio = await enviarLinkDeSenha({ email: email.trim().toLowerCase(), tipo: "redefinir" });
+  if (envio.enviado || /not found|no user|user.*not/i.test(envio.motivo)) return { ok: true };
+  console.error("[auth] Resend falhou, tentando pelo Supabase:", envio.motivo);
+
   const supabase = await createClient();
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
     redirectTo: `${urlBase()}/nova-senha`,

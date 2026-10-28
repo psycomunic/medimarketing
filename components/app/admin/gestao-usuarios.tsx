@@ -638,6 +638,7 @@ function DialogNovoUsuario({
     especialidade: "",
     crm: "",
     telefone: "",
+    enviarConvite: true,
   });
   const [erro, setErro] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -657,13 +658,16 @@ function DialogNovoUsuario({
         especialidade: v.especialidade,
         crm: v.crm,
         telefone: v.telefone,
+        enviarConvite: v.enviarConvite,
       });
       if (!res.ok) {
         setErro(res.erro);
         return;
       }
       onCriado(
-        `Acesso criado para ${v.nome}. Passe a senha provisória: ${v.senha}`
+        res.emailEnviado
+          ? `Acesso criado para ${v.nome}. O convite foi para ${v.email}; a senha provisória ${v.senha} também funciona.`
+          : `Acesso criado para ${v.nome}. Passe a senha provisória: ${v.senha}${v.enviarConvite ? " (o e-mail de convite não saiu)" : ""}`
       );
     });
   }
@@ -723,6 +727,21 @@ function DialogNovoUsuario({
               segurança, ela não fica guardada em lugar nenhum.
             </p>
           </div>
+
+          <label className="flex items-start gap-2.5 rounded-md border border-border bg-white px-3 py-2.5 text-sm sm:col-span-2">
+            <input
+              type="checkbox"
+              checked={v.enviarConvite}
+              onChange={(e) => setV({ ...v, enviarConvite: e.target.checked })}
+              className="mt-0.5 size-4 accent-teal"
+            />
+            <span className="text-cinza-texto">
+              Enviar convite por e-mail
+              <span className="mt-0.5 block text-xs text-cinza-suave">
+                Chega um link para a pessoa criar a própria senha. A provisória continua valendo.
+              </span>
+            </span>
+          </label>
 
           <div className="grid gap-1.5">
             <Label htmlFor="nu-papel">Papel</Label>

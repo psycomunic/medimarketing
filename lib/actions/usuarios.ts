@@ -11,6 +11,7 @@ import {
   type Contexto,
 } from "@/lib/actions/contexto";
 import type { Profile, Role } from "@/lib/supabase/types";
+import { enviarLinkDeSenha } from "@/lib/acesso-email";
 
 /**
  * GESTÃO DE USUÁRIOS
@@ -106,9 +107,15 @@ const criarSchema = z.object({
   especialidade: z.string().trim().max(80).optional().or(z.literal("")),
   crm: z.string().trim().max(40).optional().or(z.literal("")),
   telefone: z.string().trim().max(30).optional().or(z.literal("")),
+  /** Manda o e-mail de boas-vindas com o link para criar a senha. */
+  enviarConvite: z.boolean().optional(),
 });
 
 export type CriarUsuarioInput = z.input<typeof criarSchema>;
+
+export type ResultadoCriacao =
+  | { ok: true; emailEnviado: boolean }
+  | { ok: false; erro: string };
 
 /**
  * Cria o login e o perfil de uma pessoa da equipe.
@@ -119,14 +126,17 @@ export type CriarUsuarioInput = z.input<typeof criarSchema>;
  */
 export async function criarUsuario(
   input: CriarUsuarioInput
-): Promise<ActionResult> {
+): Promise<ResultadoCriacao> {
   const parsed = criarSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, erro: parsed.error.errors[0]?.message ?? "Dados inválidos" };
   }
 
   const ctx = await contexto(GESTAO);
-  if (ctx.estado !== "ok") return bloqueio(ctx);
+  if (ctx.estado !== "ok") {
+    const b = bloqueio(ctx);
+    return b.ok ? { ok: false, erro: "Sem permissão." } : b;
+  }
   if (!adminDisponivel()) return { ok: false, erro: MSG_SEM_CHAVE };
 
   const d = parsed.data;
@@ -192,8 +202,23 @@ export async function criarUsuario(
     return { ok: false, erro: "Não foi possível concluir o cadastro." };
   }
 
+  let emailEnviado = false;
+  if (d.enviarConvite) {
+    const { data: org } = orgId
+      ? await admin.from("organizations").select("nome").eq("id", orgId).maybeSingle()
+      : { data: null };
+    const envio = await enviarLinkDeSenha({
+      email: d.email,
+      nome: d.nome,
+      tipo: "convite",
+      clinica: org?.nome ?? null,
+    });
+    emailEnviado = envio.enviado;
+    if (!envio.enviado) console.error("[usuarios] Convite não enviado:", envio.motivo);
+  }
+
   revalidar();
-  return { ok: true };
+  return { ok: true, emailEnviado };
 }
 
 /* ------------------------------------------------------------------ */
@@ -530,6 +555,14 @@ export async function enviarRedefinicao(usuarioId: string): Promise<ActionResult
   if (!conta?.user?.email) {
     return { ok: false, erro: "Essa conta não tem e-mail cadastrado." };
   }
+
+  const envio = await enviarLinkDeSenha({
+    email: conta.user.email,
+    nome: r.alvo.nome,
+    tipo: "redefinir",
+  });
+  if (envio.enviado) return { ok: true };
+  console.error("[usuarios] Resend falhou, tentando pelo Supabase:", envio.motivo);
 
   const { error } = await r.ctx.supabase.auth.resetPasswordForEmail(conta.user.email);
   if (error) {

@@ -43,6 +43,24 @@ export function NovaSenhaForm() {
 
     let vivo = true;
 
+    // Link enviado pelo Resend (convite ou senha nova): traz o token_hash
+    // na query, que trocamos aqui mesmo por uma sessão.
+    const query = new URLSearchParams(window.location.search);
+    const tokenHash = query.get("token_hash");
+    if (tokenHash) {
+      supabase.auth
+        .verifyOtp({ token_hash: tokenHash, type: "recovery" })
+        .then(({ data, error }) => {
+          if (!vivo) return;
+          // Tira o token da barra de endereço: ele só vale uma vez
+          window.history.replaceState(null, "", window.location.pathname);
+          setEstado(!error && data.session ? "pronto" : "expirado");
+        });
+      return () => {
+        vivo = false;
+      };
+    }
+
     supabase.auth.getSession().then(({ data }) => {
       if (!vivo) return;
       setEstado(data.session ? "pronto" : "expirado");
