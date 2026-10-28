@@ -335,6 +335,7 @@ export function AgendaCalendar({
         clinicas={clinicas}
         usuarioId={usuarioId}
         organizationId={organizationId}
+        conveniosUsados={opcoes.convenios}
         onCriada={(quando) => {
           setCursor(quando);
           setVisao("dia");

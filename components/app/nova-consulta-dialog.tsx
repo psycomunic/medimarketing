@@ -21,17 +21,47 @@ import { rotuloTipo } from "@/lib/agenda";
 import { criarConsulta } from "@/lib/actions/consultas";
 import { cn } from "@/lib/utils";
 
-// Convênios sugeridos (o campo aceita texto livre via datalist)
+// Convênios mais comuns no Brasil. O que não estiver aqui entra por
+// "Outro convênio", e passa a aparecer na lista da clínica depois.
 const CONVENIOS = [
-  "Particular",
   "Unimed",
   "Bradesco Saúde",
   "SulAmérica",
   "Amil",
   "NotreDame Intermédica",
   "Hapvida",
-  "Porto Seguro",
+  "Porto Seguro Saúde",
+  "Prevent Senior",
+  "Golden Cross",
+  "Care Plus",
+  "Omint",
+  "Allianz Saúde",
+  "Mediservice",
+  "MedSênior",
+  "Seguros Unimed",
+  "Alice",
+  "Sami",
+  "QSaúde",
+  "Leve Saúde",
+  "Assim Saúde",
+  "São Francisco Saúde",
+  "Plena Saúde",
+  "Ameplan",
+  "Trasmontano",
+  "Biovida",
+  "Clinipam",
+  "Cassi",
+  "Geap",
+  "Saúde Caixa",
+  "Postal Saúde",
+  "Saúde Petrobras",
+  "Cabesp",
+  "Economus",
+  "IAMSPE",
+  "IPSEMG",
+  "Fusex",
 ];
+const OUTRO = "__outro";
 
 const DURACOES = [15, 20, 30, 40, 45, 60, 90];
 
@@ -53,6 +83,7 @@ export function NovaConsultaDialog({
   clinicas = [],
   usuarioId,
   organizationId,
+  conveniosUsados = [],
 }: {
   aberto: boolean;
   data: Date | null;
@@ -64,6 +95,8 @@ export function NovaConsultaDialog({
   usuarioId?: string;
   /** Clínica de quem está criando; nula para o super admin. */
   organizationId?: string | null;
+  /** Convênios que a clínica já usou: entram no topo da lista. */
+  conveniosUsados?: string[];
   /** Avisa a data criada, para a agenda ir até ela. */
   onCriada?: (quando: Date) => void;
 }) {
@@ -77,6 +110,10 @@ export function NovaConsultaDialog({
   const [email, setEmail] = useState("");
   const [nascimento, setNascimento] = useState("");
   const [convenio, setConvenio] = useState("Particular");
+  const [convenioOutro, setConvenioOutro] = useState(false);
+  const usados = [...new Set(conveniosUsados.map((c) => c.trim()).filter(Boolean))]
+    .filter((c) => c.toLowerCase() !== "particular")
+    .sort((a, b) => a.localeCompare(b, "pt-BR"));
   const [dia, setDia] = useState("");
   const [hora, setHora] = useState("09:00");
   const [duracao, setDuracao] = useState(30);
@@ -111,6 +148,7 @@ export function NovaConsultaDialog({
     setEmail("");
     setNascimento("");
     setConvenio("Particular");
+    setConvenioOutro(false);
     setDuracao(30);
     setTipo("primeira");
     setMotivo("");
@@ -333,18 +371,48 @@ export function NovaConsultaDialog({
               </div>
               <div className="grid gap-1.5">
                 <Label htmlFor="convenio">Convênio</Label>
-                <Input
+                <select
                   id="convenio"
-                  list="convenios"
-                  value={convenio}
-                  onChange={(e) => setConvenio(e.target.value)}
-                  placeholder="Particular"
-                />
-                <datalist id="convenios">
-                  {CONVENIOS.map((c) => (
-                    <option key={c} value={c} />
-                  ))}
-                </datalist>
+                  value={convenioOutro ? OUTRO : convenio}
+                  onChange={(e) => {
+                    if (e.target.value === OUTRO) {
+                      setConvenioOutro(true);
+                      setConvenio("");
+                    } else {
+                      setConvenioOutro(false);
+                      setConvenio(e.target.value);
+                    }
+                  }}
+                  className={selectClass}
+                >
+                  <option value="Particular">Particular</option>
+                  {usados.length > 0 && (
+                    <optgroup label="Já usados na clínica">
+                      {usados.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  <optgroup label="Convênios">
+                    {CONVENIOS.filter((c) => !usados.includes(c)).map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </optgroup>
+                  <option value={OUTRO}>Outro convênio…</option>
+                </select>
+                {convenioOutro && (
+                  <Input
+                    aria-label="Nome do convênio"
+                    value={convenio}
+                    onChange={(e) => setConvenio(e.target.value)}
+                    placeholder="Digite o nome do convênio"
+                    autoFocus
+                  />
+                )}
               </div>
             </div>
           </fieldset>
