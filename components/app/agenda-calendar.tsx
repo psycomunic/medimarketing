@@ -78,7 +78,8 @@ export function AgendaCalendar({
   organizationId?: string | null;
   demo?: boolean;
 }) {
-  const [visao, setVisao] = useState<Visao>("mes");
+  // Abre sempre no dia de hoje: é a pergunta de quem entra na agenda
+  const [visao, setVisao] = useState<Visao>("dia");
   const [cursor, setCursor] = useState(new Date());
   const [selecionada, setSelecionada] = useState<Consulta | null>(null);
   const [novaAberta, setNovaAberta] = useState(false);
