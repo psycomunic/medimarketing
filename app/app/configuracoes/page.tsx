@@ -6,17 +6,21 @@ import { adminDisponivel } from "@/lib/supabase/admin";
 import { getUsuarios } from "@/lib/supabase/usuarios";
 import { getIntegracoes } from "@/lib/supabase/configuracoes";
 import { listarConexoesMerge } from "@/lib/actions/configuracoes";
+import { getEnvios, getPreferenciasDaClinica } from "@/lib/supabase/envios";
+import { envioAutomatico } from "@/lib/envio";
 
 export const metadata = { title: "Configurações" };
 
 export default async function ConfiguracoesPage() {
   const { organizacao, profile } = await exigirModulo("configuracoes");
 
-  const [equipe, integracoes, whatsapp, demo] = await Promise.all([
+  const [equipe, integracoes, whatsapp, demo, envios, preferencias] = await Promise.all([
     getUsuarios({ organizationId: organizacao?.id ?? null, ehSuperAdmin: false }),
     getIntegracoes(organizacao?.id ?? null),
     listarConexoesMerge(),
     emModoDemo(),
+    organizacao ? getEnvios(organizacao.id) : Promise.resolve([]),
+    organizacao ? getPreferenciasDaClinica(organizacao.id) : Promise.resolve([]),
   ]);
 
   return (
@@ -57,6 +61,9 @@ export default async function ConfiguracoesPage() {
           usuarioId={profile.id}
           adminDisponivel={adminDisponivel()}
           demo={demo}
+          envios={envios}
+          preferencias={preferencias}
+          whatsappDaClinica={envioAutomatico(organizacao.merge_connection_id)}
         />
       )}
     </div>

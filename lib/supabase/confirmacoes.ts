@@ -467,6 +467,8 @@ export async function getDevidas(
     .from("confirmacoes")
     .select("*")
     .eq("status", "pendente")
+    // Já na fila de envios: a fila cuida de entregar e tentar de novo
+    .is("enfileirado_em", null)
     .lte("agendado_para", ate)
     .order("agendado_para", { ascending: true })
     .limit(limite);

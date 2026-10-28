@@ -4,6 +4,7 @@ import { Sidebar } from "@/components/app/sidebar";
 import { exigirSessao } from "@/lib/acesso";
 import { emModoDemo } from "@/lib/supabase/queries";
 import { contarNaoLidas } from "@/lib/supabase/notificacoes";
+import { NotificacoesAoVivo } from "@/components/app/notificacoes/ao-vivo";
 
 export const metadata = {
   title: "Plataforma",
@@ -41,6 +42,7 @@ export default async function AppLayout({
           </p>
         )}
         {children}
+        {!demo && <NotificacoesAoVivo />}
         {/* Espaço para a barra flutuante não cobrir o fim da página */}
         {demo && <div aria-hidden className="h-20" />}
       </main>

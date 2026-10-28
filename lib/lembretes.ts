@@ -166,6 +166,50 @@ export function diaDaSemana(iso: string): string {
   return partesEmBrasilia(new Date(iso)).diaSemana;
 }
 
+/** Data em Brasília, "AAAA-MM-DD" (para chaves e comparações). */
+export function diaEmBrasilia(d: Date = new Date()): string {
+  const p = partesEmBrasilia(d);
+  return `${p.ano}-${p.mes}-${p.dia}`;
+}
+
+/** Hora cheia de agora em Brasília (0-23). */
+export function horaEmBrasilia(d: Date = new Date()): number {
+  return Number(partesEmBrasilia(d).hora);
+}
+
+/** Início e fim de um dia de Brasília ("AAAA-MM-DD"), como instantes. */
+export function limitesDoDia(dia: string): { inicio: Date; fim: Date } {
+  const [ano, mes, d] = dia.split("-").map(Number);
+  return { inicio: deBrasilia(ano, mes, d, 0), fim: deBrasilia(ano, mes, d + 1, 0) };
+}
+
+/** O próximo dia útil depois de hoje, em Brasília ("AAAA-MM-DD"). */
+export function proximoDiaUtil(d: Date = new Date()): string {
+  const p = partesEmBrasilia(d);
+  let alvo = new Date(Date.UTC(Number(p.ano), Number(p.mes) - 1, Number(p.dia) + 1, 12));
+  while (ehFimDeSemana(alvo.getUTCFullYear(), alvo.getUTCMonth() + 1, alvo.getUTCDate())) {
+    alvo = new Date(alvo.getTime() + 86_400_000);
+  }
+  const dois = (n: number) => String(n).padStart(2, "0");
+  return `${alvo.getUTCFullYear()}-${dois(alvo.getUTCMonth() + 1)}-${dois(alvo.getUTCDate())}`;
+}
+
+/**
+ * "hoje", "amanhã" ou "na segunda-feira": como dizer o dia da consulta
+ * a partir de quando a mensagem sai. O lembrete dizia sempre "amanhã",
+ * mesmo o de sexta para a consulta de segunda.
+ */
+export function diaRelativo(iso: string, referencia: Date = new Date()): string {
+  const [a1, m1, d1] = diaEmBrasilia(referencia).split("-").map(Number);
+  const [a2, m2, d2] = diaEmBrasilia(new Date(iso)).split("-").map(Number);
+  const dias = Math.round((Date.UTC(a2, m2 - 1, d2) - Date.UTC(a1, m1 - 1, d1)) / 86_400_000);
+  if (dias === 0) return "hoje";
+  if (dias === 1) return "amanhã";
+  const semana = diaDaSemana(iso);
+  if (dias > 1 && dias < 7) return `${/sábado|domingo/.test(semana) ? "no" : "na"} ${semana}`;
+  return `em ${formatarData(iso)}`;
+}
+
 /**
  * Monta o texto que vai para o paciente.
  *

@@ -7,11 +7,14 @@ import {
   Ban,
   Bell,
   CalendarClock,
+  CalendarDays,
+  CalendarPlus,
   CheckCheck,
   CheckCircle2,
   Clock,
   Loader2,
   MessageCircle,
+  TriangleAlert,
   UserPlus,
   Users,
 } from "lucide-react";
@@ -30,6 +33,10 @@ const icone: Record<TipoNotificacao, typeof Bell> = {
   mensagem_nova: MessageCircle,
   cadastro_pendente: UserPlus,
   sistema: Bell,
+  consulta_nova: CalendarPlus,
+  consulta_remarcada: CalendarClock,
+  agenda: CalendarDays,
+  envio_falhou: TriangleAlert,
 };
 
 const corTipo: Record<TipoNotificacao, string> = {
@@ -41,6 +48,10 @@ const corTipo: Record<TipoNotificacao, string> = {
   mensagem_nova: "bg-azul-medico/15 text-azul-medico",
   cadastro_pendente: "bg-teal/15 text-teal",
   sistema: "bg-verde-menta text-cinza-suave",
+  consulta_nova: "bg-teal/15 text-teal",
+  consulta_remarcada: "bg-alerta/15 text-alerta",
+  agenda: "bg-azul-medico/15 text-azul-medico",
+  envio_falhou: "bg-coral/15 text-coral",
 };
 
 type Filtro = "nao_lidas" | "urgentes" | "todas";

@@ -16,10 +16,15 @@ import {
   Users,
 } from "lucide-react";
 import type {
+  Envio,
   Integracao,
   Organization,
+  PreferenciaAviso,
   ProvedorIntegracao,
 } from "@/lib/supabase/types";
+import { HistoricoEnvios } from "@/components/app/avisos/historico";
+import { PreferenciasAviso } from "@/components/app/avisos/preferencias";
+import { rotuloPapel } from "@/lib/rbac";
 import type { UsuarioGerenciavel } from "@/lib/supabase/usuarios";
 import {
   salvarClinica,
@@ -53,7 +58,7 @@ const placeholderProvedor: Record<ProvedorIntegracao, string> = {
   instagram: "@suaclinica",
 };
 
-type Aba = "clinica" | "equipe" | "integracoes";
+type Aba = "clinica" | "equipe" | "mensagens" | "integracoes";
 
 export function PainelConfiguracoes({
   organizacao,
@@ -64,9 +69,15 @@ export function PainelConfiguracoes({
   usuarioId,
   adminDisponivel,
   demo,
+  envios,
+  preferencias,
+  whatsappDaClinica,
 }: {
   organizacao: Organization;
   equipe: UsuarioGerenciavel[];
+  envios: Envio[];
+  preferencias: PreferenciaAviso[];
+  whatsappDaClinica: boolean;
   integracoes: Integracao[];
   conexoesWhatsApp: ConexaoDisponivel[];
   mergeDisponivel: boolean;
@@ -79,6 +90,7 @@ export function PainelConfiguracoes({
   const abas: { id: Aba; label: string; icone: typeof Building2 }[] = [
     { id: "clinica", label: "Dados da clínica", icone: Building2 },
     { id: "equipe", label: `Equipe (${equipe.length})`, icone: Users },
+    { id: "mensagens", label: "Mensagens", icone: MessageCircle },
     {
       id: "integracoes",
       label: `Integrações (${integracoes.filter((i) => i.conectado).length}/${integracoes.length})`,
@@ -125,6 +137,18 @@ export function PainelConfiguracoes({
             demo={demo}
           />
         )}
+        {aba === "mensagens" && (
+          <div className="space-y-6">
+            <HistoricoEnvios envios={envios} demo={demo} />
+            <AvisosDaEquipe
+              equipe={equipe}
+              preferencias={preferencias}
+              whatsappDaClinica={whatsappDaClinica}
+              usuarioId={usuarioId}
+              demo={demo}
+            />
+          </div>
+        )}
         {aba === "integracoes" && (
           <div className="space-y-4">
             <ConexaoWhatsApp
@@ -139,6 +163,86 @@ export function PainelConfiguracoes({
         )}
       </div>
     </>
+  );
+}
+
+/* --------------------------- Avisos da equipe --------------------------- */
+
+/**
+ * O gestor decide quem da equipe recebe o quê. Cada linha abre a mesma
+ * grade que a pessoa vê em Meu Perfil — os dois lados mexem no mesmo
+ * registro.
+ */
+function AvisosDaEquipe({
+  equipe,
+  preferencias,
+  whatsappDaClinica,
+  usuarioId,
+  demo,
+}: {
+  equipe: UsuarioGerenciavel[];
+  preferencias: PreferenciaAviso[];
+  whatsappDaClinica: boolean;
+  usuarioId: string;
+  demo: boolean;
+}) {
+  const [aberto, setAberto] = useState<string | null>(null);
+  const pessoas = equipe.filter((u) => u.ativo && !u.aguardando_liberacao && u.role !== "super_admin");
+  const porId = new Map(preferencias.map((p) => [p.usuario_id, p]));
+
+  return (
+    <section className="rounded-lg border border-border bg-white shadow-soft">
+      <header className="border-b border-border px-5 py-4">
+        <h2 className="text-lg font-semibold text-azul-medico">Avisos da equipe</h2>
+        <p className="mt-1 text-sm text-cinza-suave">
+          Quem recebe cada aviso da agenda e por qual canal. Cada pessoa também ajusta o seu em Meu Perfil.
+        </p>
+      </header>
+      {pessoas.length === 0 ? (
+        <p className="px-6 py-10 text-center text-sm text-cinza-suave">Ninguém da equipe com acesso ativo.</p>
+      ) : (
+        <ul className="divide-y divide-border">
+          {pessoas.map((u) => {
+            const p = porId.get(u.id);
+            return (
+              <li key={u.id} className="px-5 py-3">
+                <button
+                  type="button"
+                  onClick={() => setAberto(aberto === u.id ? null : u.id)}
+                  className="flex w-full items-center justify-between gap-3 text-left"
+                  aria-expanded={aberto === u.id}
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-medium text-cinza-texto">{u.nome ?? "Sem nome"}</span>
+                    <span className="block truncate text-xs text-cinza-suave">
+                      {rotuloPapel(u.role)} · {p ? "avisos personalizados" : "padrão do papel"}
+                      {!u.telefone && " · sem telefone"}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-sm font-medium text-teal">{aberto === u.id ? "Fechar" : "Ajustar"}</span>
+                </button>
+                {aberto === u.id && (
+                  <div className="mt-3">
+                    <PreferenciasAviso
+                      usuarioId={u.id}
+                      papel={u.role}
+                      inicial={p?.canais ?? {}}
+                      resumoHora={p?.resumo_hora ?? 7}
+                      temTelefone={!!u.telefone}
+                      temEmail={!!u.email}
+                      whatsappDaClinica={whatsappDaClinica}
+                      propria={u.id === usuarioId}
+                      demo={demo}
+                      compacto
+                    />
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
   );
 }
 

@@ -64,19 +64,21 @@ export function ConsultaDialog({
   const [pending, startTransition] = useTransition();
   const [salvandoObs, setSalvandoObs] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [cancelando, setCancelando] = useState(false);
 
   useEffect(() => {
     setObs(consulta?.observacao ?? "");
     setErro(null);
+    setCancelando(false);
   }, [consulta]);
 
   if (!consulta) return null;
 
-  function mudarStatus(status: StatusConsulta) {
+  function mudarStatus(status: StatusConsulta, avisarPaciente?: boolean) {
     if (!consulta) return;
     setErro(null);
     startTransition(async () => {
-      const res = await atualizarStatus(consulta.id, status);
+      const res = await atualizarStatus(consulta.id, status, { avisarPaciente });
       if (res.ok) {
         router.refresh();
         onOpenChange(false);
@@ -208,11 +210,11 @@ export function ConsultaDialog({
               <CalendarCheck className="size-4" /> Confirmar
             </Button>
           )}
-          {consulta.status !== "cancelada" && (
+          {consulta.status !== "cancelada" && !cancelando && (
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => mudarStatus("cancelada")}
+              onClick={() => setCancelando(true)}
               disabled={pending}
               className="text-coral hover:bg-coral/10"
             >
@@ -220,6 +222,38 @@ export function ConsultaDialog({
             </Button>
           )}
         </div>
+
+        {/* O profissional é avisado sempre; o paciente, se a equipe quiser */}
+        {cancelando && (
+          <div className="rounded-lg border border-coral/30 bg-coral/5 p-4">
+            <p className="text-sm font-semibold text-azul-medico">Cancelar esta consulta?</p>
+            <p className="mt-1 text-xs text-cinza-suave">
+              O profissional é avisado. Escolha se o paciente também recebe a mensagem de
+              cancelamento.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                onClick={() => mudarStatus("cancelada", true)}
+                disabled={pending}
+                className="bg-coral text-white hover:bg-coral/90"
+              >
+                Cancelar e avisar o paciente
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => mudarStatus("cancelada", false)}
+                disabled={pending}
+              >
+                Cancelar sem avisar
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setCancelando(false)} disabled={pending}>
+                Voltar
+              </Button>
+            </div>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

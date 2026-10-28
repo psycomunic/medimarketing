@@ -28,7 +28,34 @@ export type MarcaEmail = {
   /** Para onde o destinatário responde. */
   emailClinica?: string | null;
   telefoneClinica?: string | null;
+  /**
+   * E-mail do sistema (convite, senha, avisos da plataforma): sai com a
+   * identidade da Medi Marketing, não com a de uma clínica.
+   */
+  sistema?: boolean;
 };
+
+/** Logo da Medi Marketing para e-mail: PNG, porque o Gmail descarta SVG. */
+export const LOGO_MEDI_EMAIL = `${(
+  process.env.NEXT_PUBLIC_SITE_URL ?? "https://medimarketing.com.br"
+).replace(/\/$/, "")}/logo-medimarketing-email.png`;
+
+/** A marca dos e-mails que a plataforma manda para os usuários. */
+export const MARCA_MEDI: MarcaEmail = {
+  clinica: "Medi Marketing",
+  logoUrl: LOGO_MEDI_EMAIL,
+  emailClinica: "contato@medimarketing.com.br",
+  sistema: true,
+};
+
+/**
+ * Logo da clínica que um cliente de e-mail consegue mostrar. SVG o
+ * Gmail descarta, e a imagem quebrada fica pior que o monograma.
+ */
+function logoUtilizavel(url?: string | null): string | null {
+  if (!url) return null;
+  return /\.svg(\?|$)/i.test(url) ? null : url;
+}
 
 /** Escapa texto que vai para dentro do HTML. */
 export function esc(t: string): string {
@@ -43,8 +70,20 @@ export function esc(t: string): string {
 function cabecalho(m: MarcaEmail): string {
   const nome = esc(m.clinica);
 
-  const marca = m.logoUrl
-    ? `<img src="${esc(m.logoUrl)}" alt="${nome}" height="48"
+  // A logo da Medi Marketing já traz o nome: vai sozinha
+  if (m.sistema) {
+    return `
+  <tr>
+    <td style="padding:28px 32px 20px;border-bottom:1px solid ${BORDA};">
+      <img src="${esc(LOGO_MEDI_EMAIL)}" alt="Medi Marketing" height="34"
+        style="display:block;height:34px;width:auto;border:0;" />
+    </td>
+  </tr>`;
+  }
+
+  const logo = logoUtilizavel(m.logoUrl);
+  const marca = logo
+    ? `<img src="${esc(logo)}" alt="${nome}" height="48"
          style="display:block;max-height:48px;width:auto;border:0;" />`
     : `<span style="display:inline-block;width:48px;height:48px;line-height:48px;
          border-radius:10px;background:${AZUL};color:#fff;font-size:22px;
@@ -73,6 +112,22 @@ function cabecalho(m: MarcaEmail): string {
  * mandaria o paciente falar com uma parede. Toda ação vira botão.
  */
 function rodape(m: MarcaEmail): string {
+  if (m.sistema) {
+    return `
+  <tr>
+    <td style="padding:20px 32px 28px;border-top:1px solid ${BORDA};">
+      <p style="margin:0;font-size:13px;color:${CINZA};line-height:1.5;">
+        Medi Marketing &nbsp;·&nbsp;
+        <a href="https://medimarketing.com.br" style="color:${TEAL};text-decoration:none;">medimarketing.com.br</a>
+      </p>
+      <p style="margin:12px 0 0;font-size:11px;color:#9AAAB2;line-height:1.5;">
+        Este e-mail é automático e não recebe respostas.
+        Dúvidas: contato@medimarketing.com.br
+      </p>
+    </td>
+  </tr>`;
+  }
+
   const contato = [m.telefoneClinica, m.emailClinica]
     .filter(Boolean)
     .map((c) => esc(String(c)))
@@ -177,6 +232,8 @@ export type DadosEmailConsulta = {
   medico?: string | null;
   endereco?: string | null;
   link?: string | null;
+  /** "hoje", "amanhã", "na segunda-feira" — usado no lembrete. */
+  quando?: string | null;
 };
 
 export type Modelo = { assunto: string; html: string; texto: string };
@@ -245,13 +302,13 @@ export function emailPacienteLembrete(
 ): Modelo {
   const corpo = `
   <tr><td style="padding:24px 32px;">
-    ${faixa(AZUL, MENTA, "Sua consulta é amanhã")}
+    ${faixa(AZUL, MENTA, `Sua consulta é ${d.quando ?? "amanhã"}`)}
     <p style="margin:0 0 4px;font-size:16px;color:${TEXTO};">
       Olá, ${esc(d.paciente)}!
     </p>
     <p style="margin:0;font-size:15px;color:${CINZA};line-height:1.6;">
       Passando para lembrar da sua consulta e confirmar se está tudo
-      certo para amanhã:
+      certo para ${esc(d.quando ?? "amanhã")}:
     </p>
     ${blocoDados([
       ["Data", `${d.data} (${d.diaSemana})`],
@@ -273,9 +330,9 @@ export function emailPacienteLembrete(
 
   return {
     // O assunto é texto puro: escapar aqui deixaria "&" e acento à mostra
-    assunto: `${d.paciente}, podemos confirmar sua consulta de amanhã?`,
+    assunto: `${d.paciente}, podemos confirmar sua consulta ${!d.quando || d.quando === "amanhã" ? "de amanhã" : d.quando === "hoje" ? "de hoje" : d.quando}?`,
     html: layout(m, corpo),
-    texto: `Ola, ${d.paciente}! Sua consulta na ${m.clinica} e amanha, ${d.data} as ${d.hora}${d.medico ? ` com ${d.medico}` : ""}. Confirme sua presenca ou peca outro horario em: ${d.link ?? ""}`,
+    texto: `Ola, ${d.paciente}! Sua consulta na ${m.clinica} e ${d.quando ?? "amanha"}, ${d.data} as ${d.hora}${d.medico ? ` com ${d.medico}` : ""}. Confirme sua presenca ou peca outro horario em: ${d.link ?? ""}`,
   };
 }
 
@@ -467,7 +524,7 @@ export function emailAcesso(
   tipo: "convite" | "redefinir",
   d: { nome: string; clinica?: string | null; link: string; email: string }
 ): Modelo {
-  const m: MarcaEmail = { clinica: "Medi Marketing" };
+  const m = MARCA_MEDI;
   const convite = tipo === "convite";
   const corpo = `
   <tr><td style="padding:24px 32px;">
@@ -498,5 +555,114 @@ export function emailAcesso(
     assunto: convite ? "Seu acesso ao painel Medi Marketing" : "Crie sua nova senha",
     html: layout(m, corpo),
     texto: `${convite ? "Seu acesso ao painel Medi Marketing esta pronto." : "Pedido de nova senha."} Login: ${d.email}. Crie sua senha em: ${d.link}`,
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* Avisos da equipe                                                    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Molde dos avisos internos: faixa com o assunto, uma frase, os dados
+ * da consulta e o botão para o painel. O médico lê entre um paciente e
+ * outro — tudo o que importa cabe na primeira tela.
+ */
+export function emailEquipe(
+  m: MarcaEmail,
+  e: {
+    assunto: string;
+    faixa: { texto: string; cor?: string; fundo?: string };
+    frase: string;
+    dados: [string, string | null | undefined][];
+    nota?: string | null;
+    botao?: { texto: string; url: string } | null;
+  }
+): Modelo {
+  const corpo = `
+  <tr><td style="padding:24px 32px;">
+    ${faixa(e.faixa.cor ?? TEAL, e.faixa.fundo ?? MENTA, e.faixa.texto)}
+    <p style="margin:0;font-size:15px;color:${CINZA};line-height:1.6;">${esc(e.frase)}</p>
+    ${blocoDados(e.dados)}
+    ${e.nota ? `<p style="margin:0;font-size:14px;color:${CINZA};line-height:1.6;">${esc(e.nota)}</p>` : ""}
+    ${e.botao ? botao(e.botao.texto, e.botao.url, AZUL) : ""}
+  </td></tr>`;
+
+  const texto = [
+    e.faixa.texto,
+    e.frase,
+    ...e.dados.filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`),
+    e.nota,
+    e.botao?.url,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  return { assunto: e.assunto, html: layout(m, corpo), texto };
+}
+
+export type ItemAgenda = { hora: string; paciente: string; situacao: string; tipo?: string | null };
+
+/** Resumo da manhã: as consultas do dia de um profissional. */
+export function emailAgendaDoDia(
+  m: MarcaEmail,
+  d: { nome: string; data: string; diaSemana: string; itens: ItemAgenda[]; painel: string }
+): Modelo {
+  const total = `${d.itens.length} consulta${d.itens.length === 1 ? "" : "s"}`;
+  const linhas = d.itens
+    .map(
+      (i) => `
+      <tr>
+        <td style="padding:8px 0;font-size:14px;color:${AZUL};font-weight:700;width:64px;vertical-align:top;border-bottom:1px solid ${BORDA};">${esc(i.hora)}</td>
+        <td style="padding:8px 0;font-size:14px;color:${TEXTO};vertical-align:top;border-bottom:1px solid ${BORDA};">
+          ${esc(i.paciente)}${i.tipo ? `<span style="color:${CINZA};"> · ${esc(i.tipo)}</span>` : ""}
+          <br /><span style="font-size:12px;color:${CINZA};">${esc(i.situacao)}</span>
+        </td>
+      </tr>`
+    )
+    .join("");
+
+  const corpo = `
+  <tr><td style="padding:24px 32px;">
+    ${faixa(AZUL, MENTA, `Sua agenda de hoje: ${total}`)}
+    <p style="margin:0 0 4px;font-size:16px;color:${TEXTO};">Bom dia, ${esc(d.nome)}!</p>
+    <p style="margin:0;font-size:15px;color:${CINZA};line-height:1.6;">
+      ${esc(d.diaSemana)}, ${esc(d.data)}.
+    </p>
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:16px 0;">
+      ${linhas}
+    </table>
+    ${botao("Abrir a agenda", d.painel, AZUL)}
+  </td></tr>`;
+
+  return {
+    assunto: `Agenda de hoje (${d.data}): ${total}`,
+    html: layout(m, corpo),
+    texto: [`Agenda de hoje, ${d.data}:`, ...d.itens.map((i) => `${i.hora} ${i.paciente} (${i.situacao})`), d.painel].join("\n"),
+  };
+}
+
+/** Consulta cancelada, para o paciente. Sem culpa e com o caminho de volta. */
+export function emailPacienteCancelada(m: MarcaEmail, d: DadosEmailConsulta): Modelo {
+  const corpo = `
+  <tr><td style="padding:24px 32px;">
+    ${faixa("#B45309", "#FEF3C7", "Consulta cancelada")}
+    <p style="margin:0 0 4px;font-size:16px;color:${TEXTO};">Olá, ${esc(d.paciente)}!</p>
+    <p style="margin:0;font-size:15px;color:${CINZA};line-height:1.6;">
+      Sua consulta na ${esc(m.clinica)} foi cancelada:
+    </p>
+    ${blocoDados([
+      ["Data", `${d.data} (${d.diaSemana})`],
+      ["Horário", d.hora],
+      ["Profissional", d.medico],
+    ])}
+    <p style="margin:0;font-size:15px;color:${CINZA};line-height:1.6;">
+      Quando quiser remarcar, é só falar com a clínica${m.telefoneClinica ? ` pelo ${esc(m.telefoneClinica)}` : ""}.
+    </p>
+  </td></tr>`;
+
+  return {
+    assunto: `Consulta de ${d.data}, às ${d.hora}, cancelada`,
+    html: layout(m, corpo),
+    texto: `Ola, ${d.paciente}! Sua consulta na ${m.clinica} de ${d.data} as ${d.hora} foi cancelada. Quando quiser remarcar, fale com a clinica.`,
   };
 }

@@ -6,12 +6,22 @@ import { exigirSessao } from "@/lib/acesso";
 import { emModoDemo } from "@/lib/supabase/queries";
 import { listarConexoesMerge } from "@/lib/actions/configuracoes";
 import { rotuloPapel, modulosDoPapel } from "@/lib/rbac";
+import { PreferenciasAviso } from "@/components/app/avisos/preferencias";
+import { getPreferencia } from "@/lib/supabase/envios";
+import { envioAutomatico } from "@/lib/envio";
+import { createClient } from "@/lib/supabase/server";
+import { supabaseConfigurado } from "@/lib/supabase/queries";
 
 export const metadata = { title: "Meu perfil" };
 
 export default async function PerfilPage() {
   const { profile, organizacao, role } = await exigirSessao();
-  const [demo, whatsapp] = await Promise.all([emModoDemo(), listarConexoesMerge()]);
+  const [demo, whatsapp, preferencia, email] = await Promise.all([
+    emModoDemo(),
+    listarConexoesMerge(),
+    getPreferencia(profile.id),
+    emailDaConta(),
+  ]);
 
   const modulos = modulosDoPapel(role);
   // Mesma régua da action e da política do banco
@@ -96,6 +106,23 @@ export default async function PerfilPage() {
         />
       )}
 
+      {/* Avisos da agenda: só quem é de uma clínica recebe */}
+      {organizacao && role !== "super_admin" && (
+        <div className="mt-6">
+          <PreferenciasAviso
+            usuarioId={profile.id}
+            papel={role}
+            inicial={preferencia?.canais ?? {}}
+            resumoHora={preferencia?.resumo_hora ?? 7}
+            temTelefone={!!profile.telefone}
+            temEmail={!!email}
+            whatsappDaClinica={envioAutomatico(organizacao.merge_connection_id)}
+            propria
+            demo={demo}
+          />
+        </div>
+      )}
+
       <FormSenha demo={demo} />
 
       {/* O que este papel pode acessar */}
@@ -120,6 +147,13 @@ export default async function PerfilPage() {
       </section>
     </div>
   );
+}
+
+async function emailDaConta(): Promise<string | null> {
+  if (!supabaseConfigurado() || (await emModoDemo())) return null;
+  const supabase = await createClient();
+  const { data } = await supabase.auth.getUser();
+  return data.user?.email ?? null;
 }
 
 function Info({

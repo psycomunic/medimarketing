@@ -1,7 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { avisarConsultaMarcada } from "@/lib/avisos-consulta";
+import { comunicarConsulta } from "@/lib/comunicacao/consulta";
+import { createAdminClient, adminDisponivel } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { emModoDemo } from "@/lib/supabase/queries";
 import type { StatusConsulta, TipoConsulta } from "@/lib/supabase/types";
@@ -19,14 +20,27 @@ async function getUserId() {
   return { supabase, userId: user?.id };
 }
 
-/** Atualiza o status de uma consulta (ex.: marcar como realizada). */
+/**
+ * Atualiza o status de uma consulta (ex.: marcar como realizada).
+ *
+ * Cancelar e confirmar pela agenda comunicam como os mesmos eventos do
+ * link do paciente: o profissional é avisado, e no cancelamento o
+ * paciente também, quando `avisarPaciente` não vier desligado.
+ */
 export async function atualizarStatus(
   id: string,
   status: StatusConsulta,
+  opcoes: { avisarPaciente?: boolean } = {},
 ): Promise<ActionResult> {
   if (await emModoDemo()) return { ok: false, erro: MSG_DEMO };
   const { supabase, userId } = await getUserId();
   if (!userId) return { ok: false, erro: "Sessão expirada." };
+
+  const { data: antes } = await supabase
+    .from("consultas")
+    .select("status")
+    .eq("id", id)
+    .maybeSingle();
 
   const { error } = await supabase
     .from("consultas")
@@ -34,7 +48,29 @@ export async function atualizarStatus(
     .eq("id", id);
 
   if (error) return { ok: false, erro: "Não foi possível atualizar o status." };
+
+  if (antes && antes.status !== status) {
+    if (status === "cancelada") {
+      await comunicarConsulta(id, {
+        tipo: "cancelada",
+        atorId: userId,
+        avisarPaciente: opcoes.avisarPaciente ?? true,
+      });
+    } else if (status === "confirmada") {
+      // Confirmada por telefone ou no balcão: o lembrete não precisa sair
+      if (adminDisponivel()) {
+        await createAdminClient()
+          .from("confirmacoes")
+          .update({ status: "confirmado", respondido_em: new Date().toISOString() })
+          .eq("consulta_id", id)
+          .in("status", ["pendente", "enviado"]);
+      }
+      await comunicarConsulta(id, { tipo: "resposta", resposta: "confirmado", atorId: userId });
+    }
+  }
+
   revalidatePath("/app/agenda");
+  revalidatePath("/app/confirmacoes");
   revalidatePath("/app");
   return { ok: true };
 }
@@ -171,10 +207,9 @@ export async function criarConsulta(input: {
 
   if (error) return { ok: false, erro: "Não foi possível criar a consulta." };
 
-  // O paciente combinou por telefone ou no balcão e ainda não tem nada
-  // por escrito. Este é o comprovante dele — vai pelos dois canais e
-  // não derruba o agendamento se falhar.
-  if (criada) await avisarConsultaMarcada(criada.id);
+  // O paciente recebe o comprovante; o profissional e a equipe, o aviso
+  // da consulta nova. Nada disso derruba o agendamento se falhar.
+  if (criada) await comunicarConsulta(criada.id, { tipo: "nova", atorId: userId });
 
   revalidatePath("/app/agenda");
   revalidatePath("/app");

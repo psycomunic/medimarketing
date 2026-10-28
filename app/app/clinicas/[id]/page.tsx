@@ -20,6 +20,8 @@ import { FileText } from "lucide-react";
 import { getUsuarios } from "@/lib/supabase/usuarios";
 import { adminDisponivel } from "@/lib/supabase/admin";
 import { AcessosClinica } from "@/components/app/clinicas/acessos-clinica";
+import { HistoricoEnvios } from "@/components/app/avisos/historico";
+import { getEnvios } from "@/lib/supabase/envios";
 
 export const metadata = { title: "Cliente" };
 
@@ -41,6 +43,7 @@ export default async function ClientePage({ params }: { params: { id: string } }
     getUsuarios({ organizationId: null, ehSuperAdmin: true }),
     emModoDemo(),
   ]);
+  const envios = await getEnvios(cliente.id, 60);
   const contasDeClinica = usuarios.filter((u) => u.role !== "super_admin");
   const membros = contasDeClinica.filter((u) => u.organization_id === cliente.id);
   const candidatos = contasDeClinica.filter((u) => u.organization_id !== cliente.id);
@@ -209,6 +212,11 @@ export default async function ClientePage({ params }: { params: { id: string } }
           </p>
         )
       )}
+
+      {/* O que saiu em nome da clínica: lembretes, avisos e falhas */}
+      <div className="mt-6">
+        <HistoricoEnvios envios={envios} demo={demo} />
+      </div>
     </div>
   );
 }

@@ -1492,3 +1492,193 @@ update public.formularios_modelos
            where c->>'id' <> 'vagas_espera')
        )
  where slug = 'diagnostico-clinica' and versao = 1;
+
+-- ====================================================================
+-- 2026-10-28 · Comunicação: fila de envios, avisos por pessoa,
+-- preferências de aviso e rotina a cada 10 minutos
+--
+-- Toda mensagem (WhatsApp, e-mail ou aviso no painel) passa a entrar
+-- numa fila, `envios`, antes de sair. A fila registra o que saiu, para
+-- quem, por onde e se deu certo; impede o mesmo aviso de sair duas
+-- vezes (`chave`); e permite tentar de novo quando falha.
+--
+-- O Supabase chama a rotina a cada 10 minutos (pg_cron + pg_net), sem
+-- depender do cron diário do plano gratuito da Vercel. O segredo da
+-- chamada fica em `config_interna`, que só a service role lê.
+-- ====================================================================
+
+create table if not exists public.envios (
+  id              uuid primary key default gen_random_uuid(),
+  organization_id uuid references public.organizations(id) on delete cascade,
+  -- consulta_nova, consulta_cancelada, lembrete_paciente, agenda_do_dia...
+  evento          text not null,
+  canal           text not null check (canal in ('email','whatsapp','painel')),
+  -- paciente, alguém da equipe ou a caixa de e-mail da clínica
+  publico         text not null check (publico in ('paciente','equipe','clinica')),
+  usuario_id      uuid references public.profiles(id) on delete set null,
+  destino         text,
+  destino_nome    text,
+  consulta_id     uuid references public.consultas(id) on delete set null,
+  confirmacao_id  uuid references public.confirmacoes(id) on delete set null,
+  assunto         text,
+  conteudo        text,
+  payload         jsonb not null default '{}'::jsonb,
+  -- Impede o mesmo aviso duas vezes (ex.: agenda:<pessoa>:<dia>:whatsapp)
+  chave           text unique,
+  status          text not null default 'pendente'
+                    check (status in ('pendente','enviando','enviado','falhou','ignorado','cancelado')),
+  agendado_para   timestamptz not null default now(),
+  tentativas      integer not null default 0,
+  erro            text,
+  referencia      text,
+  enviado_em      timestamptz,
+  created_at      timestamptz not null default now()
+);
+
+create index if not exists envios_fila_idx
+  on public.envios (agendado_para) where status in ('pendente','enviando');
+create index if not exists envios_org_idx
+  on public.envios (organization_id, created_at desc);
+create index if not exists envios_consulta_idx
+  on public.envios (consulta_id) where consulta_id is not null;
+
+alter table public.envios enable row level security;
+
+-- Leitura para quem opera a clínica; escrita só pelo servidor
+drop policy if exists "envios_select" on public.envios;
+create policy "envios_select" on public.envios
+  for select to authenticated
+  using (
+    public.is_super_admin()
+    or (organization_id = public.minha_org() and public.is_operacional())
+  );
+
+-- Lembrete já colocado na fila: a rotina não enfileira de novo
+alter table public.confirmacoes
+  add column if not exists enfileirado_em timestamptz;
+
+-- --------------------------------------------------------------------
+-- Avisos no painel endereçados a uma pessoa
+-- --------------------------------------------------------------------
+alter table public.notificacoes
+  add column if not exists usuario_id uuid references public.profiles(id) on delete cascade;
+
+create index if not exists idx_notificacoes_usuario
+  on public.notificacoes (usuario_id, created_at desc) where usuario_id is not null;
+
+alter table public.notificacoes drop constraint if exists notificacoes_tipo_check;
+alter table public.notificacoes add constraint notificacoes_tipo_check
+  check (tipo in (
+    'reagendamento','confirmacao','cancelamento','lembrete_atrasado',
+    'lead_novo','mensagem_nova','cadastro_pendente','sistema',
+    'consulta_nova','consulta_remarcada','agenda','envio_falhou'
+  ));
+
+-- Com usuario_id, só aquela pessoa vê. Sem, vale o papel (como antes).
+drop policy if exists "notificacoes_select" on public.notificacoes;
+create policy "notificacoes_select" on public.notificacoes
+  for select to authenticated
+  using (
+    usuario_id = auth.uid()
+    or (
+      usuario_id is null
+      and (
+        public.is_super_admin()
+        or (organization_id = public.minha_org() and public.meu_papel() = any(papeis))
+      )
+    )
+  );
+
+-- Contador atualiza sozinho: o painel escuta as notificações novas
+do $$
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
+     and not exists (
+       select 1 from pg_publication_tables
+        where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'notificacoes'
+     ) then
+    alter publication supabase_realtime add table public.notificacoes;
+  end if;
+end $$;
+
+-- --------------------------------------------------------------------
+-- Preferências de aviso de cada pessoa da equipe
+-- --------------------------------------------------------------------
+create table if not exists public.preferencias_aviso (
+  usuario_id      uuid primary key references public.profiles(id) on delete cascade,
+  organization_id uuid references public.organizations(id) on delete cascade,
+  -- { "consulta_nova": ["painel","whatsapp"], ... } — evento ausente = padrão
+  canais          jsonb not null default '{}'::jsonb,
+  -- Hora (Brasília) do resumo da agenda do dia
+  resumo_hora     smallint not null default 7 check (resumo_hora between 0 and 23),
+  updated_at      timestamptz not null default now()
+);
+
+alter table public.preferencias_aviso enable row level security;
+
+-- A própria pessoa, o gestor da clínica dela ou a equipe Medi Marketing
+drop policy if exists "preferencias_aviso_select" on public.preferencias_aviso;
+create policy "preferencias_aviso_select" on public.preferencias_aviso
+  for select to authenticated
+  using (
+    usuario_id = auth.uid()
+    or public.is_super_admin()
+    or (organization_id = public.minha_org() and public.is_gestor())
+  );
+
+drop policy if exists "preferencias_aviso_insert" on public.preferencias_aviso;
+create policy "preferencias_aviso_insert" on public.preferencias_aviso
+  for insert to authenticated
+  with check (
+    public.is_super_admin()
+    or (organization_id = public.minha_org()
+        and (usuario_id = auth.uid() or public.is_gestor()))
+  );
+
+drop policy if exists "preferencias_aviso_update" on public.preferencias_aviso;
+create policy "preferencias_aviso_update" on public.preferencias_aviso
+  for update to authenticated
+  using (
+    public.is_super_admin()
+    or (organization_id = public.minha_org()
+        and (usuario_id = auth.uid() or public.is_gestor()))
+  )
+  with check (
+    public.is_super_admin()
+    or (organization_id = public.minha_org()
+        and (usuario_id = auth.uid() or public.is_gestor()))
+  );
+
+-- --------------------------------------------------------------------
+-- Rotina a cada 10 minutos
+-- --------------------------------------------------------------------
+create table if not exists public.config_interna (
+  chave text primary key,
+  valor text not null
+);
+-- RLS ligada e nenhuma política: só a service role enxerga
+alter table public.config_interna enable row level security;
+
+insert into public.config_interna (chave, valor)
+values ('cron_segredo', replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', ''))
+on conflict (chave) do nothing;
+
+create extension if not exists pg_cron;
+create extension if not exists pg_net;
+
+select cron.unschedule(jobid) from cron.job where jobname = 'medi-comunicacao';
+
+select cron.schedule(
+  'medi-comunicacao',
+  '*/10 * * * *',
+  $job$
+    select net.http_get(
+      url := 'https://medimarketing.com.br/api/cron/comunicacao',
+      headers := jsonb_build_object(
+        'Authorization',
+        'Bearer ' || (select valor from public.config_interna where chave = 'cron_segredo')
+      ),
+      timeout_milliseconds := 55000
+    );
+  $job$
+);

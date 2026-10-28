@@ -133,7 +133,8 @@ export function msgAgendada(d: DadosConsulta): string {
     "",
     ...blocoConsulta(d),
     "",
-    "Guarde esta mensagem. Enviaremos um lembrete na véspera para você confirmar.",
+    d.link ? "Como ela é para breve, já pode confirmar sua presença por aqui:" : "Guarde esta mensagem. Enviaremos um lembrete na véspera para você confirmar.",
+    d.link ? d.link : null,
     "Se precisar mudar alguma coisa, é só responder por aqui.",
     "",
     `Até breve!`,
@@ -169,9 +170,9 @@ export function msgCancelada(d: DadosConsulta): string {
   return montar([
     `Olá, ${primeiroNome(d.paciente)}! Aqui é da ${d.clinica}.`,
     "",
-    `Sua consulta de ${d.data}, às ${d.hora}, foi cancelada conforme você pediu.`,
+    `Sua consulta de ${d.data}, às ${d.hora}, foi cancelada.`,
     "",
-    "Quando quiser remarcar, é só me chamar por aqui. Fica tudo registrado, você não precisa explicar de novo.",
+    "Quando quiser remarcar, é só chamar por aqui. Fica tudo registrado, você não precisa explicar de novo.",
     "",
     "Cuide-se!",
     d.clinica,
@@ -370,4 +371,71 @@ export function preencherModelo(
     .replaceAll("{clinica}", vars.clinica)
     .replaceAll("{data}", vars.data ?? "")
     .replaceAll("{hora}", vars.hora ?? "");
+}
+
+/* ------------------------------------------------------------------ */
+/* Equipe: agenda                                                      */
+/* ------------------------------------------------------------------ */
+
+/** Consulta nova na agenda de quem vai atender. */
+export function msgEquipeNovaConsulta(
+  d: AvisoEquipe & { marcadoPor?: string | null; tipo?: string | null; convenio?: string | null; quando?: string | null }
+): string {
+  return montar([
+    d.quando === "hoje" || d.quando === "amanhã"
+      ? `*Consulta nova para ${d.quando}*`
+      : "*Consulta nova na agenda*",
+    "",
+    ...blocoAviso(d),
+    d.tipo ? `Tipo: ${d.tipo}` : null,
+    d.convenio ? `Convênio: ${d.convenio}` : null,
+    d.marcadoPor ? `Marcada por: ${d.marcadoPor}` : null,
+    d.painel ? "" : null,
+    d.painel ? `Ver na agenda: ${d.painel}` : null,
+  ]);
+}
+
+/** Cancelamento feito pela equipe. */
+export function msgEquipeCanceladaClinica(d: AvisoEquipe & { por?: string | null }): string {
+  return montar([
+    "*Consulta cancelada*",
+    "",
+    ...blocoAviso(d),
+    d.por ? `Cancelada por: ${d.por}` : null,
+    "",
+    "O horário ficou livre na agenda.",
+    d.painel ? `Ver a agenda: ${d.painel}` : null,
+  ]);
+}
+
+/** Mudança de dia ou horário. */
+export function msgEquipeRemarcada(d: AvisoEquipe & { anterior: string; por?: string | null }): string {
+  return montar([
+    "*Consulta remarcada*",
+    "",
+    ...blocoAviso(d),
+    `Antes: ${d.anterior}`,
+    d.por ? `Remarcada por: ${d.por}` : null,
+    d.painel ? "" : null,
+    d.painel ? `Ver na agenda: ${d.painel}` : null,
+  ]);
+}
+
+/** Resumo da manhã para quem atende. */
+export function msgAgendaDoDia(d: {
+  nome: string;
+  data: string;
+  diaSemana: string;
+  itens: { hora: string; paciente: string; situacao: string }[];
+  painel?: string | null;
+}): string {
+  return montar([
+    `Bom dia, ${primeiroNome(d.nome)}!`,
+    "",
+    `*Sua agenda de hoje* (${d.diaSemana}, ${d.data}): ${d.itens.length} consulta${d.itens.length === 1 ? "" : "s"}`,
+    "",
+    ...d.itens.map((i) => `${i.hora} - ${i.paciente} (${i.situacao})`),
+    d.painel ? "" : null,
+    d.painel ? `Agenda completa: ${d.painel}` : null,
+  ]);
 }

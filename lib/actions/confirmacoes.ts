@@ -10,21 +10,12 @@ import {
 } from "@/lib/actions/contexto";
 import { createAdminClient, adminDisponivel } from "@/lib/supabase/admin";
 import { gerarToken } from "@/lib/supabase/confirmacoes";
-import {
-  calcularDisparo,
-  diaDaSemana,
-  formatarData,
-  formatarHora,
-  montarMensagem,
-  urlConfirmacao,
-} from "@/lib/lembretes";
+import { calcularDisparo, montarMensagem, urlConfirmacao } from "@/lib/lembretes";
 import { enviarWhatsApp, envioAutomatico } from "@/lib/envio";
-import { msgReagendada } from "@/lib/mensagens";
 import { mergeConfigurado } from "@/lib/merge";
-import { emailConfigurado, enviarEmail } from "@/lib/email";
-import { emailPacienteRemarcada } from "@/lib/email-modelos";
-import { marcaDaClinica } from "@/lib/supabase/destinatarios";
 import type { Confirmacao, StatusConfirmacao } from "@/lib/supabase/types";
+import { comunicarConsulta } from "@/lib/comunicacao/consulta";
+import { cancelarPendentes } from "@/lib/comunicacao/fila";
 
 function revalidar() {
   revalidatePath("/app/confirmacoes");
@@ -163,15 +154,37 @@ export async function enviarAgora(id: string): Promise<ActionResult> {
     };
   }
 
+  const agora = new Date().toISOString();
   await r.admin
     .from("confirmacoes")
     .update({
       status: "enviado",
-      enviado_em: new Date().toISOString(),
+      enviado_em: agora,
       canal: envio.canal,
       tentativas: r.conf.tentativas + 1,
+      // A rotina não manda de novo o que a recepção acabou de enviar
+      enfileirado_em: agora,
     })
     .eq("id", id);
+
+  // Entra no histórico de mensagens como qualquer outro envio
+  await r.admin.from("envios").insert({
+    organization_id: r.conf.organization_id,
+    evento: "lembrete_paciente",
+    canal: "whatsapp",
+    publico: "paciente",
+    usuario_id: null,
+    destino: consulta.paciente_telefone,
+    destino_nome: consulta.paciente_nome,
+    consulta_id: r.conf.consulta_id,
+    confirmacao_id: id,
+    conteudo: texto,
+    payload: { conexaoId, manual: true },
+    status: "enviado",
+    tentativas: 1,
+    referencia: envio.referencia ?? null,
+    enviado_em: agora,
+  });
 
   revalidar();
   return { ok: true };
@@ -214,6 +227,15 @@ export async function registrarResposta(
       .eq("id", r.conf.consulta_id);
   }
 
+  // E o mesmo aviso: o profissional fica sabendo como se fosse pelo link
+  if (status !== "pendente" && status !== r.conf.status) {
+    await comunicarConsulta(r.conf.consulta_id, {
+      tipo: "resposta",
+      resposta: status as "confirmado" | "reagendar" | "recusado",
+      atorId: r.ctx.profile.id,
+    });
+  }
+
   revalidar();
   return { ok: true };
 }
@@ -240,6 +262,12 @@ export async function reagendarConsulta(
   if (quando.getTime() <= Date.now()) {
     return { ok: false, erro: "Escolha um horário no futuro." };
   }
+
+  const { data: antes } = await r.admin
+    .from("consultas")
+    .select("data_hora")
+    .eq("id", r.conf.consulta_id)
+    .maybeSingle();
 
   const { error: erroConsulta } = await r.admin
     .from("consultas")
@@ -271,6 +299,7 @@ export async function reagendarConsulta(
       respondido_em: null,
       canal: null,
       tentativas: 0,
+      enfileirado_em: null,
       observacao: `Reagendada em ${new Date().toLocaleDateString("pt-BR")} a pedido do paciente.`,
     })
     .eq("id", confirmacaoId);
@@ -282,71 +311,17 @@ export async function reagendarConsulta(
     };
   }
 
-  // O paciente pediu para remarcar: avisar que foi atendido é o que
-  // fecha o ciclo. Vai pelos dois canais — o WhatsApp é o que ele
-  // realmente lê, o e-mail é o que fica guardado.
-  const { data: consulta } = await r.admin
-    .from("consultas")
-    .select("paciente_nome,paciente_email,paciente_telefone,medico_id")
-    .eq("id", r.conf.consulta_id)
-    .maybeSingle();
+  // O que estava programado para o horário antigo não sai mais
+  await cancelarPendentes(r.conf.consulta_id);
 
-  if (consulta) {
-    const [marca, { data: medico }, { data: orgEnvio }] = await Promise.all([
-      marcaDaClinica(r.conf.organization_id),
-      r.admin.from("profiles").select("nome").eq("id", consulta.medico_id).maybeSingle(),
-      r.admin
-        .from("organizations")
-        .select("nome,endereco,cidade,merge_connection_id")
-        .eq("id", r.conf.organization_id)
-        .maybeSingle(),
-    ]);
-
-    const dados = {
-      paciente: consulta.paciente_nome,
-      data: formatarData(quando.toISOString()),
-      hora: formatarHora(quando.toISOString()),
-      diaSemana: diaDaSemana(quando.toISOString()),
-      medico: medico?.nome ?? null,
-      link: urlConfirmacao(r.conf.token),
-    };
-
-    const avisos: Promise<unknown>[] = [];
-
-    if (emailConfigurado() && consulta.paciente_email && marca) {
-      const modelo = emailPacienteRemarcada(marca, dados);
-      avisos.push(
-        enviarEmail({
-          para: consulta.paciente_email,
-          assunto: modelo.assunto,
-          html: modelo.html,
-          texto: modelo.texto,
-          remetenteNome: marca.clinica,
-        })
-      );
-    }
-
-    if (consulta.paciente_telefone && orgEnvio) {
-      avisos.push(
-        enviarWhatsApp(
-          {
-            nome: consulta.paciente_nome,
-            telefone: consulta.paciente_telefone,
-            conexaoId: orgEnvio.merge_connection_id ?? null,
-          },
-          msgReagendada({
-            ...dados,
-            clinica: orgEnvio.nome,
-            endereco:
-              [orgEnvio.endereco, orgEnvio.cidade].filter(Boolean).join(", ") || null,
-          })
-        )
-      );
-    }
-
-    // Nenhum aviso pode derrubar a remarcação que já foi feita
-    await Promise.allSettled(avisos);
-  }
+  // O paciente pediu para remarcar: avisar que foi atendido fecha o
+  // ciclo. O profissional fica sabendo do horário novo.
+  await comunicarConsulta(r.conf.consulta_id, {
+    tipo: "remarcada",
+    atorId: r.ctx.profile.id,
+    anterior: antes?.data_hora ?? quando.toISOString(),
+    token: r.conf.token,
+  });
 
   revalidar();
   revalidatePath("/app/notificacoes");

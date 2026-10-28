@@ -398,6 +398,8 @@ export type Confirmacao = {
   respondido_em: string | null;
   observacao: string | null;
   tentativas: number;
+  /** Quando o lembrete entrou na fila de envios. */
+  enfileirado_em?: string | null;
   created_at: string;
 };
 
@@ -423,7 +425,11 @@ export type TipoNotificacao =
   | "lead_novo"
   | "mensagem_nova"
   | "cadastro_pendente"
-  | "sistema";
+  | "sistema"
+  | "consulta_nova"
+  | "consulta_remarcada"
+  | "agenda"
+  | "envio_falhou";
 
 /**
  * Aviso endereçado a papéis dentro de uma clínica.
@@ -442,7 +448,50 @@ export type Notificacao = {
   descricao: string | null;
   href: string | null;
   entidade_id: string | null;
+  /** Preenchido, só esta pessoa vê; vazio, vale `papeis`. */
+  usuario_id?: string | null;
   created_at: string;
+};
+
+/* ------------------------------------------------------------------ */
+/* Comunicação                                                         */
+/* ------------------------------------------------------------------ */
+
+export type CanalAviso = "painel" | "whatsapp" | "email";
+
+export type StatusEnvio = "pendente" | "enviando" | "enviado" | "falhou" | "ignorado" | "cancelado";
+
+/** Uma mensagem da fila: o que sai, para quem, por onde e como foi. */
+export type Envio = {
+  id: string;
+  organization_id: string | null;
+  evento: string;
+  canal: CanalAviso;
+  publico: "paciente" | "equipe" | "clinica";
+  usuario_id: string | null;
+  destino: string | null;
+  destino_nome: string | null;
+  consulta_id: string | null;
+  confirmacao_id: string | null;
+  assunto: string | null;
+  conteudo: string | null;
+  payload: Record<string, unknown>;
+  chave: string | null;
+  status: StatusEnvio;
+  agendado_para: string;
+  tentativas: number;
+  erro: string | null;
+  referencia: string | null;
+  enviado_em: string | null;
+  created_at: string;
+};
+
+export type PreferenciaAviso = {
+  usuario_id: string;
+  organization_id: string | null;
+  canais: Partial<Record<string, CanalAviso[]>>;
+  resumo_hora: number;
+  updated_at: string;
 };
 
 export type NotificacaoLeitura = {
@@ -776,6 +825,21 @@ export interface Database {
           papeis?: Role[];
         },
         Partial<Notificacao>
+      >;
+      envios: Tabela<
+        Envio,
+        Pick<Envio, "evento" | "canal" | "publico"> & Partial<Envio>,
+        Partial<Envio>
+      >;
+      preferencias_aviso: Tabela<
+        PreferenciaAviso,
+        Pick<PreferenciaAviso, "usuario_id"> & Partial<PreferenciaAviso>,
+        Partial<PreferenciaAviso>
+      >;
+      config_interna: Tabela<
+        { chave: string; valor: string },
+        { chave: string; valor: string },
+        Partial<{ chave: string; valor: string }>
       >;
       notificacao_leituras: Tabela<
         NotificacaoLeitura,
