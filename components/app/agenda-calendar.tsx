@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   addDays,
   addMonths,
@@ -27,6 +27,7 @@ import {
   Building2,
   UserRound,
   MessageCircle,
+  Video,
 } from "lucide-react";
 import { linkWhatsApp } from "@/lib/lembretes";
 import type { ConsultaComContexto, OpcoesAgenda } from "@/lib/supabase/queries";
@@ -130,6 +131,15 @@ export function AgendaCalendar({
         : format(cursor, "EEEE, dd 'de' MMMM", { locale: ptBR })
   );
 
+  // "Hoje" só tem efeito quando o período na tela não inclui hoje
+  const hojeAgora = new Date();
+  const noPeriodoDeHoje =
+    visao === "mes"
+      ? isSameMonth(cursor, hojeAgora)
+      : visao === "semana"
+        ? isSameDay(startOfWeek(cursor, { weekStartsOn: 0 }), startOfWeek(hojeAgora, { weekStartsOn: 0 }))
+        : isSameDay(cursor, hojeAgora);
+
   function abrirNova(d?: Date) {
     setDataNova(d ?? cursor);
     setNovaAberta(true);
@@ -194,8 +204,8 @@ export function AgendaCalendar({
       </div>
 
       {/* Barra de controle */}
-      <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-white p-2 shadow-soft sm:p-2.5">
+        <div className="flex min-w-0 items-center gap-2">
           <button
             onClick={() => navegar(-1)}
             className="grid size-9 place-items-center rounded-md border border-border bg-white text-cinza-suave transition-colors hover:text-azul-medico"
@@ -212,17 +222,23 @@ export function AgendaCalendar({
           </button>
           <button
             onClick={() => setCursor(new Date())}
-            className="rounded-md border border-border bg-white px-3 py-1.5 text-sm font-medium text-cinza-texto transition-colors hover:text-azul-medico"
+            disabled={noPeriodoDeHoje}
+            className={cn(
+              "rounded-md border px-3 py-1.5 text-sm font-medium transition-colors",
+              noPeriodoDeHoje
+                ? "border-border bg-branco-clinico text-cinza-suave"
+                : "border-teal bg-verde-menta text-azul-medico hover:bg-teal hover:text-white"
+            )}
           >
             Hoje
           </button>
-          <span className="ml-2 font-heading text-lg font-semibold text-azul-medico">
+          <span className="ml-1 truncate font-heading text-base font-semibold text-azul-medico sm:ml-2 sm:text-lg">
             {titulo}
           </span>
         </div>
 
         {/* Alternador de visão */}
-        <div className="flex rounded-lg border border-border bg-white p-1">
+        <div className="flex rounded-lg bg-branco-clinico p-1">
           {(["mes", "semana", "dia"] as Visao[]).map((v) => (
             <button
               key={v}
@@ -365,6 +381,24 @@ const corConfirmacao: Record<string, string> = {
   cancelado: "bg-cinza-suave/40",
 };
 
+/** Tom de cada status nos blocos da grade: fundo claro e borda forte. */
+const tomStatus: Record<Consulta["status"], { bloco: string; texto: string }> = {
+  pendente: { bloco: "border-l-alerta bg-alerta/10 hover:bg-alerta/15", texto: "text-[#9A5B00]" },
+  confirmada: { bloco: "border-l-sucesso bg-sucesso/10 hover:bg-sucesso/15", texto: "text-[#15803D]" },
+  realizada: { bloco: "border-l-teal bg-teal/10 hover:bg-teal/15", texto: "text-teal" },
+  cancelada: { bloco: "border-l-cinza-suave/50 bg-cinza-suave/10 hover:bg-cinza-suave/15", texto: "text-cinza-suave" },
+};
+
+/** Minuto atual, atualizado a cada 30 s, para a linha do "agora". */
+function useAgora(): Date {
+  const [agora, setAgora] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setAgora(new Date()), 30_000);
+    return () => clearInterval(t);
+  }, []);
+  return agora;
+}
+
 function MonthView({
   cursor,
   consultasDoDia,
@@ -383,12 +417,12 @@ function MonthView({
   const dias = eachDayOfInterval({ start: inicio, end: fim });
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border bg-white shadow-soft">
-      <div className="grid grid-cols-7 border-b border-border bg-verde-menta/40">
+    <div className="overflow-hidden rounded-xl border border-border bg-white shadow-soft">
+      <div className="grid grid-cols-7 border-b border-border bg-branco-clinico">
         {DIAS_CURTOS.map((d) => (
           <div
             key={d}
-            className="py-2 text-center text-xs font-semibold uppercase tracking-wide text-cinza-suave"
+            className="py-2.5 text-center text-[11px] font-semibold uppercase tracking-wider text-cinza-suave"
           >
             {d}
           </div>
@@ -398,7 +432,9 @@ function MonthView({
         {dias.map((d) => {
           const doMes = isSameMonth(d, cursor);
           const consultas = consultasDoDia(d);
+          const ativas = consultas.filter((c) => c.status !== "cancelada");
           const fimDeSemana = d.getDay() === 0 || d.getDay() === 6;
+          const hoje = isToday(d);
           // Quantos precisam de atenção: pediram remarcação
           const remarcar = consultas.filter(
             (c) => confirmacoes[c.id]?.status === "reagendar"
@@ -409,54 +445,76 @@ function MonthView({
               key={d.toISOString()}
               onClick={() => onDia(d)}
               className={cn(
-                "min-h-[112px] border-b border-r border-border p-1.5 text-left transition-colors hover:bg-verde-menta/30 focus:outline-none",
-                !doMes && "bg-branco-clinico/60",
-                doMes && fimDeSemana && "bg-branco-clinico/40"
+                "group relative min-h-[76px] border-b border-r border-border p-1.5 text-left transition-colors hover:bg-verde-menta/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal sm:min-h-[118px] sm:p-2",
+                !doMes && "bg-branco-clinico/70",
+                doMes && fimDeSemana && "bg-branco-clinico/40",
+                hoje && "bg-verde-menta/30"
               )}
             >
               <span className="flex items-center justify-between gap-1">
                 <span
                   className={cn(
-                    "inline-grid size-6 place-items-center rounded-full text-xs font-medium",
-                    isToday(d)
-                      ? "bg-teal text-white"
+                    "inline-grid size-7 place-items-center rounded-full text-xs font-semibold",
+                    hoje
+                      ? "bg-teal text-white shadow-sm"
                       : doMes
-                        ? "text-cinza-texto"
+                        ? "text-azul-medico"
                         : "text-cinza-suave/50"
                   )}
                 >
                   {format(d, "d")}
                 </span>
 
-                {/* Quantas consultas o dia tem, sem precisar contar */}
-                {consultas.length > 0 && (
+                {ativas.length > 0 && (
                   <span className="flex items-center gap-1">
                     {remarcar > 0 && (
                       <span
-                        className="size-1.5 rounded-full bg-coral"
+                        className="size-2 rounded-full bg-coral"
                         title={`${remarcar} pediu para remarcar`}
                       />
                     )}
-                    <span className="rounded-full bg-verde-menta px-1.5 text-[10px] font-bold text-azul-medico">
-                      {consultas.length}
+                    <span className="hidden rounded-full bg-azul-medico/8 px-1.5 py-0.5 text-[10px] font-bold text-azul-medico sm:inline">
+                      {ativas.length}
                     </span>
                   </span>
                 )}
               </span>
-              <div className="mt-1 space-y-1">
-                {consultas.slice(0, 4).map((c) => (
+
+              {/* Celular: só pontinhos, um por consulta */}
+              {consultas.length > 0 && (
+                <span className="mt-1.5 flex flex-wrap gap-0.5 sm:hidden">
+                  {consultas.slice(0, 6).map((c) => (
+                    <span key={c.id} className={cn("size-1.5 rounded-full", corStatus[c.status])} />
+                  ))}
+                </span>
+              )}
+
+              <div className="mt-1 hidden space-y-1 sm:block">
+                {consultas.slice(0, 3).map((c) => (
                   <div
                     key={c.id}
+                    role="button"
+                    tabIndex={0}
                     onClick={(e) => {
                       e.stopPropagation();
                       onConsulta(c);
                     }}
-                    className="flex items-center gap-1 truncate rounded bg-verde-menta px-1.5 py-0.5 text-[11px] text-cinza-texto hover:bg-teal-claro/30"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.stopPropagation();
+                        onConsulta(c);
+                      }
+                    }}
+                    className={cn(
+                      "flex items-center gap-1 truncate rounded-md border-l-[3px] px-1.5 py-0.5 text-[11px] transition-colors",
+                      tomStatus[c.status].bloco,
+                      c.status === "cancelada" && "line-through"
+                    )}
                   >
-                    <span className={cn("size-1.5 shrink-0 rounded-full", corStatus[c.status])} />
-                    <span className="truncate">
-                      {format(new Date(c.data_hora), "HH:mm")} {c.paciente_nome}
+                    <span className={cn("shrink-0 font-semibold tabular-nums", tomStatus[c.status].texto)}>
+                      {format(new Date(c.data_hora), "HH:mm")}
                     </span>
+                    <span className="truncate text-cinza-texto">{c.paciente_nome}</span>
                     {/* Segundo ponto: como está a confirmação do paciente */}
                     {confirmacoes[c.id] && (
                       <span
@@ -469,9 +527,9 @@ function MonthView({
                     )}
                   </div>
                 ))}
-                {consultas.length > 4 && (
-                  <span className="pl-1 text-[11px] font-medium text-teal">
-                    +{consultas.length - 4} mais
+                {consultas.length > 3 && (
+                  <span className="block pl-1 text-[11px] font-semibold text-teal">
+                    +{consultas.length - 3} mais
                   </span>
                 )}
               </div>
@@ -486,15 +544,46 @@ function MonthView({
 /* ------------------------- Visão de semana ------------------------- */
 
 /**
+ * Distribui as consultas que se sobrepõem lado a lado, como num
+ * calendário de verdade: cada grupo de sobreposição divide a largura
+ * pelo número de colunas que precisa.
+ */
+function emColunas(consultas: Consulta[]): Map<string, { coluna: number; total: number }> {
+  const res = new Map<string, { coluna: number; total: number }>();
+  const ordenadas = [...consultas].sort((a, b) => a.data_hora.localeCompare(b.data_hora));
+  let grupo: { id: string; fim: number; coluna: number }[] = [];
+  let fimGrupo = -Infinity;
+
+  const fechar = () => {
+    const total = Math.max(1, ...grupo.map((g) => g.coluna + 1));
+    for (const g of grupo) res.set(g.id, { coluna: g.coluna, total });
+    grupo = [];
+  };
+
+  for (const c of ordenadas) {
+    const ini = new Date(c.data_hora).getTime();
+    const fim = ini + (c.duracao_min ?? 30) * 60000;
+    if (ini >= fimGrupo) {
+      fechar();
+      fimGrupo = -Infinity;
+    }
+    const ocupadas = new Set(grupo.filter((g) => g.fim > ini).map((g) => g.coluna));
+    let coluna = 0;
+    while (ocupadas.has(coluna)) coluna++;
+    grupo.push({ id: c.id, fim, coluna });
+    fimGrupo = Math.max(fimGrupo, fim);
+  }
+  fechar();
+  return res;
+}
+
+/**
  * Grade de horários da semana.
  *
- * Substitui a lista de cartões por dia: numa agenda o que importa é ver
- * o vazio tanto quanto o cheio — onde dá para encaixar, onde a manhã
- * está sobrecarregada. Isso só aparece quando o tempo vira eixo.
- *
- * A faixa de horas se ajusta ao que existe na semana, com um mínimo de
- * 8h às 19h, para uma clínica que atende à noite não ficar com metade da
- * agenda fora da tela.
+ * Numa agenda o que importa é ver o vazio tanto quanto o cheio: onde dá
+ * para encaixar, onde a manhã está sobrecarregada. A faixa de horas se
+ * ajusta ao que existe na semana, com um mínimo de 7h às 20h, e a grade
+ * já abre rolada para perto da hora atual.
  */
 function WeekView({
   cursor,
@@ -509,6 +598,8 @@ function WeekView({
   onConsulta: (c: Consulta) => void;
   onNova: (d: Date) => void;
 }) {
+  const agora = useAgora();
+  const rolagem = useRef<HTMLDivElement>(null);
   const inicio = startOfWeek(cursor, { weekStartsOn: 0 });
   const dias = eachDayOfInterval({
     start: inicio,
@@ -517,140 +608,204 @@ function WeekView({
 
   const todas = dias.flatMap((d) => consultasDoDia(d));
   const horas = todas.map((c) => new Date(c.data_hora).getHours());
-  const primeira = Math.min(8, ...(horas.length ? horas : [8]));
-  const ultima = Math.max(19, ...(horas.length ? horas.map((h) => h + 1) : [19]));
+  const primeira = Math.min(7, ...(horas.length ? horas : [7]));
+  const ultima = Math.max(20, ...(horas.length ? horas.map((h) => h + 1) : [20]));
   const faixa = Array.from({ length: ultima - primeira }, (_, i) => primeira + i);
 
-  const ALTURA = 56; // px por hora
+  const ALTURA = 64; // px por hora
+  const semanaAtual = dias.some((d) => isToday(d));
+  const primeiraConsulta = horas.length ? Math.min(...horas) : 8;
+  const chaveSemana = inicio.getTime();
+
+  // Abre perto do que interessa: a hora atual nesta semana, ou a
+  // primeira consulta nas outras
+  useEffect(() => {
+    const alvo = semanaAtual ? new Date().getHours() - 1 : primeiraConsulta - 1;
+    if (rolagem.current) rolagem.current.scrollTop = Math.max(0, (alvo - primeira) * ALTURA);
+  }, [semanaAtual, primeiraConsulta, primeira, chaveSemana]);
+
+  const minutoAgora = (agora.getHours() - primeira) * 60 + agora.getMinutes();
+  const agoraVisivel = minutoAgora >= 0 && agora.getHours() < ultima;
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border bg-white shadow-soft">
-      {/* Cabeçalho dos dias */}
-      <div className="grid grid-cols-[3.5rem_repeat(7,1fr)] border-b border-border bg-verde-menta/40">
-        <div />
-        {dias.map((d) => (
-          <button
-            key={d.toISOString()}
-            onClick={() => onNova(d)}
-            className="group border-l border-border py-2 text-center transition-colors hover:bg-verde-menta"
-            title="Marcar consulta neste dia"
-          >
-            <p className="text-[10px] uppercase tracking-wide text-cinza-suave">
-              {format(d, "EEE", { locale: ptBR })}
-            </p>
-            <p
-              className={cn(
-                "mx-auto mt-0.5 grid size-7 place-items-center rounded-full font-heading text-sm font-bold",
-                isToday(d) ? "bg-teal text-white" : "text-azul-medico"
-              )}
-            >
-              {format(d, "dd")}
-            </p>
-          </button>
-        ))}
-      </div>
-
-      {/* Grade */}
-      <div className="relative max-h-[560px] overflow-y-auto">
-        <div className="grid grid-cols-[3.5rem_repeat(7,1fr)]">
-          {/* Coluna das horas */}
-          <div>
-            {faixa.map((h) => (
-              <div
-                key={h}
-                style={{ height: ALTURA }}
-                className="relative border-b border-border/60"
-              >
-                <span className="absolute -top-2 right-2 text-[10px] text-cinza-suave">
-                  {String(h).padStart(2, "0")}:00
-                </span>
-              </div>
-            ))}
+    <div className="overflow-hidden rounded-xl border border-border bg-white shadow-soft">
+      <div className="overflow-x-auto">
+        <div className="min-w-[760px]">
+          {/* Cabeçalho dos dias */}
+          <div className="grid grid-cols-[3.75rem_repeat(7,minmax(0,1fr))] border-b border-border bg-branco-clinico">
+            <div />
+            {dias.map((d) => {
+              const hoje = isToday(d);
+              const n = consultasDoDia(d).filter((c) => c.status !== "cancelada").length;
+              return (
+                <button
+                  key={d.toISOString()}
+                  onClick={() => onNova(d)}
+                  className={cn(
+                    "group border-l border-border px-1 py-2.5 text-center transition-colors hover:bg-verde-menta/60",
+                    hoje && "bg-verde-menta/50"
+                  )}
+                  title="Marcar consulta neste dia"
+                >
+                  <p
+                    className={cn(
+                      "text-[11px] font-semibold uppercase tracking-wider",
+                      hoje ? "text-teal" : "text-cinza-suave"
+                    )}
+                  >
+                    {format(d, "EEE", { locale: ptBR }).replace(".", "")}
+                  </p>
+                  <p
+                    className={cn(
+                      "mx-auto mt-1 grid size-9 place-items-center rounded-full font-heading text-lg font-bold",
+                      hoje ? "bg-teal text-white shadow-sm" : "text-azul-medico"
+                    )}
+                  >
+                    {format(d, "d")}
+                  </p>
+                  <p className="mt-1 h-4 text-[10px] font-medium text-cinza-suave">
+                    {n > 0 ? `${n} consulta${n === 1 ? "" : "s"}` : ""}
+                  </p>
+                </button>
+              );
+            })}
           </div>
 
-          {/* Uma coluna por dia */}
-          {dias.map((d) => {
-            const doDia = consultasDoDia(d);
-            const fimDeSemana = d.getDay() === 0 || d.getDay() === 6;
-
-            return (
-              <div
-                key={d.toISOString()}
-                className={cn(
-                  "relative border-l border-border",
-                  fimDeSemana && "bg-branco-clinico/60"
-                )}
-              >
-                {/* Linhas de hora, que também servem de alvo para marcar */}
+          {/* Grade */}
+          <div ref={rolagem} className="relative max-h-[620px] overflow-y-auto">
+            <div className="grid grid-cols-[3.75rem_repeat(7,minmax(0,1fr))] pt-3">
+              {/* Coluna das horas */}
+              <div>
                 {faixa.map((h) => (
-                  <button
-                    key={h}
-                    onClick={() => {
-                      const alvo = new Date(d);
-                      alvo.setHours(h, 0, 0, 0);
-                      onNova(alvo);
-                    }}
-                    style={{ height: ALTURA }}
-                    className="block w-full border-b border-border/60 transition-colors hover:bg-verde-menta/50"
-                    aria-label={`Marcar consulta ${format(d, "dd/MM")} às ${h}:00`}
-                  />
+                  <div key={h} style={{ height: ALTURA }} className="relative">
+                    <span className="absolute -top-2 right-2.5 text-[11px] font-medium tabular-nums text-cinza-suave">
+                      {String(h).padStart(2, "0")}:00
+                    </span>
+                  </div>
                 ))}
-
-                {/* Consultas posicionadas pelo horário */}
-                {doDia.map((c) => {
-                  const d0 = new Date(c.data_hora);
-                  const minutos =
-                    (d0.getHours() - primeira) * 60 + d0.getMinutes();
-                  const altura = Math.max(
-                    ((c.duracao_min ?? 30) / 60) * ALTURA,
-                    22
-                  );
-                  const conf = confirmacoes[c.id];
-                  const cancelada = c.status === "cancelada";
-
-                  return (
-                    <button
-                      key={c.id}
-                      onClick={() => onConsulta(c)}
-                      style={{
-                        top: (minutos / 60) * ALTURA,
-                        height: altura,
-                      }}
-                      className={cn(
-                        "absolute inset-x-1 overflow-hidden rounded-md border-l-4 bg-white px-1.5 py-0.5 text-left shadow-sm transition-all hover:z-10 hover:shadow-soft",
-                        cancelada && "opacity-60 line-through",
-                        conf?.status === "reagendar"
-                          ? "border-l-coral ring-1 ring-coral/30"
-                          : "border-l-transparent"
-                      )}
-                      title={`${format(d0, "HH:mm")} · ${c.paciente_nome}`}
-                    >
-                      <span className="flex items-center gap-1">
-                        <span
-                          className={cn(
-                            "size-1.5 shrink-0 rounded-full",
-                            corStatus[c.status]
-                          )}
-                        />
-                        <span className="truncate text-[10px] font-semibold text-azul-medico">
-                          {format(d0, "HH:mm")}
-                        </span>
-                      </span>
-                      <span className="block truncate text-[10px] leading-tight text-cinza-suave">
-                        {c.paciente_nome}
-                      </span>
-                    </button>
-                  );
-                })}
               </div>
-            );
-          })}
+
+              {/* Uma coluna por dia */}
+              {dias.map((d) => {
+                const doDia = consultasDoDia(d);
+                const colunas = emColunas(doDia.filter((c) => c.status !== "cancelada"));
+                const fimDeSemana = d.getDay() === 0 || d.getDay() === 6;
+                const hoje = isToday(d);
+
+                return (
+                  <div
+                    key={d.toISOString()}
+                    className={cn(
+                      "relative border-l border-border",
+                      fimDeSemana && "bg-branco-clinico/50",
+                      hoje && "bg-verde-menta/20"
+                    )}
+                  >
+                    {/* Linhas de hora e meia hora, que também servem de alvo para marcar */}
+                    {faixa.map((h) => (
+                      <div key={h} style={{ height: ALTURA }} className="border-t border-border/70">
+                        {[0, 30].map((m) => (
+                          <button
+                            key={m}
+                            onClick={() => {
+                              const alvo = new Date(d);
+                              alvo.setHours(h, m, 0, 0);
+                              onNova(alvo);
+                            }}
+                            style={{ height: ALTURA / 2 }}
+                            className={cn(
+                              "group/slot flex w-full items-center justify-center text-[10px] font-medium text-teal opacity-0 transition hover:bg-verde-menta/60 hover:opacity-100",
+                              m === 30 && "border-t border-dashed border-border/50"
+                            )}
+                            aria-label={`Marcar consulta ${format(d, "dd/MM")} às ${h}:${m === 0 ? "00" : "30"}`}
+                          >
+                            <Plus className="mr-0.5 size-3" /> {String(h).padStart(2, "0")}:{m === 0 ? "00" : "30"}
+                          </button>
+                        ))}
+                      </div>
+                    ))}
+
+                    {/* Linha do agora */}
+                    {hoje && agoraVisivel && (
+                      <div
+                        className="pointer-events-none absolute inset-x-0 z-20 flex items-center"
+                        style={{ top: (minutoAgora / 60) * ALTURA }}
+                      >
+                        <span className="-ml-1.5 size-3 rounded-full bg-coral shadow" />
+                        <span className="h-0.5 flex-1 bg-coral" />
+                      </div>
+                    )}
+
+                    {/* Consultas posicionadas pelo horário */}
+                    {doDia.map((c) => {
+                      const d0 = new Date(c.data_hora);
+                      const minutos = (d0.getHours() - primeira) * 60 + d0.getMinutes();
+                      const duracao = c.duracao_min ?? 30;
+                      const altura = Math.max((duracao / 60) * ALTURA - 3, 24);
+                      const conf = confirmacoes[c.id];
+                      const cancelada = c.status === "cancelada";
+                      const pos = colunas.get(c.id) ?? { coluna: 0, total: 1 };
+                      const largura = 100 / pos.total;
+                      const fimC = new Date(d0.getTime() + duracao * 60000);
+                      const tom = tomStatus[c.status];
+
+                      return (
+                        <button
+                          key={c.id}
+                          onClick={() => onConsulta(c)}
+                          style={{
+                            top: (minutos / 60) * ALTURA + 1,
+                            height: altura,
+                            left: `calc(${pos.coluna * largura}% + 3px)`,
+                            width: `calc(${largura}% - 6px)`,
+                          }}
+                          className={cn(
+                            "absolute z-10 overflow-hidden rounded-md border-l-[3px] px-2 py-1 text-left shadow-sm ring-1 ring-black/[0.03] transition-all hover:z-30 hover:shadow-card",
+                            tom.bloco,
+                            cancelada && "z-0 opacity-60",
+                            conf?.status === "reagendar" && "ring-2 ring-coral/60"
+                          )}
+                          title={`${format(d0, "HH:mm")}–${format(fimC, "HH:mm")} · ${c.paciente_nome}${c.medico_nome ? ` · ${c.medico_nome}` : ""}`}
+                        >
+                          <span className="flex items-center gap-1">
+                            <span className={cn("truncate text-[11px] font-semibold tabular-nums", tom.texto)}>
+                              {format(d0, "HH:mm")}
+                              {altura >= 40 && `–${format(fimC, "HH:mm")}`}
+                            </span>
+                            {c.tipo === "teleconsulta" && <Video className="size-3 shrink-0 text-cinza-suave" />}
+                            {conf && (
+                              <span
+                                className={cn("ml-auto size-1.5 shrink-0 rounded-full", corConfirmacao[conf.status])}
+                              />
+                            )}
+                          </span>
+                          <span
+                            className={cn(
+                              "block truncate text-xs font-semibold leading-tight text-azul-medico",
+                              cancelada && "line-through"
+                            )}
+                          >
+                            {c.paciente_nome}
+                          </span>
+                          {altura >= 56 && (
+                            <span className="mt-0.5 block truncate text-[10px] text-cinza-suave">
+                              {[rotuloTipo[c.tipo], c.medico_nome].filter(Boolean).join(" · ")}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </div>
 
       <p className="border-t border-border px-4 py-2 text-[11px] text-cinza-suave">
-        Clique num horário vazio para marcar. Barra vermelha à esquerda =
-        paciente pediu para reagendar.
+        Clique num horário vazio para marcar. Contorno vermelho = paciente pediu para reagendar.
+        O ponto no canto mostra a confirmação do paciente.
       </p>
     </div>
   );
@@ -710,7 +865,7 @@ function DayView({
   ).length;
 
   return (
-    <div className="rounded-lg border border-border bg-white shadow-soft">
+    <div className="rounded-xl border border-border bg-white shadow-soft">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-5 py-4">
         <p className="font-heading font-semibold text-azul-medico">
           {capitalizar(format(cursor, "EEEE, dd 'de' MMMM", { locale: ptBR }))}
@@ -739,8 +894,13 @@ function DayView({
         </div>
       ) : (
         <ul className="space-y-2.5 p-3 sm:p-4">
-          {consultas.map((c) => {
+          {consultas.map((c, i) => {
             const inicio = new Date(c.data_hora);
+            // Divisória do agora antes da primeira consulta que ainda vem
+            const agoraAqui =
+              isToday(cursor) &&
+              inicio.getTime() > Date.now() &&
+              (i === 0 || new Date(consultas[i - 1].data_hora).getTime() <= Date.now());
             const fim = c.duracao_min
               ? new Date(inicio.getTime() + c.duracao_min * 60000)
               : null;
@@ -748,6 +908,13 @@ function DayView({
             const conf = confirmacoes[c.id];
             return (
               <li key={c.id}>
+                {agoraAqui && (
+                  <div className="mb-2.5 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-coral">
+                    <span className="size-2.5 rounded-full bg-coral" />
+                    Agora · {format(new Date(), "HH:mm")}
+                    <span className="h-px flex-1 bg-coral/60" />
+                  </div>
+                )}
                 {/* Linha em div, e não em button: o atalho do WhatsApp é um
                     link, e link dentro de botão é HTML inválido. */}
                 <div
