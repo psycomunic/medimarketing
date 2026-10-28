@@ -42,7 +42,22 @@ export function Sidebar({
         {/* A marca da clínica manda no painel dela. A da plataforma vira
             assinatura no rodapé. Sem clínica (super admin), o contrário. */}
         {organizacao ? (
-          <MarcaClinica nome={organizacao} logoUrl={logoUrl} href="/app" />
+          logoUrl ? (
+            // Com logo, ela é a estrela: grande, e o nome logo abaixo
+            <Link href="/app" className="block" aria-label={organizacao}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={logoUrl}
+                alt={organizacao}
+                className="h-14 w-auto max-w-full object-contain object-left"
+              />
+              <span className="mt-2 block truncate text-sm font-semibold text-azul-medico">
+                {organizacao}
+              </span>
+            </Link>
+          ) : (
+            <MarcaClinica nome={organizacao} logoUrl={null} href="/app" />
+          )
         ) : (
           <Logo href="/app" />
         )}
@@ -154,9 +169,16 @@ export function Sidebar({
 
         {/* Assinatura discreta: o painel é da clínica, a plataforma é nossa */}
         {organizacao && (
-          <p className="px-3 pt-2 text-[10px] text-cinza-suave/70">
-            Plataforma <span className="font-semibold">Medi Marketing</span>
-          </p>
+          <a
+            href="https://medimarketing.com.br"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 px-3 pt-2 text-[10px] text-cinza-suave/70 opacity-80 transition-opacity hover:opacity-100"
+          >
+            Feito com
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo-medimarketing-email.png" alt="Medi Marketing" className="h-3 w-auto" />
+          </a>
         )}
       </div>
     </div>

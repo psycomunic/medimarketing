@@ -46,7 +46,12 @@ export function MarcaClinica({
           unoptimized
           className={cn(
             "shrink-0 rounded-lg object-contain",
-            tamanho === "lg" ? "h-18 w-auto max-w-[200px]" : caixa
+            // Logo costuma ser larga: altura fixa e largura livre, sem espremer
+            tamanho === "lg"
+              ? "h-18 w-auto max-w-[200px]"
+              : tamanho === "sm"
+                ? "h-8 w-auto max-w-[140px]"
+                : "h-10 w-auto max-w-[160px]"
           )}
         />
       ) : (
