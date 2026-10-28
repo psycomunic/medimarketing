@@ -54,6 +54,7 @@ import {
   aplicarFiltros,
   type FiltrosAgenda,
 } from "@/components/app/agenda-filtros";
+import { FaixaDias, SeletorData } from "@/components/app/agenda-navegacao";
 
 type Visao = "mes" | "semana" | "dia";
 type Consulta = ConsultaComContexto;
@@ -118,6 +119,25 @@ export function AgendaCalendar({
     (porDia.get(format(d, "yyyy-MM-dd")) ?? []).sort((a, b) =>
       a.data_hora.localeCompare(b.data_hora)
     );
+
+  const contarDia = (d: Date) =>
+    consultasDoDia(d).filter((c) => c.status !== "cancelada").length;
+
+  // Atalhos: setas passam o período, T volta para hoje. Ignorados
+  // enquanto se digita ou com uma janela aberta.
+  useEffect(() => {
+    function tecla(e: KeyboardEvent) {
+      const alvo = e.target as HTMLElement | null;
+      if (alvo && (alvo.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(alvo.tagName))) return;
+      if (document.querySelector('[role="dialog"]')) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === "ArrowLeft") navegar(-1);
+      else if (e.key === "ArrowRight") navegar(1);
+      else if (e.key === "t" || e.key === "T") setCursor(new Date());
+    }
+    window.addEventListener("keydown", tecla);
+    return () => window.removeEventListener("keydown", tecla);
+  });
 
   function navegar(dir: -1 | 1) {
     if (visao === "mes") setCursor((c) => addMonths(c, dir));
@@ -206,27 +226,33 @@ export function AgendaCalendar({
       </div>
 
       {/* Barra de controle */}
-      <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-white p-2 shadow-soft sm:p-2.5">
-        <div className="flex min-w-0 items-center gap-2">
-          <button
-            onClick={() => navegar(-1)}
-            className="grid size-9 place-items-center rounded-md border border-border bg-white text-cinza-suave transition-colors hover:text-azul-medico"
-            aria-label="Anterior"
-          >
-            <ChevronLeft className="size-4" />
-          </button>
-          <button
-            onClick={() => navegar(1)}
-            className="grid size-9 place-items-center rounded-md border border-border bg-white text-cinza-suave transition-colors hover:text-azul-medico"
-            aria-label="Próximo"
-          >
-            <ChevronRight className="size-4" />
-          </button>
+      <div className="mt-5 rounded-xl border border-border bg-white p-2 shadow-soft sm:p-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
+          <div className="flex shrink-0 overflow-hidden rounded-lg border border-border">
+            <button
+              onClick={() => navegar(-1)}
+              className="grid size-9 place-items-center bg-white text-cinza-suave transition-colors hover:bg-verde-menta hover:text-azul-medico"
+              aria-label={visao === "mes" ? "Mês anterior" : visao === "semana" ? "Semana anterior" : "Dia anterior"}
+              title={`${visao === "mes" ? "Mês anterior" : visao === "semana" ? "Semana anterior" : "Dia anterior"} (←)`}
+            >
+              <ChevronLeft className="size-4" />
+            </button>
+            <button
+              onClick={() => navegar(1)}
+              className="grid size-9 place-items-center border-l border-border bg-white text-cinza-suave transition-colors hover:bg-verde-menta hover:text-azul-medico"
+              aria-label={visao === "mes" ? "Próximo mês" : visao === "semana" ? "Próxima semana" : "Próximo dia"}
+              title={`${visao === "mes" ? "Próximo mês" : visao === "semana" ? "Próxima semana" : "Próximo dia"} (→)`}
+            >
+              <ChevronRight className="size-4" />
+            </button>
+          </div>
           <button
             onClick={() => setCursor(new Date())}
             disabled={noPeriodoDeHoje}
+            title="Voltar para hoje (T)"
             className={cn(
-              "rounded-md border px-3 py-1.5 text-sm font-medium transition-colors",
+              "h-9 shrink-0 rounded-lg border px-3 text-sm font-medium transition-colors",
               noPeriodoDeHoje
                 ? "border-border bg-branco-clinico text-cinza-suave"
                 : "border-teal bg-verde-menta text-azul-medico hover:bg-teal hover:text-white"
@@ -234,9 +260,12 @@ export function AgendaCalendar({
           >
             Hoje
           </button>
-          <span className="ml-1 truncate font-heading text-base font-semibold text-azul-medico sm:ml-2 sm:text-lg">
-            {titulo}
-          </span>
+          <SeletorData
+            titulo={titulo}
+            cursor={cursor}
+            onEscolher={setCursor}
+            contarDia={contarDia}
+          />
         </div>
 
         {/* Alternador de visão */}
@@ -256,6 +285,14 @@ export function AgendaCalendar({
             </button>
           ))}
         </div>
+        </div>
+
+        {/* No dia, a semana inteira à mão para pular de um dia para outro */}
+        {visao === "dia" && (
+          <div className="mt-2.5 border-t border-border pt-2.5">
+            <FaixaDias cursor={cursor} onEscolher={setCursor} contarDia={contarDia} />
+          </div>
+        )}
       </div>
 
       {/* Resumo do período visível */}
