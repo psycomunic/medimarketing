@@ -1693,3 +1693,20 @@ select cron.schedule(
 -- ---------------------------------------------------------------------
 alter table public.organizations add column if not exists banner_url text;
 alter table public.organizations add column if not exists banner_link text;
+
+
+-- ---------------------------------------------------------------------
+-- 2026-10-28 (3) — Perfil completo e foto
+--
+-- Campos novos do Meu perfil. A foto vai para o bucket público
+-- `avatares`, numa pasta com o id da pessoa; o upload passa pelo
+-- servidor, então não precisa de política de escrita.
+-- ---------------------------------------------------------------------
+alter table public.profiles add column if not exists tratamento text;
+alter table public.profiles add column if not exists rqe text;
+alter table public.profiles add column if not exists bio text;
+alter table public.profiles add column if not exists instagram text;
+
+insert into storage.buckets (id, name, public)
+values ('avatares', 'avatares', true)
+on conflict (id) do update set public = true;

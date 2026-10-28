@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { adminDisponivel, createAdminClient } from "@/lib/supabase/admin";
 import { emModoDemo, getSessao } from "@/lib/supabase/queries";
 import { MSG_DEMO, type ActionResult } from "@/lib/actions/contexto";
 
@@ -11,13 +12,26 @@ const perfilSchema = z.object({
   especialidade: z.string().trim().max(80).optional().or(z.literal("")),
   crm: z.string().trim().max(40).optional().or(z.literal("")),
   telefone: z.string().trim().max(30).optional().or(z.literal("")),
-  fotoUrl: z
+  tratamento: z.enum(["", "Dr.", "Dra."]).optional(),
+  rqe: z.string().trim().max(40).optional().or(z.literal("")),
+  bio: z
     .string()
     .trim()
-    .url("Informe um endereço de imagem válido.")
+    .max(400, "A apresentação pode ter até 400 caracteres.")
     .optional()
     .or(z.literal("")),
+  instagram: z.string().trim().max(80).optional().or(z.literal("")),
 });
+
+/** "@perfil" a partir de "@perfil", "perfil" ou o link do Instagram. */
+function arroba(bruto?: string): string | null {
+  if (!bruto) return null;
+  const limpo = bruto
+    .replace(/^https?:\/\/(www\.)?instagram\.com\//i, "")
+    .replace(/[/?#].*$/, "")
+    .replace(/^@+/, "");
+  return limpo ? `@${limpo}` : null;
+}
 
 export type PerfilInput = z.input<typeof perfilSchema>;
 
@@ -35,16 +49,33 @@ export async function salvarPerfil(input: PerfilInput): Promise<ActionResult> {
 
   const d = parsed.data;
   const supabase = await createClient();
+  const basicos = {
+    nome: d.nome,
+    especialidade: d.especialidade || null,
+    crm: d.crm || null,
+    telefone: d.telefone || null,
+  };
   const { error } = await supabase
     .from("profiles")
     .update({
-      nome: d.nome,
-      especialidade: d.especialidade || null,
-      crm: d.crm || null,
-      telefone: d.telefone || null,
-      foto_url: d.fotoUrl || null,
+      ...basicos,
+      tratamento: d.tratamento || null,
+      rqe: d.rqe || null,
+      bio: d.bio || null,
+      instagram: arroba(d.instagram),
     })
     .eq("id", profile.id);
+
+  // Colunas novas ainda não criadas: salva o básico e avisa do SQL
+  if (error && /column|schema cache/i.test(error.message)) {
+    await supabase.from("profiles").update(basicos).eq("id", profile.id);
+    revalidatePath("/app/perfil");
+    revalidatePath("/app", "layout");
+    return {
+      ok: false,
+      erro: "Nome, especialidade, CRM e telefone foram salvos. Tratamento, RQE, Instagram e apresentação dependem do SQL do perfil.",
+    };
+  }
 
   if (error) {
     console.error("[perfil] Erro ao salvar:", error.message);
@@ -54,6 +85,90 @@ export async function salvarPerfil(input: PerfilInput): Promise<ActionResult> {
   revalidatePath("/app/perfil");
   revalidatePath("/app", "layout");
   return { ok: true };
+}
+
+/* ------------------------------- Foto ------------------------------- */
+
+const BUCKET_FOTOS = "avatares";
+const TIPOS_FOTO = ["image/png", "image/jpeg", "image/webp"];
+
+/**
+ * Sobe a foto de perfil. Vai pela service role, numa pasta com o id da
+ * pessoa: cada um só troca a própria foto, sem depender de política de
+ * storage. O bucket é público porque a foto aparece no painel todo.
+ */
+export async function salvarFoto(formData: FormData): Promise<ActionResult> {
+  if (await emModoDemo()) return { ok: false, erro: MSG_DEMO };
+  const { profile } = await getSessao();
+  if (!profile) return { ok: false, erro: "Sessão expirada." };
+  if (!adminDisponivel()) {
+    return { ok: false, erro: "Falta a SUPABASE_SERVICE_ROLE_KEY nas variáveis de ambiente." };
+  }
+
+  const file = formData.get("foto");
+  if (!(file instanceof File) || file.size === 0) return { ok: false, erro: "Escolha uma imagem." };
+  if (!TIPOS_FOTO.includes(file.type)) return { ok: false, erro: "Use PNG, JPG ou WEBP." };
+  if (file.size > 3 * 1024 * 1024) return { ok: false, erro: "A foto precisa ter no máximo 3 MB." };
+
+  const admin = createAdminClient();
+  const ext = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
+  const caminho = `${profile.id}/foto-${Date.now()}.${ext}`;
+
+  let envio = await admin.storage
+    .from(BUCKET_FOTOS)
+    .upload(caminho, file, { contentType: file.type, upsert: true });
+  if (envio.error && /bucket/i.test(envio.error.message)) {
+    // Primeira foto da plataforma: cria o bucket na hora
+    await admin.storage.createBucket(BUCKET_FOTOS, { public: true });
+    envio = await admin.storage
+      .from(BUCKET_FOTOS)
+      .upload(caminho, file, { contentType: file.type, upsert: true });
+  }
+  if (envio.error) {
+    console.error("[perfil] Falha no upload da foto:", envio.error.message);
+    return { ok: false, erro: "Não foi possível enviar a foto." };
+  }
+
+  const url = admin.storage.from(BUCKET_FOTOS).getPublicUrl(caminho).data.publicUrl;
+  const { error } = await admin.from("profiles").update({ foto_url: url }).eq("id", profile.id);
+  if (error) {
+    await admin.storage.from(BUCKET_FOTOS).remove([caminho]);
+    return { ok: false, erro: "Não foi possível salvar a foto." };
+  }
+
+  await apagarFotoAntiga(admin, profile.foto_url, profile.id);
+  revalidatePath("/app/perfil");
+  revalidatePath("/app", "layout");
+  return { ok: true };
+}
+
+/** Tira a foto e volta às iniciais. */
+export async function removerFoto(): Promise<ActionResult> {
+  if (await emModoDemo()) return { ok: false, erro: MSG_DEMO };
+  const { profile } = await getSessao();
+  if (!profile) return { ok: false, erro: "Sessão expirada." };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("profiles").update({ foto_url: null }).eq("id", profile.id);
+  if (error) return { ok: false, erro: "Não foi possível remover a foto." };
+
+  if (adminDisponivel()) await apagarFotoAntiga(createAdminClient(), profile.foto_url, profile.id);
+  revalidatePath("/app/perfil");
+  revalidatePath("/app", "layout");
+  return { ok: true };
+}
+
+async function apagarFotoAntiga(
+  admin: ReturnType<typeof createAdminClient>,
+  url: string | null,
+  userId: string
+): Promise<void> {
+  const marca = `/${BUCKET_FOTOS}/`;
+  const i = url ? url.indexOf(marca) : -1;
+  if (!url || i < 0) return;
+  const caminho = url.slice(i + marca.length);
+  // Só dentro da pasta da própria pessoa
+  if (caminho.startsWith(`${userId}/`)) await admin.storage.from(BUCKET_FOTOS).remove([caminho]);
 }
 
 const senhaSchema = z

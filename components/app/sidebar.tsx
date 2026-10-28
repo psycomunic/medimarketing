@@ -13,12 +13,15 @@ import type { Role } from "@/lib/supabase/types";
 
 export function Sidebar({
   nome,
+  fotoUrl = null,
   role,
   organizacao,
   logoUrl = null,
   naoLidas = 0,
 }: {
   nome: string;
+  /** Foto de perfil; sem ela, as iniciais. */
+  fotoUrl?: string | null;
   role: Role;
   organizacao: string | null;
   /** Logo da clínica; sem ela, cai no monograma. */
@@ -127,9 +130,14 @@ export function Sidebar({
 
       <div className="border-t border-border p-3">
         <div className="flex items-center gap-3 rounded-lg px-3 py-2">
-          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-azul-medico text-sm font-semibold text-white">
-            {inicial(nome)}
-          </span>
+          {fotoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={fotoUrl} alt="" className="size-9 shrink-0 rounded-full object-cover" />
+          ) : (
+            <span className="grid size-9 shrink-0 place-items-center rounded-full bg-azul-medico text-sm font-semibold text-white">
+              {inicial(nome)}
+            </span>
+          )}
           <div className="min-w-0">
             <p className="truncate text-sm font-medium text-cinza-texto">{nome}</p>
             <p className="truncate text-xs text-cinza-suave">{rotuloPapel(role)}</p>

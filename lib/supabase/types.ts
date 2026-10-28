@@ -86,6 +86,13 @@ export type Profile = {
   crm: string | null;
   telefone: string | null;
   foto_url: string | null;
+  /** "Dr.", "Dra." ou vazio: vem antes do nome nas mensagens. */
+  tratamento?: string | null;
+  /** Registro de Qualificação de Especialista. */
+  rqe?: string | null;
+  /** Apresentação curta, mostrada no perfil. */
+  bio?: string | null;
+  instagram?: string | null;
   role: Role;
   ativo: boolean;
   /**

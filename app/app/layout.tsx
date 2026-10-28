@@ -26,6 +26,7 @@ export default async function AppLayout({
     <div className="flex min-h-screen flex-col bg-branco-clinico lg:flex-row print:bg-white">
       <Sidebar
         nome={profile.nome || "Usuário"}
+        fotoUrl={profile.foto_url}
         role={role}
         organizacao={organizacao?.nome ?? null}
         logoUrl={organizacao?.logo_url ?? null}

@@ -1,5 +1,5 @@
-import Image from "next/image";
-import { Building2, CalendarDays, ShieldCheck } from "lucide-react";
+import { AtSign, Building2, CalendarDays, Mail, Phone, ShieldCheck } from "lucide-react";
+import { FotoPerfil } from "@/components/app/perfil/foto-perfil";
 import { FormPerfil, FormSenha } from "@/components/app/perfil/form-perfil";
 import { MarcaClinica } from "@/components/app/perfil/marca-clinica";
 import { exigirSessao } from "@/lib/acesso";
@@ -36,60 +36,63 @@ export default async function PerfilPage() {
       <header>
         <h1 className="text-2xl md:text-3xl">Meu perfil</h1>
         <p className="mt-1 text-cinza-suave">
-          Seus dados, seu acesso e a senha da conta.
+          Sua foto, seus dados, os avisos que você recebe e a senha da conta.
         </p>
       </header>
 
       {/* Cartão de identificação */}
-      <section className="mt-8 rounded-lg border border-border bg-white p-6 shadow-soft">
-        <div className="flex flex-wrap items-center gap-4">
-          {profile.foto_url ? (
-            <Image
-              src={profile.foto_url}
-              alt=""
-              width={64}
-              height={64}
-              className="size-16 shrink-0 rounded-full object-cover"
-              unoptimized
-            />
-          ) : (
-            <span className="grid size-16 shrink-0 place-items-center rounded-full bg-azul-medico text-xl font-semibold text-white">
-              {(profile.nome ?? "?").charAt(0).toUpperCase()}
+      <section className="mt-8 overflow-hidden rounded-xl border border-border bg-white shadow-soft">
+        <div className="h-28 bg-gradient-to-r from-azul-medico via-azul-medico to-teal sm:h-32" />
+        <div className="px-6 pb-6">
+          <div className="-mt-14 flex flex-col items-center gap-4 sm:flex-row sm:items-end">
+            <FotoPerfil nome={profile.nome} fotoUrl={profile.foto_url} demo={demo} />
+            <div className="min-w-0 flex-1 text-center sm:pb-2 sm:text-left">
+              <p className="font-heading text-xl font-semibold text-azul-medico">
+                {[profile.tratamento, profile.nome || "Sem nome"].filter(Boolean).join(" ")}
+              </p>
+              <p className="text-sm text-cinza-suave">
+                {[
+                  profile.especialidade || (role === "secretaria" ? null : "Especialidade não informada"),
+                  profile.crm,
+                  profile.rqe ? `RQE ${profile.rqe}` : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
+            </div>
+            <span className="rounded-full bg-verde-menta px-3 py-1.5 text-xs font-semibold text-azul-medico sm:mb-2">
+              {rotuloPapel(role)}
             </span>
-          )}
-
-          <div className="min-w-0 flex-1">
-            <p className="font-heading text-lg font-semibold text-azul-medico">
-              {profile.nome || "Sem nome"}
-            </p>
-            <p className="text-sm text-cinza-suave">
-              {profile.especialidade || "Especialidade não informada"}
-              {profile.crm && ` · ${profile.crm}`}
-            </p>
           </div>
 
-          <span className="rounded-full bg-verde-menta px-3 py-1.5 text-xs font-semibold text-azul-medico">
-            {rotuloPapel(role)}
-          </span>
-        </div>
+          {profile.bio && (
+            <p className="mt-4 whitespace-pre-line text-sm leading-relaxed text-cinza-texto">{profile.bio}</p>
+          )}
 
-        <dl className="mt-5 grid gap-3 border-t border-border pt-5 sm:grid-cols-3">
-          <Info
-            icone={Building2}
-            rotulo="Clínica"
-            valor={organizacao?.nome ?? "Todas as clínicas"}
-          />
-          <Info
-            icone={ShieldCheck}
-            rotulo="Módulos liberados"
-            valor={`${modulos.length} do painel`}
-          />
-          <Info icone={CalendarDays} rotulo="Na plataforma desde" valor={desde} />
-        </dl>
+          {(profile.telefone || profile.instagram || email) && (
+            <div className="mt-4 flex flex-wrap justify-center gap-2 sm:justify-start">
+              {profile.telefone && <Contato icone={Phone} texto={profile.telefone} />}
+              {email && <Contato icone={Mail} texto={email} />}
+              {profile.instagram && <Contato icone={AtSign} texto={profile.instagram.replace(/^@/, "")} />}
+            </div>
+          )}
+
+          <dl className="mt-5 grid gap-3 border-t border-border pt-5 sm:grid-cols-3">
+            <Info icone={Building2} rotulo="Clínica" valor={organizacao?.nome ?? "Todas as clínicas"} />
+            <Info icone={ShieldCheck} rotulo="Módulos liberados" valor={`${modulos.length} do painel`} />
+            <Info icone={CalendarDays} rotulo="Na plataforma desde" valor={desde} />
+          </dl>
+        </div>
       </section>
 
+      {!profile.foto_url && (
+        <p className="mt-3 text-center text-xs text-cinza-suave sm:text-left">
+          Clique no círculo para adicionar sua foto. Ela aparece na barra lateral e para a equipe.
+        </p>
+      )}
+
       <div className="mt-6">
-        <FormPerfil profile={profile} demo={demo} />
+        <FormPerfil profile={profile} email={email} demo={demo} />
       </div>
 
       {/* A marca só aparece para quem responde por ela. A secretária
@@ -154,6 +157,15 @@ async function emailDaConta(): Promise<string | null> {
   const supabase = await createClient();
   const { data } = await supabase.auth.getUser();
   return data.user?.email ?? null;
+}
+
+function Contato({ icone: Icone, texto }: { icone: typeof Phone; texto: string }) {
+  return (
+    <span className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-branco-clinico px-3 py-1 text-xs text-cinza-texto">
+      <Icone className="size-3.5 shrink-0 text-teal" />
+      <span className="truncate">{texto}</span>
+    </span>
+  );
 }
 
 function Info({
