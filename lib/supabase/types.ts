@@ -367,6 +367,186 @@ export type Lancamento = {
   data_recebimento: string | null;
   observacao: string | null;
   created_at: string;
+  /* Campos do financeiro completo (opcionais até o SQL rodar) */
+  medico_id?: string | null;
+  convenio?: string | null;
+  desconto?: number;
+  /** Taxa da maquininha ou do boleto, já em reais. */
+  taxa?: number;
+  parcelas?: number;
+  /** Quanto o convênio deixou de pagar. */
+  glosa?: number;
+  glosa_motivo?: string | null;
+  /** Quando o convênio deve pagar. */
+  previsao_recebimento?: string | null;
+  origem?: "manual" | "agenda";
+  atualizado_em?: string;
+};
+
+/* ------------------------------------------------------------------ */
+/* Financeiro da clínica                                               */
+/* ------------------------------------------------------------------ */
+
+export type CategoriaDespesa =
+  | "aluguel"
+  | "equipe"
+  | "pro_labore"
+  | "insumos"
+  | "laboratorio"
+  | "marketing"
+  | "sistemas"
+  | "impostos"
+  | "taxas"
+  | "manutencao"
+  | "outros";
+
+export type StatusDespesa = "aberta" | "paga" | "cancelada";
+
+export type Despesa = {
+  id: string;
+  organization_id: string;
+  descricao: string;
+  categoria: CategoriaDespesa;
+  fornecedor: string | null;
+  valor: number;
+  vencimento: string;
+  pago_em: string | null;
+  status: StatusDespesa;
+  /** Fixa: existe todo mês, com ou sem paciente (aluguel, equipe). */
+  fixa: boolean;
+  recorrente: boolean;
+  grupo: string | null;
+  parcela: number | null;
+  parcelas: number | null;
+  forma_pagamento: string | null;
+  comprovante: string | null;
+  observacao: string | null;
+  created_at: string;
+};
+
+export type PrecoProcedimento = {
+  id: string;
+  organization_id: string;
+  procedimento: string;
+  categoria: string | null;
+  /** Nulo = particular. */
+  convenio: string | null;
+  valor: number;
+  custo: number;
+  duracao_min: number | null;
+  ativo: boolean;
+  created_at: string;
+};
+
+export type RegraRepasse = {
+  id: string;
+  organization_id: string;
+  medico_id: string;
+  tipo: "percentual" | "fixo";
+  /** Percentual (0–100) ou valor fixo por atendimento. */
+  valor: number;
+  base: "bruto" | "liquido";
+  /** Repassa só o que já entrou no caixa. */
+  so_recebido: boolean;
+};
+
+export type Repasse = {
+  id: string;
+  organization_id: string;
+  medico_id: string;
+  competencia: string;
+  atendimentos: number;
+  base: number;
+  valor: number;
+  status: "fechado" | "pago";
+  pago_em: string | null;
+  fechado_por: string | null;
+  created_at: string;
+};
+
+export type ConfigFinanceira = {
+  organization_id: string;
+  /** Percentual de taxa por forma de pagamento. */
+  taxas: Partial<Record<FormaPagamento, number>>;
+  /** Imposto sobre a receita (%), para o resultado do mês. */
+  imposto: number;
+  /** Quanto separar da receita de convênio para glosas (%). */
+  reserva_glosa: number;
+  saldo_inicial: number;
+  meta_lucro: number | null;
+  atualizado_em: string;
+};
+
+/* ------------------------------------------------------------------ */
+/* Financeiro da agência                                               */
+/* ------------------------------------------------------------------ */
+
+export type StatusContrato = "ativo" | "pausado" | "cancelado";
+
+export type Contrato = {
+  id: string;
+  organization_id: string;
+  plano: PlanoOrganizacao;
+  mensalidade: number;
+  implantacao: number;
+  inicio: string;
+  fidelidade_meses: number;
+  dia_vencimento: number;
+  reajuste: string;
+  status: StatusContrato;
+  cancelado_em: string | null;
+  motivo_saida: string | null;
+  responsavel: string | null;
+  observacao: string | null;
+  created_at: string;
+  atualizado_em: string;
+};
+
+export type TipoEventoContrato =
+  | "novo"
+  | "upgrade"
+  | "downgrade"
+  | "pausa"
+  | "reativacao"
+  | "cancelamento";
+
+export type ContratoEvento = {
+  id: string;
+  contrato_id: string;
+  tipo: TipoEventoContrato;
+  data: string;
+  mrr_antes: number;
+  mrr_depois: number;
+  observacao: string | null;
+  created_at: string;
+};
+
+export type StatusFatura = "aberta" | "paga" | "cancelada";
+
+export type Fatura = {
+  id: string;
+  organization_id: string;
+  contrato_id: string | null;
+  competencia: string;
+  descricao: string;
+  valor: number;
+  vencimento: string;
+  status: StatusFatura;
+  pago_em: string | null;
+  forma_pagamento: string | null;
+  tipo: "mensalidade" | "implantacao" | "avulsa";
+  created_at: string;
+};
+
+export type CustoAgencia = {
+  id: string;
+  descricao: string;
+  categoria: "ferramentas" | "equipe" | "midia" | "impostos" | "estrutura" | "outros";
+  valor: number;
+  competencia: string;
+  recorrente: boolean;
+  organization_id: string | null;
+  created_at: string;
 };
 
 /* ------------------------------------------------------------------ */
@@ -810,6 +990,51 @@ export interface Database {
         Lancamento,
         Omit<Lancamento, "id" | "created_at"> & { id?: string },
         Partial<Lancamento>
+      >;
+      tabela_precos: Tabela<
+        PrecoProcedimento,
+        Pick<PrecoProcedimento, "organization_id" | "procedimento"> & Partial<PrecoProcedimento>,
+        Partial<PrecoProcedimento>
+      >;
+      despesas: Tabela<
+        Despesa,
+        Pick<Despesa, "organization_id" | "descricao" | "valor" | "vencimento"> & Partial<Despesa>,
+        Partial<Despesa>
+      >;
+      regras_repasse: Tabela<
+        RegraRepasse,
+        Pick<RegraRepasse, "organization_id" | "medico_id"> & Partial<RegraRepasse>,
+        Partial<RegraRepasse>
+      >;
+      repasses: Tabela<
+        Repasse,
+        Pick<Repasse, "organization_id" | "medico_id" | "competencia"> & Partial<Repasse>,
+        Partial<Repasse>
+      >;
+      config_financeira: Tabela<
+        ConfigFinanceira,
+        Pick<ConfigFinanceira, "organization_id"> & Partial<ConfigFinanceira>,
+        Partial<ConfigFinanceira>
+      >;
+      contratos: Tabela<
+        Contrato,
+        Pick<Contrato, "organization_id"> & Partial<Contrato>,
+        Partial<Contrato>
+      >;
+      contrato_eventos: Tabela<
+        ContratoEvento,
+        Pick<ContratoEvento, "contrato_id" | "tipo"> & Partial<ContratoEvento>,
+        Partial<ContratoEvento>
+      >;
+      faturas: Tabela<
+        Fatura,
+        Pick<Fatura, "organization_id" | "competencia" | "valor" | "vencimento"> & Partial<Fatura>,
+        Partial<Fatura>
+      >;
+      custos_agencia: Tabela<
+        CustoAgencia,
+        Pick<CustoAgencia, "descricao" | "valor" | "competencia"> & Partial<CustoAgencia>,
+        Partial<CustoAgencia>
       >;
       integracoes: Tabela<
         Integracao,

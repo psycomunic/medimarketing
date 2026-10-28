@@ -1,4 +1,5 @@
 import "server-only";
+import { gerarMensalidades } from "@/lib/financeiro/rotina";
 
 import { createAdminClient, adminDisponivel } from "@/lib/supabase/admin";
 import { getDevidas, gerarPendentes } from "@/lib/supabase/confirmacoes";
@@ -50,6 +51,7 @@ export type RelatorioRotina = {
   lembretes: number;
   resumos: number;
   alertasVespera: number;
+  mensalidades: number;
   fila: RelatorioFila;
 };
 
@@ -59,6 +61,7 @@ export async function rodarRotina(): Promise<RelatorioRotina> {
     lembretes: 0,
     resumos: 0,
     alertasVespera: 0,
+    mensalidades: 0,
     fila: { enviados: 0, falhas: 0, ignorados: 0 },
   };
   if (!adminDisponivel()) return relatorio;
@@ -78,6 +81,7 @@ export async function rodarRotina(): Promise<RelatorioRotina> {
     ["lembretes", enfileirarLembretes],
     ["resumos", () => resumosDoDia((orgs ?? []).map((o) => o.id))],
     ["alertasVespera", () => alertasDeVespera((orgs ?? []).map((o) => o.id))],
+    ["mensalidades", gerarMensalidades],
   ];
   for (const [nome, etapa] of etapas) {
     try {

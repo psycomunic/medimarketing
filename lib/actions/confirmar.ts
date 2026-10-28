@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { sincronizarReceita } from "@/lib/financeiro/agenda";
 import { createAdminClient, adminDisponivel } from "@/lib/supabase/admin";
 import { comunicarConsulta } from "@/lib/comunicacao/consulta";
 import type { StatusConfirmacao } from "@/lib/supabase/types";
@@ -87,6 +88,7 @@ export async function responderConfirmacao(
       .update({ status: "cancelada" })
       .eq("id", conf.consulta_id);
   }
+  if (resposta === "recusado") await sincronizarReceita(conf.consulta_id);
 
   // Avisa a equipe (painel, WhatsApp, e-mail, conforme cada pessoa
   // escolheu) e manda o recibo ao paciente que confirmou. O pedido de

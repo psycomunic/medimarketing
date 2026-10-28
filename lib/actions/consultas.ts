@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { comunicarConsulta } from "@/lib/comunicacao/consulta";
+import { sincronizarReceita } from "@/lib/financeiro/agenda";
 import { createAdminClient, adminDisponivel } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { emModoDemo } from "@/lib/supabase/queries";
@@ -50,6 +51,8 @@ export async function atualizarStatus(
   if (error) return { ok: false, erro: "Não foi possível atualizar o status." };
 
   if (antes && antes.status !== status) {
+    // A receita da consulta acompanha o status (cancelada sai das contas)
+    await sincronizarReceita(id);
     if (status === "cancelada") {
       await comunicarConsulta(id, {
         tipo: "cancelada",
@@ -211,6 +214,7 @@ export async function criarConsulta(input: {
 
   // O paciente recebe o comprovante; o profissional e a equipe, o aviso
   // da consulta nova. Nada disso derruba o agendamento se falhar.
+  await sincronizarReceita(criada.id);
   await comunicarConsulta(criada.id, {
       tipo: "nova",
       atorId: userId,

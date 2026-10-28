@@ -1710,3 +1710,245 @@ alter table public.profiles add column if not exists instagram text;
 insert into storage.buckets (id, name, public)
 values ('avatares', 'avatares', true)
 on conflict (id) do update set public = true;
+
+
+-- ---------------------------------------------------------------------
+-- 2026-10-28 (4) — Financeiro completo: clínica e agência
+--
+-- Clínica: receita ligada à agenda, pagamentos com taxa, despesas e
+-- contas a pagar, tabela de preços, convênios e glosas, repasse aos
+-- médicos e configuração financeira.
+-- Agência: contratos, histórico de mudanças (base do MRR), faturas e
+-- custos da operação.
+-- ---------------------------------------------------------------------
+
+-- ============================ CLÍNICA ================================
+
+-- Receita: o que faltava para convênio, taxa, repasse e origem
+alter table public.lancamentos add column if not exists medico_id uuid references public.profiles(id) on delete set null;
+alter table public.lancamentos add column if not exists convenio text;
+alter table public.lancamentos add column if not exists desconto numeric(12,2) not null default 0;
+alter table public.lancamentos add column if not exists taxa numeric(12,2) not null default 0;
+alter table public.lancamentos add column if not exists parcelas smallint not null default 1;
+alter table public.lancamentos add column if not exists glosa numeric(12,2) not null default 0;
+alter table public.lancamentos add column if not exists glosa_motivo text;
+alter table public.lancamentos add column if not exists previsao_recebimento date;
+alter table public.lancamentos add column if not exists origem text not null default 'manual';
+alter table public.lancamentos add column if not exists atualizado_em timestamptz not null default now();
+alter table public.lancamentos drop constraint if exists lancamentos_origem_check;
+alter table public.lancamentos add constraint lancamentos_origem_check check (origem in ('manual', 'agenda'));
+
+-- Uma receita por consulta: a agenda atualiza sempre a mesma linha
+create unique index if not exists lancamentos_consulta_unica
+  on public.lancamentos (consulta_id) where consulta_id is not null;
+create index if not exists idx_lancamentos_medico on public.lancamentos (medico_id, data_competencia);
+
+-- Tabela de preços: particular (convenio nulo) ou por convênio
+create table if not exists public.tabela_precos (
+  id              uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  procedimento    text not null,
+  categoria       text,
+  convenio        text,
+  valor           numeric(12,2) not null default 0,
+  custo           numeric(12,2) not null default 0,
+  duracao_min     smallint,
+  ativo           boolean not null default true,
+  created_at      timestamptz not null default now()
+);
+create index if not exists idx_precos_org on public.tabela_precos (organization_id, procedimento);
+
+-- Despesas e contas a pagar
+create table if not exists public.despesas (
+  id              uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  descricao       text not null,
+  categoria       text not null default 'outros',
+  fornecedor      text,
+  valor           numeric(12,2) not null,
+  vencimento      date not null,
+  pago_em         date,
+  status          text not null default 'aberta' check (status in ('aberta', 'paga', 'cancelada')),
+  fixa            boolean not null default false,
+  recorrente      boolean not null default false,
+  grupo           uuid,
+  parcela         smallint,
+  parcelas        smallint,
+  forma_pagamento text,
+  comprovante     text,
+  observacao      text,
+  created_at      timestamptz not null default now()
+);
+create index if not exists idx_despesas_org_venc on public.despesas (organization_id, vencimento);
+
+-- Regra de repasse por profissional
+create table if not exists public.regras_repasse (
+  id              uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  medico_id       uuid not null references public.profiles(id) on delete cascade,
+  tipo            text not null default 'percentual' check (tipo in ('percentual', 'fixo')),
+  valor           numeric(12,2) not null default 0,
+  base            text not null default 'liquido' check (base in ('bruto', 'liquido')),
+  so_recebido     boolean not null default true,
+  unique (organization_id, medico_id)
+);
+
+-- Fechamento do repasse de um mês
+create table if not exists public.repasses (
+  id              uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  medico_id       uuid not null references public.profiles(id) on delete cascade,
+  competencia     date not null,
+  atendimentos    integer not null default 0,
+  base            numeric(12,2) not null default 0,
+  valor           numeric(12,2) not null default 0,
+  status          text not null default 'fechado' check (status in ('fechado', 'pago')),
+  pago_em         date,
+  fechado_por     uuid references public.profiles(id) on delete set null,
+  created_at      timestamptz not null default now(),
+  unique (organization_id, medico_id, competencia)
+);
+
+-- Configuração financeira da clínica
+create table if not exists public.config_financeira (
+  organization_id uuid primary key references public.organizations(id) on delete cascade,
+  taxas           jsonb not null default '{"pix":0,"dinheiro":0,"cartao_debito":1.6,"cartao_credito":3.5,"boleto":2,"convenio":0}',
+  imposto         numeric(5,2) not null default 6,
+  reserva_glosa   numeric(5,2) not null default 7,
+  saldo_inicial   numeric(12,2) not null default 0,
+  meta_lucro      numeric(12,2),
+  atualizado_em   timestamptz not null default now()
+);
+
+alter table public.tabela_precos     enable row level security;
+alter table public.despesas          enable row level security;
+alter table public.regras_repasse    enable row level security;
+alter table public.repasses          enable row level security;
+alter table public.config_financeira enable row level security;
+
+-- Preços: a clínica toda lê (a agenda usa); gestor escreve
+drop policy if exists "precos_select" on public.tabela_precos;
+create policy "precos_select" on public.tabela_precos for select to authenticated
+  using (organization_id = public.minha_org() or public.is_super_admin());
+drop policy if exists "precos_write" on public.tabela_precos;
+create policy "precos_write" on public.tabela_precos for all to authenticated
+  using ((organization_id = public.minha_org() and public.is_gestor()) or public.is_super_admin())
+  with check ((organization_id = public.minha_org() and public.is_gestor()) or public.is_super_admin());
+
+-- Despesas, regras e configuração: só gestor (a atendente não vê o custo da clínica)
+drop policy if exists "despesas_all" on public.despesas;
+create policy "despesas_all" on public.despesas for all to authenticated
+  using ((organization_id = public.minha_org() and public.is_gestor()) or public.is_super_admin())
+  with check ((organization_id = public.minha_org() and public.is_gestor()) or public.is_super_admin());
+
+drop policy if exists "regras_repasse_all" on public.regras_repasse;
+create policy "regras_repasse_all" on public.regras_repasse for all to authenticated
+  using ((organization_id = public.minha_org() and public.is_gestor()) or public.is_super_admin())
+  with check ((organization_id = public.minha_org() and public.is_gestor()) or public.is_super_admin());
+
+drop policy if exists "config_financeira_all" on public.config_financeira;
+create policy "config_financeira_all" on public.config_financeira for all to authenticated
+  using ((organization_id = public.minha_org() and public.is_gestor()) or public.is_super_admin())
+  with check ((organization_id = public.minha_org() and public.is_gestor()) or public.is_super_admin());
+
+-- Repasses: o médico lê só o dele; gestor lê e escreve os da clínica
+drop policy if exists "repasses_select" on public.repasses;
+create policy "repasses_select" on public.repasses for select to authenticated
+  using (
+    medico_id = auth.uid()
+    or (organization_id = public.minha_org() and public.is_gestor())
+    or public.is_super_admin()
+  );
+drop policy if exists "repasses_write" on public.repasses;
+create policy "repasses_write" on public.repasses for all to authenticated
+  using ((organization_id = public.minha_org() and public.is_gestor()) or public.is_super_admin())
+  with check ((organization_id = public.minha_org() and public.is_gestor()) or public.is_super_admin());
+
+-- ============================ AGÊNCIA ================================
+
+create table if not exists public.contratos (
+  id               uuid primary key default gen_random_uuid(),
+  organization_id  uuid not null references public.organizations(id) on delete cascade,
+  plano            text not null default 'essencial',
+  mensalidade      numeric(12,2) not null default 0,
+  implantacao      numeric(12,2) not null default 0,
+  inicio           date not null default current_date,
+  fidelidade_meses smallint not null default 12,
+  dia_vencimento   smallint not null default 10 check (dia_vencimento between 1 and 28),
+  reajuste         text not null default 'IPCA',
+  status           text not null default 'ativo' check (status in ('ativo', 'pausado', 'cancelado')),
+  cancelado_em     date,
+  motivo_saida     text,
+  responsavel      text,
+  observacao       text,
+  created_at       timestamptz not null default now(),
+  atualizado_em    timestamptz not null default now()
+);
+create unique index if not exists contratos_um_ativo
+  on public.contratos (organization_id) where status <> 'cancelado';
+
+-- Cada mudança de valor fica registrada: é daqui que sai a ponte do MRR
+create table if not exists public.contrato_eventos (
+  id           uuid primary key default gen_random_uuid(),
+  contrato_id  uuid not null references public.contratos(id) on delete cascade,
+  tipo         text not null check (tipo in ('novo', 'upgrade', 'downgrade', 'pausa', 'reativacao', 'cancelamento')),
+  data         date not null default current_date,
+  mrr_antes    numeric(12,2) not null default 0,
+  mrr_depois   numeric(12,2) not null default 0,
+  observacao   text,
+  created_at   timestamptz not null default now()
+);
+create index if not exists idx_contrato_eventos on public.contrato_eventos (contrato_id, data);
+
+create table if not exists public.faturas (
+  id              uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  contrato_id     uuid references public.contratos(id) on delete set null,
+  competencia     date not null,
+  descricao       text not null default 'Mensalidade',
+  valor           numeric(12,2) not null,
+  vencimento      date not null,
+  status          text not null default 'aberta' check (status in ('aberta', 'paga', 'cancelada')),
+  pago_em         date,
+  forma_pagamento text,
+  tipo            text not null default 'mensalidade' check (tipo in ('mensalidade', 'implantacao', 'avulsa')),
+  created_at      timestamptz not null default now()
+);
+create unique index if not exists faturas_mensalidade_unica
+  on public.faturas (contrato_id, competencia) where tipo = 'mensalidade';
+create index if not exists idx_faturas_venc on public.faturas (vencimento);
+
+create table if not exists public.custos_agencia (
+  id              uuid primary key default gen_random_uuid(),
+  descricao       text not null,
+  categoria       text not null default 'ferramentas',
+  valor           numeric(12,2) not null,
+  competencia     date not null,
+  recorrente      boolean not null default true,
+  organization_id uuid references public.organizations(id) on delete set null,
+  created_at      timestamptz not null default now()
+);
+create index if not exists idx_custos_agencia on public.custos_agencia (competencia);
+
+alter table public.contratos        enable row level security;
+alter table public.contrato_eventos enable row level security;
+alter table public.faturas          enable row level security;
+alter table public.custos_agencia   enable row level security;
+
+drop policy if exists "contratos_admin" on public.contratos;
+create policy "contratos_admin" on public.contratos for all to authenticated
+  using (public.is_super_admin()) with check (public.is_super_admin());
+drop policy if exists "contrato_eventos_admin" on public.contrato_eventos;
+create policy "contrato_eventos_admin" on public.contrato_eventos for all to authenticated
+  using (public.is_super_admin()) with check (public.is_super_admin());
+drop policy if exists "custos_agencia_admin" on public.custos_agencia;
+create policy "custos_agencia_admin" on public.custos_agencia for all to authenticated
+  using (public.is_super_admin()) with check (public.is_super_admin());
+
+-- A clínica vê as próprias faturas (gestor); só a agência escreve
+drop policy if exists "faturas_select" on public.faturas;
+create policy "faturas_select" on public.faturas for select to authenticated
+  using (public.is_super_admin() or (organization_id = public.minha_org() and public.is_gestor()));
+drop policy if exists "faturas_admin" on public.faturas;
+create policy "faturas_admin" on public.faturas for all to authenticated
+  using (public.is_super_admin()) with check (public.is_super_admin());

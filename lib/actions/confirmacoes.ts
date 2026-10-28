@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { sincronizarReceita } from "@/lib/financeiro/agenda";
 import {
   bloqueio,
   contexto,
@@ -227,6 +228,8 @@ export async function registrarResposta(
       .eq("id", r.conf.consulta_id);
   }
 
+  if (status === "recusado") await sincronizarReceita(r.conf.consulta_id);
+
   // E o mesmo aviso: o profissional fica sabendo como se fosse pelo link
   if (status !== "pendente" && status !== r.conf.status) {
     await comunicarConsulta(r.conf.consulta_id, {
@@ -313,6 +316,7 @@ export async function reagendarConsulta(
 
   // O que estava programado para o horário antigo não sai mais
   await cancelarPendentes(r.conf.consulta_id);
+  await sincronizarReceita(r.conf.consulta_id);
 
   // O paciente pediu para remarcar: avisar que foi atendido fecha o
   // ciclo. O profissional fica sabendo do horário novo.
