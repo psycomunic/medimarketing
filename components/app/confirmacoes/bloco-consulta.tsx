@@ -294,7 +294,10 @@ export function BlocoConfirmacao({
 
           <button
             type="button"
-            onClick={() => copiar(confirmacao.url)}
+            // Vai o lembrete inteiro, com o link no meio: pronto para colar
+            // no WhatsApp Web, Instagram ou onde a recepção conversa
+            onClick={() => copiar(confirmacao.mensagem)}
+            title="Copia a mensagem do lembrete com o link de confirmação"
             className="inline-flex items-center gap-1.5 rounded-md border border-border bg-white px-2.5 py-1.5 text-xs font-medium text-cinza-suave transition-colors hover:border-teal hover:text-teal"
           >
             {copiado ? (
@@ -303,7 +306,7 @@ export function BlocoConfirmacao({
               </>
             ) : (
               <>
-                <Copy className="size-3.5" /> Copiar link
+                <Copy className="size-3.5" /> Copiar mensagem com link
               </>
             )}
           </button>
