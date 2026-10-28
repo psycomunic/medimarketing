@@ -18,6 +18,7 @@ import type { Organization } from "@/lib/supabase/types";
 import { ativarClinica } from "@/lib/actions/identidade";
 import { salvarClinica, type ConexaoDisponivel } from "@/lib/actions/configuracoes";
 import { FormLogo } from "@/components/app/configuracoes/form-logo";
+import { FormBanner } from "@/components/app/configuracoes/form-banner";
 import { ConexaoWhatsApp } from "@/components/app/configuracoes/conexao-whatsapp";
 import {
   Dialog,
@@ -38,7 +39,7 @@ type Aba = "dados" | "marca" | "whatsapp" | "lembretes";
 
 const ABAS: { id: Aba; label: string; icone: typeof Building2 }[] = [
   { id: "dados", label: "Dados", icone: Building2 },
-  { id: "marca", label: "Logo", icone: ImageIcon },
+  { id: "marca", label: "Visual", icone: ImageIcon },
   { id: "whatsapp", label: "WhatsApp", icone: MessageCircle },
   { id: "lembretes", label: "Lembretes", icone: BellRing },
 ];
@@ -272,6 +273,16 @@ export function EditarMarca({
               className="border-0 p-0 shadow-none"
             />
           )}
+          {aba === "marca" && (
+            <FormBanner
+              organizationId={clinica.id}
+              nome={v.nome || clinica.nome}
+              bannerUrl={clinica.banner_url ?? null}
+              bannerLink={clinica.banner_link ?? null}
+              demo={demo}
+              className="mt-6 rounded-none border-0 border-t p-0 pt-6 shadow-none"
+            />
+          )}
 
           {aba === "whatsapp" && (
             <ConexaoWhatsApp
@@ -382,7 +393,7 @@ export function EditarMarca({
             </div>
           ) : (
             <p className="text-right text-xs text-cinza-suave">
-              {aba === "marca" ? "A logo é salva ao enviar." : "O número é salvo ao escolher."}
+              {aba === "marca" ? "Logo e banner são salvos ao enviar." : "O número é salvo ao escolher."}
             </p>
           )}
         </div>

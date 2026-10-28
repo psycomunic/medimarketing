@@ -1682,3 +1682,14 @@ select cron.schedule(
     );
   $job$
 );
+
+
+-- ---------------------------------------------------------------------
+-- 2026-10-28 (2) — Banner do painel da clínica
+--
+-- Imagem que aparece no topo da visão geral da clínica, com link
+-- opcional. Fica no bucket `logos` (já público, pasta da clínica), então
+-- as políticas de storage do bloco da logo já cobrem o upload.
+-- ---------------------------------------------------------------------
+alter table public.organizations add column if not exists banner_url text;
+alter table public.organizations add column if not exists banner_link text;

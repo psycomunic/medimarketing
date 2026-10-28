@@ -54,6 +54,10 @@ export type Organization = {
   responsavel: string | null;
   /** Logo da clínica, no bucket público `logos`. */
   logo_url: string | null;
+  /** Banner do topo da visão geral, no mesmo bucket da logo. */
+  banner_url?: string | null;
+  /** Para onde o banner leva ao ser clicado (rota do painel ou https). */
+  banner_link?: string | null;
   site: string | null;
   instagram: string | null;
   /** Texto do lembrete de consulta enviado ao paciente. */

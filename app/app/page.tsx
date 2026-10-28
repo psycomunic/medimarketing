@@ -16,6 +16,7 @@ import { getPainel } from "@/lib/supabase/painel";
 import { modulosDoPapel, rotuloPapel } from "@/lib/rbac";
 import { formatarHora, rotuloStatus, rotuloTipo, capitalizar } from "@/lib/agenda";
 import { cn } from "@/lib/utils";
+import { BannerClinica } from "@/components/app/painel/banner-clinica";
 
 /** Primeiro nome, sem título. E-mail vira o trecho antes do @. */
 function comoChamar(nome: string | null): string {
@@ -61,6 +62,15 @@ export default async function DashboardPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-5 py-8 md:px-8 md:py-10">
+      {organizacao?.banner_url && (
+        <BannerClinica
+          url={organizacao.banner_url}
+          link={organizacao.banner_link}
+          nome={organizacao.nome}
+          className="mb-8"
+        />
+      )}
+
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl">

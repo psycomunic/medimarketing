@@ -147,3 +147,111 @@ async function removerArquivo(
 
   await supabase.storage.from(BUCKET).remove([caminho]);
 }
+
+/* ------------------------------- Banner -------------------------------- */
+
+const TIPOS_BANNER = ["image/png", "image/jpeg", "image/webp", "image/gif"];
+const MAX_BANNER = 4 * 1024 * 1024;
+
+/** Link do banner: rota interna do painel ou endereço https. */
+function linkValido(bruto: string): string | null | false {
+  const link = bruto.trim();
+  if (!link) return null;
+  if (link.startsWith("/")) return link;
+  try {
+    const u = new URL(link.includes("://") ? link : `https://${link}`);
+    return u.protocol === "https:" || u.protocol === "http:" ? u.toString() : false;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Banner do topo da visão geral da clínica.
+ *
+ * Mesmo bucket da logo (é material de marca, feito para ser visto). A
+ * imagem é opcional na chamada: sem arquivo, só o link é atualizado.
+ */
+export async function salvarBanner(formData: FormData): Promise<ActionResult> {
+  const ctx = await contexto(MARCA);
+  if (ctx.estado !== "ok") return bloqueio(ctx);
+
+  const orgId = organizacaoAlvo(
+    ctx.profile,
+    (formData.get("organizationId") as string) || undefined
+  );
+  if (!orgId) return { ok: false, erro: "Clínica inválida." };
+
+  const link = linkValido(String(formData.get("link") ?? ""));
+  if (link === false) return { ok: false, erro: "O link precisa ser um endereço válido." };
+
+  const file = formData.get("banner");
+  const temArquivo = file instanceof File && file.size > 0;
+  const mudancas: { banner_link: string | null; banner_url?: string } = { banner_link: link };
+
+  const { data: antes } = await ctx.supabase
+    .from("organizations")
+    .select("banner_url")
+    .eq("id", orgId)
+    .maybeSingle();
+
+  let caminho: string | null = null;
+  if (temArquivo) {
+    if (!TIPOS_BANNER.includes(file.type)) {
+      return { ok: false, erro: "Use PNG, JPG, WEBP ou GIF." };
+    }
+    if (file.size > MAX_BANNER) {
+      return { ok: false, erro: "O banner precisa ter no máximo 4 MB." };
+    }
+    const ext = file.name.split(".").pop()?.toLowerCase() ?? "png";
+    caminho = `${orgId}/banner-${Date.now()}.${ext}`;
+    const { error: erroUpload } = await ctx.supabase.storage
+      .from(BUCKET)
+      .upload(caminho, file, { contentType: file.type, upsert: true });
+    if (erroUpload) {
+      console.error("[banner] Falha no upload:", erroUpload.message);
+      return { ok: false, erro: "Não foi possível enviar a imagem." };
+    }
+    mudancas.banner_url = ctx.supabase.storage.from(BUCKET).getPublicUrl(caminho).data.publicUrl;
+  }
+
+  const { error } = await ctx.supabase.from("organizations").update(mudancas).eq("id", orgId);
+
+  if (error) {
+    if (caminho) await ctx.supabase.storage.from(BUCKET).remove([caminho]);
+    console.error("[banner] Erro ao salvar:", error.message);
+    return { ok: false, erro: "Não foi possível salvar o banner. O SQL do banner já foi rodado?" };
+  }
+
+  if (caminho) await removerArquivo(ctx.supabase, antes?.banner_url ?? null, orgId);
+
+  revalidar();
+  return { ok: true };
+}
+
+/** Tira o banner do painel. */
+export async function removerBanner(organizationId?: string): Promise<ActionResult> {
+  const ctx = await contexto(MARCA);
+  if (ctx.estado !== "ok") return bloqueio(ctx);
+
+  const orgId = organizacaoAlvo(ctx.profile, organizationId);
+  if (!orgId) return { ok: false, erro: "Clínica inválida." };
+
+  const { data: antes } = await ctx.supabase
+    .from("organizations")
+    .select("banner_url")
+    .eq("id", orgId)
+    .maybeSingle();
+
+  const { error } = await ctx.supabase
+    .from("organizations")
+    .update({ banner_url: null, banner_link: null })
+    .eq("id", orgId);
+
+  if (error) return { ok: false, erro: "Não foi possível remover o banner." };
+
+  await removerArquivo(ctx.supabase, antes?.banner_url ?? null, orgId);
+
+  revalidar();
+  return { ok: true };
+}

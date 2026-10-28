@@ -34,6 +34,7 @@ import {
 import { descricaoProvedor, rotuloProvedor } from "@/lib/rotulos";
 import { GestaoUsuarios } from "@/components/app/admin/gestao-usuarios";
 import { FormLogo } from "@/components/app/configuracoes/form-logo";
+import { FormBanner } from "@/components/app/configuracoes/form-banner";
 import { ConexaoWhatsApp } from "@/components/app/configuracoes/conexao-whatsapp";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -314,6 +315,14 @@ function FormClinica({
         organizationId={o.id}
         nome={o.nome}
         logoUrl={o.logo_url}
+        demo={demo}
+      />
+
+      <FormBanner
+        organizationId={o.id}
+        nome={o.nome}
+        bannerUrl={o.banner_url ?? null}
+        bannerLink={o.banner_link ?? null}
         demo={demo}
       />
 
