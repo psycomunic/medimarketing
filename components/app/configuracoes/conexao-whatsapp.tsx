@@ -61,7 +61,7 @@ export function ConexaoWhatsApp({
           <Smartphone className="size-5" />
         </span>
 
-        <div className="min-w-[16rem] flex-1">
+        <div className="min-w-0 flex-1 basis-56">
           <h3 className="font-semibold text-azul-medico">
             WhatsApp que fala com os pacientes
           </h3>

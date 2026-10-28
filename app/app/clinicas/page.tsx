@@ -200,11 +200,7 @@ export default async function ClinicasPage() {
                       </td>
                       <td className="px-6 py-4 text-right">
                         <EditarMarca
-                          organizationId={c.id}
-                          nome={c.nome}
-                          logoUrl={c.logo_url}
-                          ativa={c.ativo}
-                          conexaoEscolhida={c.merge_connection_id}
+                          clinica={c}
                           conexoes={whatsapp.conexoes}
                           mergeDisponivel={whatsapp.disponivel}
                           demo={demo}
@@ -264,12 +260,8 @@ export default async function ClinicasPage() {
                   </div>
                   <div className="mt-2 flex justify-end">
                     <EditarMarca
-                      organizationId={c.id}
-                      nome={c.nome}
-                      logoUrl={c.logo_url}
-                      ativa={c.ativo}
-                      conexaoEscolhida={c.merge_connection_id}
-                      conexoes={whatsapp.conexoes}
+                          clinica={c}
+                          conexoes={whatsapp.conexoes}
                       mergeDisponivel={whatsapp.disponivel}
                       demo={demo}
                     />
@@ -283,16 +275,9 @@ export default async function ClinicasPage() {
 
       <p className="mt-4 rounded-md border border-dashed border-border bg-white px-4 py-3 text-sm text-cinza-suave">
         <UserPlus className="mr-1.5 inline size-4 text-teal" />
-        Para cadastrar uma clínica nova e convidar a equipe dela, use o painel
-        do Supabase (Authentication → Users) e vincule o usuário à organização.
-        O fluxo de convite dentro da plataforma entra na Fase 2.{" "}
-        <Link
-          href="/app/admin/academy"
-          className="font-semibold text-teal hover:underline"
-        >
-          Gerenciar conteúdo da Academy
-        </Link>
-        .
+        Cliente novo entra pelo botão <strong>Nova clínica</strong>. Para dar
+        acesso ao painel, abra a clínica e use <strong>Acessos ao painel</strong>:
+        vincule a conta de quem já se cadastrou ou crie um login novo.
       </p>
     </div>
   );

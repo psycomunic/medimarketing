@@ -46,6 +46,8 @@ const clinicaSchema = z.object({
   lembreteAtivo: z.boolean(),
   lembreteDiasUteis: z.number().int().min(1).max(10),
   lembreteHora: z.number().int().min(0).max(23),
+  /** Só a equipe Medi Marketing muda o plano; para os demais é ignorado. */
+  plano: z.enum(["essencial", "performance", "full"]).optional(),
 });
 
 export type ClinicaInput = z.input<typeof clinicaSchema>;
@@ -81,6 +83,7 @@ export async function salvarClinica(input: ClinicaInput): Promise<ActionResult> 
       lembrete_ativo: d.lembreteAtivo,
       lembrete_dias_uteis: d.lembreteDiasUteis,
       lembrete_hora: d.lembreteHora,
+      ...(d.plano && ctx.profile.role === "super_admin" ? { plano: d.plano } : {}),
     })
     .eq("id", orgId);
 
@@ -90,6 +93,7 @@ export async function salvarClinica(input: ClinicaInput): Promise<ActionResult> 
   }
 
   revalidar();
+  revalidatePath("/app/clinicas", "layout");
   return { ok: true };
 }
 

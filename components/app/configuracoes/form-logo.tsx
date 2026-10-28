@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { CheckCircle2, ImageUp, Loader2, Trash2 } from "lucide-react";
 import { removerLogo, salvarLogo } from "@/lib/actions/logo";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 /**
  * Upload da logo da clínica.
@@ -19,11 +20,13 @@ export function FormLogo({
   nome,
   logoUrl,
   demo,
+  className,
 }: {
   organizationId: string;
   nome: string;
   logoUrl: string | null;
   demo: boolean;
+  className?: string;
 }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -85,15 +88,15 @@ export function FormLogo({
   const mostrando = previa ?? logoUrl;
 
   return (
-    <section className="rounded-lg border border-border bg-white p-6 shadow-soft">
+    <section className={cn("rounded-lg border border-border bg-white p-6 shadow-soft", className)}>
       <h2 className="text-lg font-semibold text-azul-medico">Logo da clínica</h2>
       <p className="mt-1 text-sm text-cinza-suave">
         Aparece no painel da sua equipe e, principalmente, na página que o
         paciente abre para confirmar a consulta.
       </p>
 
-      <div className="mt-5 flex flex-wrap items-center gap-5">
-        <div className="grid h-24 w-40 shrink-0 place-items-center rounded-lg border border-dashed border-border bg-branco-clinico p-2">
+      <div className="mt-5 flex flex-col gap-5 sm:flex-row sm:items-center">
+        <div className="grid h-24 w-full shrink-0 sm:w-40 place-items-center rounded-lg border border-dashed border-border bg-branco-clinico p-2">
           {mostrando ? (
             <Image
               src={mostrando}
@@ -111,13 +114,31 @@ export function FormLogo({
         </div>
 
         <div className="min-w-0 flex-1">
+          {/* O input nativo corta o nome do arquivo ("Nenh...olhido") em
+              telas estreitas; o botão e o nome ficam por nossa conta. */}
           <input
             ref={inputRef}
+            id={`logo-${organizationId}`}
             type="file"
             accept="image/png,image/jpeg,image/webp,image/svg+xml"
             onChange={escolher}
-            className="block w-full text-sm text-cinza-suave file:mr-3 file:cursor-pointer file:rounded-full file:border-0 file:bg-verde-menta file:px-4 file:py-2 file:text-sm file:font-semibold file:text-azul-medico hover:file:bg-teal-claro/40"
+            className="sr-only"
           />
+          <div className="flex min-w-0 items-center gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={demo || pending}
+              onClick={() => inputRef.current?.click()}
+              className="shrink-0"
+            >
+              Escolher arquivo
+            </Button>
+            <span className="min-w-0 truncate text-sm text-cinza-suave" title={arquivo?.name}>
+              {arquivo?.name ?? "Nenhum arquivo escolhido"}
+            </span>
+          </div>
           <p className="mt-2 text-xs text-cinza-suave">
             PNG, JPG, WEBP ou SVG, até 2 MB. Fundo transparente fica melhor
             sobre o branco do painel.
