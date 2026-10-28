@@ -75,31 +75,27 @@ function cabecalho(m: MarcaEmail): string {
     return `
   <tr>
     <td style="padding:28px 32px 20px;border-bottom:1px solid ${BORDA};">
-      <img src="${esc(LOGO_MEDI_EMAIL)}" alt="Medi Marketing" height="34"
-        style="display:block;height:34px;width:auto;border:0;" />
+      <img src="${esc(LOGO_MEDI_EMAIL)}" alt="Medi Marketing" width="133" height="23"
+        style="display:block;width:133px;height:23px;max-width:133px;border:0;" />
     </td>
   </tr>`;
   }
 
+  // Para o paciente, quem fala é a clínica: logo grande e centralizada,
+  // com o nome logo abaixo.
   const logo = logoUtilizavel(m.logoUrl);
   const marca = logo
-    ? `<img src="${esc(logo)}" alt="${nome}" height="48"
-         style="display:block;max-height:48px;width:auto;border:0;" />`
-    : `<span style="display:inline-block;width:48px;height:48px;line-height:48px;
-         border-radius:10px;background:${AZUL};color:#fff;font-size:22px;
+    ? `<img src="${esc(logo)}" alt="${nome}" height="72"
+         style="display:block;margin:0 auto;height:auto;max-height:72px;max-width:240px;width:auto;border:0;" />`
+    : `<span style="display:inline-block;width:64px;height:64px;line-height:64px;
+         border-radius:14px;background:${AZUL};color:#fff;font-size:28px;
          font-weight:700;text-align:center;">${nome.charAt(0).toUpperCase()}</span>`;
 
   return `
   <tr>
-    <td style="padding:28px 32px 20px;border-bottom:1px solid ${BORDA};">
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0">
-        <tr>
-          <td style="padding-right:12px;vertical-align:middle;">${marca}</td>
-          <td style="vertical-align:middle;">
-            <span style="font-size:17px;font-weight:700;color:${AZUL};">${nome}</span>
-          </td>
-        </tr>
-      </table>
+    <td align="center" style="padding:32px 32px 22px;border-bottom:1px solid ${BORDA};text-align:center;">
+      ${marca}
+      <p style="margin:12px 0 0;font-size:18px;font-weight:700;color:${AZUL};line-height:1.3;">${nome}</p>
     </td>
   </tr>`;
 }
