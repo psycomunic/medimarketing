@@ -49,9 +49,9 @@ export function Sidebar({
               <img
                 src={logoUrl}
                 alt={organizacao}
-                className="h-14 w-auto max-w-full object-contain object-left"
+                className="h-9 w-auto max-w-[160px] object-contain object-left"
               />
-              <span className="mt-2 block truncate text-sm font-semibold text-azul-medico">
+              <span className="mt-1.5 block truncate text-xs font-semibold text-azul-medico">
                 {organizacao}
               </span>
             </Link>
