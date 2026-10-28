@@ -385,11 +385,11 @@ const corConfirmacao: Record<string, string> = {
 };
 
 /** Tom de cada status nos blocos da grade: fundo claro e borda forte. */
-const tomStatus: Record<Consulta["status"], { bloco: string; texto: string }> = {
-  pendente: { bloco: "border-l-alerta bg-alerta/10 hover:bg-alerta/15", texto: "text-[#9A5B00]" },
-  confirmada: { bloco: "border-l-sucesso bg-sucesso/10 hover:bg-sucesso/15", texto: "text-[#15803D]" },
-  realizada: { bloco: "border-l-teal bg-teal/10 hover:bg-teal/15", texto: "text-teal" },
-  cancelada: { bloco: "border-l-cinza-suave/50 bg-cinza-suave/10 hover:bg-cinza-suave/15", texto: "text-cinza-suave" },
+const tomStatus: Record<Consulta["status"], { borda: string; fundo: string; texto: string }> = {
+  pendente: { borda: "border-l-alerta", fundo: "bg-[#FFF7E8] hover:bg-[#FFF0D4]", texto: "text-[#9A5B00]" },
+  confirmada: { borda: "border-l-sucesso", fundo: "bg-[#ECFBF1] hover:bg-[#DDF6E6]", texto: "text-[#15803D]" },
+  realizada: { borda: "border-l-teal", fundo: "bg-[#E8F6F4] hover:bg-[#D8EFEC]", texto: "text-teal" },
+  cancelada: { borda: "border-l-cinza-suave/50", fundo: "bg-[#F3F5F6] hover:bg-[#EAEEF0]", texto: "text-cinza-suave" },
 };
 
 /** Minuto atual, atualizado a cada 30 s, para a linha do "agora". */
@@ -510,7 +510,8 @@ function MonthView({
                     }}
                     className={cn(
                       "flex items-center gap-1 truncate rounded-md border-l-[3px] px-1.5 py-0.5 text-[11px] transition-colors",
-                      tomStatus[c.status].bloco,
+                      tomStatus[c.status].borda,
+                      tomStatus[c.status].fundo,
                       c.status === "cancelada" && "line-through"
                     )}
                   >
@@ -615,7 +616,7 @@ function WeekView({
   const ultima = Math.max(20, ...(horas.length ? horas.map((h) => h + 1) : [20]));
   const faixa = Array.from({ length: ultima - primeira }, (_, i) => primeira + i);
 
-  const ALTURA = 64; // px por hora
+  const ALTURA = 88; // px por hora: 30 min = 44 px, cabe nome e horário
   const semanaAtual = dias.some((d) => isToday(d));
   const primeiraConsulta = horas.length ? Math.min(...horas) : 8;
   const chaveSemana = inicio.getTime();
@@ -744,13 +745,16 @@ function WeekView({
                       const d0 = new Date(c.data_hora);
                       const minutos = (d0.getHours() - primeira) * 60 + d0.getMinutes();
                       const duracao = c.duracao_min ?? 30;
-                      const altura = Math.max((duracao / 60) * ALTURA - 3, 24);
+                      const altura = Math.max((duracao / 60) * ALTURA - 3, 26);
                       const conf = confirmacoes[c.id];
                       const cancelada = c.status === "cancelada";
                       const pos = colunas.get(c.id) ?? { coluna: 0, total: 1 };
                       const largura = 100 / pos.total;
                       const fimC = new Date(d0.getTime() + duracao * 60000);
                       const tom = tomStatus[c.status];
+
+                      // Curta demais para duas linhas: horário e nome lado a lado
+                      const compacto = altura < 38;
 
                       return (
                         <button
@@ -759,41 +763,73 @@ function WeekView({
                           style={{
                             top: (minutos / 60) * ALTURA + 1,
                             height: altura,
-                            left: `calc(${pos.coluna * largura}% + 3px)`,
-                            width: `calc(${largura}% - 6px)`,
+                            left: `calc(${pos.coluna * largura}% + 4px)`,
+                            width: `calc(${largura}% - 8px)`,
                           }}
                           className={cn(
-                            "absolute z-10 overflow-hidden rounded-md border-l-[3px] px-2 py-1 text-left shadow-sm ring-1 ring-black/[0.03] transition-all hover:z-30 hover:shadow-card",
-                            tom.bloco,
+                            "absolute z-10 flex overflow-hidden rounded-lg text-left shadow-[0_1px_2px_rgba(15,58,82,0.08)] ring-1 ring-inset ring-black/[0.04] transition-all hover:z-30 hover:-translate-y-px hover:shadow-card",
+                            tom.fundo,
                             cancelada && "z-0 opacity-60",
-                            conf?.status === "reagendar" && "ring-2 ring-coral/60"
+                            conf?.status === "reagendar" && "ring-2 ring-coral/70"
                           )}
                           title={`${format(d0, "HH:mm")}–${format(fimC, "HH:mm")} · ${c.paciente_nome}${c.medico_nome ? ` · ${c.medico_nome}` : ""}`}
                         >
-                          <span className="flex items-center gap-1">
-                            <span className={cn("truncate text-[11px] font-semibold tabular-nums", tom.texto)}>
-                              {format(d0, "HH:mm")}
-                              {altura >= 40 && `–${format(fimC, "HH:mm")}`}
-                            </span>
-                            {c.tipo === "teleconsulta" && <Video className="size-3 shrink-0 text-cinza-suave" />}
-                            {conf && (
-                              <span
-                                className={cn("ml-auto size-1.5 shrink-0 rounded-full", corConfirmacao[conf.status])}
-                              />
-                            )}
-                          </span>
+                          {/* Faixa do status, reta, por dentro do cartão */}
+                          <span className={cn("w-1 shrink-0", corStatus[c.status])} />
+
                           <span
                             className={cn(
-                              "block truncate text-xs font-semibold leading-tight text-azul-medico",
-                              cancelada && "line-through"
+                              "flex min-w-0 flex-1 px-2",
+                              compacto ? "items-center gap-1.5" : cn("flex-col justify-center", altura < 56 ? "py-1" : "justify-start py-1.5")
                             )}
                           >
-                            {c.paciente_nome}
+                            {compacto ? (
+                              <>
+                                <span className={cn("shrink-0 text-[11px] font-semibold tabular-nums", tom.texto)}>
+                                  {format(d0, "HH:mm")}
+                                </span>
+                                <span
+                                  className={cn(
+                                    "min-w-0 truncate text-xs font-semibold text-azul-medico",
+                                    cancelada && "line-through"
+                                  )}
+                                >
+                                  {c.paciente_nome}
+                                </span>
+                              </>
+                            ) : (
+                              <>
+                                <span className="flex min-w-0 items-center gap-1">
+                                  <span
+                                    className={cn(
+                                      "min-w-0 truncate text-xs font-semibold leading-tight text-azul-medico",
+                                      cancelada && "line-through"
+                                    )}
+                                  >
+                                    {c.paciente_nome}
+                                  </span>
+                                  {c.tipo === "teleconsulta" && <Video className="size-3 shrink-0 text-cinza-suave" />}
+                                </span>
+                                <span className={cn("mt-0.5 truncate text-[11px] font-medium tabular-nums", tom.texto)}>
+                                  {format(d0, "HH:mm")} – {format(fimC, "HH:mm")}
+                                </span>
+                                {altura >= 70 && (
+                                  <span className="mt-0.5 truncate text-[10px] text-cinza-suave">
+                                    {[rotuloTipo[c.tipo], c.medico_nome].filter(Boolean).join(" · ")}
+                                  </span>
+                                )}
+                              </>
+                            )}
                           </span>
-                          {altura >= 56 && (
-                            <span className="mt-0.5 block truncate text-[10px] text-cinza-suave">
-                              {[rotuloTipo[c.tipo], c.medico_nome].filter(Boolean).join(" · ")}
-                            </span>
+
+                          {conf && (
+                            <span
+                              className={cn(
+                                "mr-1.5 mt-1.5 size-2 shrink-0 rounded-full ring-2 ring-white",
+                                corConfirmacao[conf.status]
+                              )}
+                              title={`Confirmação: ${conf.status}`}
+                            />
                           )}
                         </button>
                       );
