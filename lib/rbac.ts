@@ -27,6 +27,7 @@ import {
   ClipboardList,
   ClipboardCheck,
   type LucideIcon,
+  Landmark,
 } from "lucide-react";
 import type { Role } from "@/lib/supabase/types";
 
@@ -44,6 +45,7 @@ export type ModuloId =
   | "financeiro"
   | "clinicas"
   | "diagnostico"
+  | "admin-financeiro"
   | "admin-propostas"
   | "admin-diagnosticos"
   | "admin-usuarios"
@@ -213,6 +215,16 @@ export const MODULOS: readonly Modulo[] = [
     fase: 1,
     grupo: "admin",
     resumo: "Todas as clínicas atendidas pela Medi Marketing.",
+  },
+  {
+    id: "admin-financeiro",
+    label: "Financeiro da agência",
+    href: "/app/admin/financeiro",
+    icone: Landmark,
+    papeis: ["super_admin"],
+    fase: 1,
+    grupo: "admin",
+    resumo: "MRR, contratos, faturas, inadimplência e margem por cliente.",
   },
   {
     id: "admin-propostas",

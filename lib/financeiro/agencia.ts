@@ -10,6 +10,19 @@ import { diasEntre, hojeIso, somarDias, ultimosMeses } from "./calculos";
 
 const n = (v: unknown) => Number(v ?? 0) || 0;
 
+export const PRECO_SUGERIDO: Record<"essencial" | "performance" | "full", number> = { essencial: 1900, performance: 3500, full: 5800 };
+export const ROTULO_PLANO: Record<string, string> = { essencial: "Essencial", performance: "Performance", full: "Full / Parceria" };
+
+export const CATEGORIAS_CUSTO: { id: CustoAgencia["categoria"]; rotulo: string }[] = [
+  { id: "ferramentas", rotulo: "Ferramentas e software" },
+  { id: "equipe", rotulo: "Equipe" },
+  { id: "midia", rotulo: "Mídia própria" },
+  { id: "impostos", rotulo: "Impostos" },
+  { id: "estrutura", rotulo: "Estrutura" },
+  { id: "outros", rotulo: "Outros" },
+];
+export const rotuloCusto = (c: string) => CATEGORIAS_CUSTO.find((x) => x.id === c)?.rotulo ?? "Outros";
+
 export const ROTULO_EVENTO: Record<ContratoEvento["tipo"], string> = {
   novo: "Novo cliente",
   upgrade: "Upgrade",

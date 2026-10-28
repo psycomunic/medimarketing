@@ -520,10 +520,12 @@ export function Cascata({ etapas, altura = 260 }: { etapas: Etapa[]; altura?: nu
                 />
               )}
               <rect x={x} y={topo} width={larg} height={h} rx={4} fill={cor} />
-              <text x={x + larg / 2} y={topo - 6} textAnchor="middle" fontSize={11} fontWeight={600} fill={COR.texto}>
-                {b.tipo === "menos" ? "−" : ""}
-                {reaisCurto(Math.abs(b.tipo === "total" ? b.ate : b.valor))}
-              </text>
+              {(b.tipo === "total" || b.valor !== 0) && (
+                <text x={x + larg / 2} y={topo - 6} textAnchor="middle" fontSize={banda < 70 ? 10 : 11} fontWeight={600} fill={COR.texto}>
+                  {b.tipo === "menos" ? "−" : b.tipo === "mais" ? "+" : ""}
+                  {reaisCurto(Math.abs(b.tipo === "total" ? b.ate : b.valor))}
+                </text>
+              )}
               {quebra && palavras.length > 1 ? (
                 <text x={x + larg / 2} y={altura - 22} textAnchor="middle" fontSize={10.5} fill={COR.eixo}>
                   <tspan x={x + larg / 2}>{palavras.slice(0, meio).join(" ")}</tspan>
@@ -532,7 +534,7 @@ export function Cascata({ etapas, altura = 260 }: { etapas: Etapa[]; altura?: nu
                   </tspan>
                 </text>
               ) : (
-                <text x={x + larg / 2} y={altura - 16} textAnchor="middle" fontSize={11} fill={COR.eixo}>
+                <text x={x + larg / 2} y={altura - 16} textAnchor="middle" fontSize={banda < 70 ? 10 : 11} fill={COR.eixo}>
                   {b.nome}
                 </text>
               )}
