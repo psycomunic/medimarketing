@@ -117,7 +117,7 @@ export async function criarConsulta(input: {
   organization_id?: string;
   /** Falso segura a mensagem de agendamento ao paciente. */
   avisar_paciente?: boolean;
-}): Promise<ActionResult> {
+}): Promise<{ ok: true; id: string } | { ok: false; erro: string }> {
   if (await emModoDemo()) return { ok: false, erro: MSG_DEMO };
   const { supabase, userId } = await getUserId();
   if (!userId) return { ok: false, erro: "Sessão expirada." };
@@ -207,11 +207,11 @@ export async function criarConsulta(input: {
     .select("id")
     .single();
 
-  if (error) return { ok: false, erro: "Não foi possível criar a consulta." };
+  if (error || !criada) return { ok: false, erro: "Não foi possível criar a consulta." };
 
   // O paciente recebe o comprovante; o profissional e a equipe, o aviso
   // da consulta nova. Nada disso derruba o agendamento se falhar.
-  if (criada) await comunicarConsulta(criada.id, {
+  await comunicarConsulta(criada.id, {
       tipo: "nova",
       atorId: userId,
       avisarPaciente: input.avisar_paciente !== false,
@@ -219,5 +219,5 @@ export async function criarConsulta(input: {
 
   revalidatePath("/app/agenda");
   revalidatePath("/app");
-  return { ok: true };
+  return { ok: true, id: criada.id };
 }

@@ -69,6 +69,7 @@ export function AgendaCalendar({
   organizationId,
   disponibilidade = [],
   bloqueios = [],
+  lembrete = null,
   demo = false,
 }: {
   consultasIniciais: ConsultaComContexto[];
@@ -82,6 +83,7 @@ export function AgendaCalendar({
   organizationId?: string | null;
   disponibilidade?: Disponibilidade[];
   bloqueios?: Bloqueio[];
+  lembrete?: { ativo: boolean; diasUteis: number; hora: number } | null;
   demo?: boolean;
 }) {
   // Abre sempre no dia de hoje: é a pergunta de quem entra na agenda
@@ -361,6 +363,7 @@ export function AgendaCalendar({
         disponibilidade={disponibilidade}
         bloqueios={bloqueios}
         envioAutomatico={envioAutomatico}
+        lembrete={lembrete}
         onCriada={(quando) => {
           setCursor(quando);
           setVisao("dia");

@@ -57,6 +57,15 @@ export default async function AgendaPage() {
         organizationId={organizacao?.id ?? null}
         disponibilidade={disponibilidade}
         bloqueios={bloqueios}
+        lembrete={
+          organizacao
+            ? {
+                ativo: organizacao.lembrete_ativo,
+                diasUteis: organizacao.lembrete_dias_uteis,
+                hora: organizacao.lembrete_hora,
+              }
+            : null
+        }
         demo={demo}
       />
     </div>

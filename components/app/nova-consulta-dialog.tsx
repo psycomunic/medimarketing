@@ -6,7 +6,11 @@ import { addDays, addMinutes, differenceInCalendarDays, differenceInYears, forma
 import { ptBR } from "date-fns/locale";
 import {
   Bell,
+  BellRing,
   CalendarCheck,
+  FileText,
+  Paperclip,
+  X,
   Clock,
   History,
   Loader2,
@@ -35,6 +39,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { rotuloTipo } from "@/lib/agenda";
 import { criarConsulta } from "@/lib/actions/consultas";
+import { salvarAnexo } from "@/lib/actions/anexos";
+import { calcularDisparo } from "@/lib/lembretes";
 import { cn } from "@/lib/utils";
 
 // Convênios mais comuns no Brasil. O que não estiver aqui entra por
@@ -81,6 +87,14 @@ const OUTRO = "__outro";
 
 const DURACOES = [15, 20, 30, 40, 45, 60, 90];
 
+const MAX_ANEXO = 10 * 1024 * 1024;
+const TIPOS_ANEXO = ".pdf,.jpg,.jpeg,.png,.webp,.heic,.doc,.docx,image/*,application/pdf";
+
+function tamanhoLegivel(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1).replace(".", ",")} MB`;
+}
+
 const ICONE_TIPO: Record<TipoConsulta, typeof UserPlus> = {
   primeira: UserPlus,
   retorno: RotateCcw,
@@ -104,6 +118,8 @@ type PacienteConhecido = {
   convenio: string | null;
   consultas: number;
   ultima: string;
+  /** Valor da última consulta, para sugerir. */
+  valor: number | null;
 };
 
 const soDigitos = (s: string) => s.replace(/\D/g, "");
@@ -168,6 +184,7 @@ export function NovaConsultaDialog({
   disponibilidade = [],
   bloqueios = [],
   envioAutomatico = false,
+  lembrete = null,
 }: {
   aberto: boolean;
   data: Date | null;
@@ -189,6 +206,8 @@ export function NovaConsultaDialog({
   bloqueios?: Bloqueio[];
   /** A clínica tem WhatsApp conectado para o aviso ao paciente. */
   envioAutomatico?: boolean;
+  /** Régua do lembrete da clínica, para dizer quando ele sai. */
+  lembrete?: { ativo: boolean; diasUteis: number; hora: number } | null;
   /** Avisa a data criada, para a agenda ir até ela. */
   onCriada?: (quando: Date) => void;
 }) {
@@ -213,6 +232,9 @@ export function NovaConsultaDialog({
   const [valor, setValor] = useState("");
   const [observacao, setObservacao] = useState("");
   const [avisarPaciente, setAvisarPaciente] = useState(true);
+  const [arquivos, setArquivos] = useState<File[]>([]);
+  const [arrastando, setArrastando] = useState(false);
+  const [etapa, setEtapa] = useState<string | null>(null);
   const [clinicaId, setClinicaId] = useState(organizationId ?? clinicas[0]?.id ?? "");
   // Só pré-seleciona a si mesmo quem de fato atende na clínica
   const [medicoId, setMedicoId] = useState(
@@ -258,6 +280,20 @@ export function NovaConsultaDialog({
     setValor("");
     setObservacao("");
     setAvisarPaciente(true);
+    setArquivos([]);
+    setEtapa(null);
+  }
+
+  function adicionarArquivos(lista: FileList | File[] | null) {
+    if (!lista) return;
+    const novos: File[] = [];
+    const grandes: string[] = [];
+    for (const f of Array.from(lista)) {
+      if (f.size > MAX_ANEXO) grandes.push(f.name);
+      else if (!arquivos.some((a) => a.name === f.name && a.size === f.size)) novos.push(f);
+    }
+    setArquivos((atual) => [...atual, ...novos].slice(0, 10));
+    setErro(grandes.length ? `Acima de 10 MB, não entra: ${grandes.join(", ")}.` : null);
   }
 
   /* ------------------------ Pacientes já atendidos ------------------------ */
@@ -284,6 +320,7 @@ export function NovaConsultaDialog({
         convenio: c.convenio,
         consultas: 1,
         ultima: c.data_hora,
+        valor: c.valor != null ? Number(c.valor) : null,
       });
     }
     return [...mapa.values()];
@@ -312,6 +349,7 @@ export function NovaConsultaDialog({
     setConvenio(conv);
     setConvenioOutro(false);
     setTipo("retorno");
+    if (!valor && p.valor) setValor(String(p.valor).replace(".", ","));
     setBuscando(false);
   }
 
@@ -438,6 +476,11 @@ export function NovaConsultaDialog({
   const avisoWhats = envioAutomatico && soDigitos(telefone).length >= 10;
   const avisoEmail = /\S+@\S+\.\S+/.test(email);
 
+  // Quando o lembrete com o link de confirmação sai, pela régua da clínica
+  const disparoLembrete =
+    lembrete?.ativo && dataValida ? calcularDisparo(escolhida, lembrete.diasUteis, lembrete.hora) : null;
+  const lembreteJaPassou = disparoLembrete ? disparoLembrete.getTime() <= Date.now() : false;
+
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErro(null);
@@ -460,6 +503,7 @@ export function NovaConsultaDialog({
     const dataHora = new Date(`${dia}T${hora}:00`);
 
     startTransition(async () => {
+      setEtapa("Criando a consulta…");
       const res = await criarConsulta({
         paciente_nome: nome,
         paciente_telefone: telefone,
@@ -476,14 +520,38 @@ export function NovaConsultaDialog({
         organization_id: clinicaId || undefined,
         avisar_paciente: avisarPaciente,
       });
-      if (res.ok) {
-        limpar();
-        onOpenChange(false);
-        // Leva a agenda até a consulta criada. Sem isso, marcar num mês
-        // que não é o que está na tela parece que a consulta sumiu.
-        onCriada?.(dataHora);
-        router.refresh();
-      } else setErro(res.erro);
+      if (!res.ok) {
+        setEtapa(null);
+        setErro(res.erro);
+        return;
+      }
+
+      // Os documentos sobem depois, já ligados à consulta criada
+      const falharam: string[] = [];
+      for (const [i, f] of arquivos.entries()) {
+        setEtapa(`Enviando documento ${i + 1} de ${arquivos.length}…`);
+        const fd = new FormData();
+        fd.append("file", f);
+        const up = await salvarAnexo(res.id, fd).catch(() => ({ ok: false as const, erro: "" }));
+        if (!up.ok) falharam.push(f.name);
+      }
+
+      // Leva a agenda até a consulta criada. Sem isso, marcar num mês
+      // que não é o que está na tela parece que a consulta sumiu.
+      onCriada?.(dataHora);
+      router.refresh();
+
+      if (falharam.length) {
+        // A consulta existe: o que faltou dá para anexar na ficha dela
+        setEtapa(null);
+        setArquivos(arquivos.filter((f) => falharam.includes(f.name)));
+        setErro(
+          `Consulta criada, mas ${falharam.length === 1 ? "um documento não subiu" : `${falharam.length} documentos não subiram`}: ${falharam.join(", ")}. Abra a consulta na agenda e anexe de novo.`
+        );
+        return;
+      }
+      limpar();
+      onOpenChange(false);
     });
   }
 
@@ -909,6 +977,77 @@ export function NovaConsultaDialog({
                   />
                 </div>
               </Secao>
+
+              {/* ---------- 5. Documentos ---------- */}
+              <Secao n={5} titulo="Documentos e exames">
+                <label
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setArrastando(true);
+                  }}
+                  onDragLeave={() => setArrastando(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setArrastando(false);
+                    adicionarArquivos(e.dataTransfer.files);
+                  }}
+                  className={cn(
+                    "flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed px-4 py-6 text-center transition-colors",
+                    arrastando
+                      ? "border-teal bg-verde-menta/60"
+                      : "border-border bg-branco-clinico hover:border-teal/60 hover:bg-verde-menta/30"
+                  )}
+                >
+                  <Paperclip className="size-5 text-teal" />
+                  <span className="text-sm font-medium text-azul-medico">
+                    Arraste aqui ou clique para anexar
+                  </span>
+                  <span className="text-xs text-cinza-suave">
+                    Exames, pedidos, encaminhamentos, receitas · PDF, imagem ou Word · até 10 MB cada
+                  </span>
+                  <input
+                    type="file"
+                    multiple
+                    accept={TIPOS_ANEXO}
+                    className="sr-only"
+                    onChange={(e) => {
+                      adicionarArquivos(e.target.files);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+
+                {arquivos.length > 0 && (
+                  <ul className="mt-3 grid gap-2">
+                    {arquivos.map((f) => (
+                      <li
+                        key={`${f.name}-${f.size}`}
+                        className="flex items-center gap-3 rounded-lg border border-border bg-white px-3 py-2"
+                      >
+                        <span className="grid size-8 shrink-0 place-items-center rounded-md bg-verde-menta text-teal">
+                          <FileText className="size-4" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm text-cinza-texto">{f.name}</span>
+                          <span className="block text-xs text-cinza-suave">{tamanhoLegivel(f.size)}</span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setArquivos(arquivos.filter((a) => a !== f))}
+                          disabled={pending}
+                          className="grid size-8 place-items-center rounded-md text-cinza-suave hover:bg-coral/10 hover:text-coral"
+                          aria-label={`Tirar ${f.name}`}
+                        >
+                          <X className="size-4" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <p className="mt-2 text-xs text-cinza-suave">
+                  Ficam guardados na ficha da consulta, visíveis só para a equipe da clínica.
+                </p>
+              </Secao>
             </div>
 
             {/* ---------- Resumo ---------- */}
@@ -953,6 +1092,14 @@ export function NovaConsultaDialog({
                       </dd>
                     </div>
                   </div>
+                  {arquivos.length > 0 && (
+                    <div className="flex items-center gap-3 px-4 py-3">
+                      <Paperclip className="size-4 shrink-0 text-teal" />
+                      <dd className="text-cinza-texto">
+                        {arquivos.length} documento{arquivos.length === 1 ? "" : "s"} anexado{arquivos.length === 1 ? "" : "s"}
+                      </dd>
+                    </div>
+                  )}
                   {valorNum !== undefined && Number.isFinite(valorNum) && (
                     <div className="flex items-center justify-between px-4 py-3">
                       <dt className="text-cinza-suave">Valor</dt>
@@ -978,6 +1125,16 @@ export function NovaConsultaDialog({
                       <Mail className="size-3.5 shrink-0 text-teal" />
                       Paciente recebe por e-mail
                     </li>
+                    {disparoLembrete && (
+                      <li className="flex items-start gap-2">
+                        <BellRing className="mt-0.5 size-3.5 shrink-0 text-teal" />
+                        <span>
+                          {lembreteJaPassou
+                            ? "Pedido de confirmação vai junto, já que a consulta está perto"
+                            : `Lembrete para confirmar: ${format(disparoLembrete, "EEE, dd/MM 'às' HH'h'", { locale: ptBR })}`}
+                        </span>
+                      </li>
+                    )}
                   </ul>
                   <label className="mt-3 flex cursor-pointer items-start gap-2 text-xs text-cinza-texto">
                     <input
@@ -1001,6 +1158,10 @@ export function NovaConsultaDialog({
           <div className="sticky bottom-0 z-10 flex flex-col-reverse gap-3 border-t border-border bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
             {erro ? (
               <p className="rounded-md bg-coral/10 px-3 py-2 text-sm text-coral">{erro}</p>
+            ) : etapa ? (
+              <p className="flex items-center gap-2 text-sm text-cinza-suave">
+                <Loader2 className="size-4 animate-spin text-teal" /> {etapa}
+              </p>
             ) : (
               <span className="hidden text-xs text-cinza-suave sm:block">
                 Campos com <span className="text-coral">*</span> são obrigatórios.
