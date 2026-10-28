@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { linkWhatsApp } from "@/lib/lembretes";
 import type { ConsultaComContexto, OpcoesAgenda } from "@/lib/supabase/queries";
+import type { Bloqueio, Disponibilidade } from "@/lib/supabase/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -65,6 +66,8 @@ export function AgendaCalendar({
   envioAutomatico = false,
   usuarioId,
   organizationId,
+  disponibilidade = [],
+  bloqueios = [],
   demo = false,
 }: {
   consultasIniciais: ConsultaComContexto[];
@@ -76,6 +79,8 @@ export function AgendaCalendar({
   envioAutomatico?: boolean;
   usuarioId?: string;
   organizationId?: string | null;
+  disponibilidade?: Disponibilidade[];
+  bloqueios?: Bloqueio[];
   demo?: boolean;
 }) {
   // Abre sempre no dia de hoje: é a pergunta de quem entra na agenda
@@ -336,6 +341,10 @@ export function AgendaCalendar({
         usuarioId={usuarioId}
         organizationId={organizationId}
         conveniosUsados={opcoes.convenios}
+        consultas={consultasIniciais}
+        disponibilidade={disponibilidade}
+        bloqueios={bloqueios}
+        envioAutomatico={envioAutomatico}
         onCriada={(quando) => {
           setCursor(quando);
           setVisao("dia");

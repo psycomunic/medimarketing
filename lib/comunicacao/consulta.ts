@@ -60,7 +60,7 @@ const rotuloTipoConsulta = (t: string | null) =>
  */
 
 export type EventoConsulta =
-  | { tipo: "nova"; atorId: string | null }
+  | { tipo: "nova"; atorId: string | null; avisarPaciente?: boolean }
   | { tipo: "cancelada"; atorId: string | null; avisarPaciente: boolean }
   | { tipo: "remarcada"; atorId: string | null; anterior: string; token?: string | null }
   | {
@@ -163,10 +163,12 @@ async function comunicar(consultaId: string, ev: EventoConsulta): Promise<void> 
   if (ev.tipo === "nova") {
     // Consulta para breve: o lembrete já teria saído. A confirmação vai
     // junto com o aviso de agendamento, em vez de duas mensagens seguidas.
+    // Quem marca pode segurar o aviso (ex.: paciente avisado pessoalmente)
+    const avisar = ev.avisarPaciente !== false;
     let link: string | null = null;
     let confirmacaoId: string | null = null;
     const disparo = calcularDisparo(new Date(c.data_hora), org?.lembrete_dias_uteis ?? 1, org?.lembrete_hora ?? 9);
-    if (org?.ativo && org.lembrete_ativo && disparo.getTime() <= momento && (whatsappPaciente || emailPaciente)) {
+    if (org?.ativo && org.lembrete_ativo && disparo.getTime() <= momento && avisar && (whatsappPaciente || emailPaciente)) {
       const conf = await garantirConfirmacao(c.id, c.organization_id, disparo);
       if (conf) {
         link = urlConfirmacao(conf.token);
@@ -175,14 +177,14 @@ async function comunicar(consultaId: string, ev: EventoConsulta): Promise<void> 
     }
 
     const evento = confirmacaoId ? "lembrete_paciente" : "consulta_nova";
-    if (whatsappPaciente) {
+    if (avisar && whatsappPaciente) {
       doPaciente(
         "whatsapp",
         { evento, confirmacaoId, conteudo: msgAgendada({ ...base, clinica: clinica.nome, endereco, link }) },
         `nova:${c.id}:paciente:whatsapp`
       );
     }
-    if (emailPaciente) {
+    if (avisar && emailPaciente) {
       const m = emailPacienteAgendada(marca, { ...base, endereco, link });
       doPaciente(
         "email",

@@ -115,6 +115,8 @@ export async function criarConsulta(input: {
   medico_id?: string;
   /** Clínica da consulta. Obrigatória para quem não pertence a nenhuma. */
   organization_id?: string;
+  /** Falso segura a mensagem de agendamento ao paciente. */
+  avisar_paciente?: boolean;
 }): Promise<ActionResult> {
   if (await emModoDemo()) return { ok: false, erro: MSG_DEMO };
   const { supabase, userId } = await getUserId();
@@ -209,7 +211,11 @@ export async function criarConsulta(input: {
 
   // O paciente recebe o comprovante; o profissional e a equipe, o aviso
   // da consulta nova. Nada disso derruba o agendamento se falhar.
-  if (criada) await comunicarConsulta(criada.id, { tipo: "nova", atorId: userId });
+  if (criada) await comunicarConsulta(criada.id, {
+      tipo: "nova",
+      atorId: userId,
+      avisarPaciente: input.avisar_paciente !== false,
+    });
 
   revalidatePath("/app/agenda");
   revalidatePath("/app");
