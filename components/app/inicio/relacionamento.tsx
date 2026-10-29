@@ -5,6 +5,7 @@ import { MESES_SEM_RETORNO, mensagemAniversario, mensagemRetorno } from "@/lib/i
 import { linkWhatsApp } from "@/lib/lembretes";
 import { SERIES, pct } from "@/components/graficos/formato";
 import { Painel } from "@/components/app/financeiro/ui";
+import { PainelNps } from "./nps";
 import { cn } from "@/lib/utils";
 
 const dataCurta = (iso: string) =>
@@ -39,6 +40,8 @@ export function RelacionamentoPacientes({
   return (
     <section className="grid grid-cols-[minmax(0,1fr)] gap-5">
       <h2 className="font-heading text-lg font-semibold text-azul-medico">Relacionamento com pacientes</h2>
+
+      <PainelNps r={dados.nps} nomes={nomes} />
 
       <div className="grid gap-5 lg:grid-cols-2">
         {/* Quem não voltou */}

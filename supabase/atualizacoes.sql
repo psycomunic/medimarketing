@@ -2015,3 +2015,36 @@ create policy "composicoes_all" on public.composicoes_financeiras for all to aut
 -- pendente/confirmada e sai do faturamento (como o cancelamento).
 -- ============================================================
 alter type public.status_consulta add value if not exists 'faltou';
+
+-- ============================================================
+-- 2026-10-29 — Pesquisa de satisfação (NPS)
+-- Depois da consulta realizada, o paciente recebe um link para dar
+-- uma nota de 0 a 10. Quem dá 9 ou 10 é convidado a avaliar no Google.
+-- O paciente responde pela página pública (servidor, com service role);
+-- a equipe da clínica só lê.
+-- ============================================================
+alter table public.organizations add column if not exists pesquisa_ativa boolean not null default false;
+alter table public.organizations add column if not exists link_avaliacao text;
+
+create table if not exists public.avaliacoes (
+  id              uuid primary key default uuid_generate_v4(),
+  consulta_id     uuid not null unique references public.consultas(id) on delete cascade,
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  medico_id       uuid references public.profiles(id) on delete set null,
+  paciente_nome   text not null,
+  -- Segredo da página pública, como o da confirmação
+  token           text not null unique,
+  enviado_em      timestamptz,
+  nota            smallint check (nota between 0 and 10),
+  comentario      text,
+  respondido_em   timestamptz,
+  created_at      timestamptz not null default now()
+);
+
+create index if not exists idx_avaliacoes_org on public.avaliacoes (organization_id, respondido_em desc);
+
+alter table public.avaliacoes enable row level security;
+
+drop policy if exists "avaliacoes_select" on public.avaliacoes;
+create policy "avaliacoes_select" on public.avaliacoes for select to authenticated
+  using (organization_id = public.minha_org() or public.is_super_admin());

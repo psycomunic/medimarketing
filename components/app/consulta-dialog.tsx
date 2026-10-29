@@ -18,6 +18,7 @@ import {
   CheckCircle2,
   XCircle,
   UserX,
+  MessageSquareHeart,
   Loader2,
   Save,
 } from "lucide-react";
@@ -30,6 +31,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { linkPesquisa } from "@/lib/actions/avaliacoes";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -75,6 +77,28 @@ export function ConsultaDialog({
   }, [consulta]);
 
   if (!consulta) return null;
+
+  function enviarPesquisa() {
+    if (!consulta) return;
+    setErro(null);
+    // A aba abre no clique; senão o navegador trata como pop-up e bloqueia
+    const aba = consulta.paciente_telefone ? window.open("", "_blank") : null;
+    startTransition(async () => {
+      const r = await linkPesquisa(consulta.id);
+      if (!r.ok) {
+        aba?.close();
+        return setErro(r.erro);
+      }
+      if (r.whatsapp && aba) {
+        aba.opener = null;
+        aba.location.href = r.whatsapp;
+      } else {
+        aba?.close();
+        await navigator.clipboard?.writeText(r.texto).catch(() => {});
+        setErro("Paciente sem telefone: a mensagem com o link foi copiada para você colar onde preferir.");
+      }
+    });
+  }
 
   function mudarStatus(status: StatusConsulta, avisarPaciente?: boolean) {
     if (!consulta) return;
@@ -218,6 +242,11 @@ export function ConsultaDialog({
               disabled={pending}
             >
               <CalendarCheck className="size-4" /> Confirmar
+            </Button>
+          )}
+          {consulta.status === "realizada" && (
+            <Button variant="outline" size="sm" onClick={enviarPesquisa} disabled={pending}>
+              <MessageSquareHeart className="size-4" /> Enviar pesquisa
             </Button>
           )}
           {/* Falta só faz sentido depois do horário */}

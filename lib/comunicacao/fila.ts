@@ -331,6 +331,7 @@ export function rotuloEvento(evento: string): string {
     consulta_remarcada: "remarcação",
     paciente_confirmou: "confirmação",
     agenda_do_dia: "agenda do dia",
+    pesquisa_satisfacao: "pesquisa de satisfação",
     teste: "teste",
   };
   return r[evento] ?? evento.replace(/_/g, " ");

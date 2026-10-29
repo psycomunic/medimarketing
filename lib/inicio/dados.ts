@@ -14,6 +14,7 @@ import {
   type Vagas,
 } from "@/lib/inicio/relacionamento";
 import { demoLeads } from "@/lib/demo";
+import { resumoNps, type ResumoNps } from "@/lib/avaliacoes";
 import { getPainel, type PendenciaPainel } from "@/lib/supabase/painel";
 import { getIndicadores, getClientes } from "@/lib/supabase/indicadores";
 import { getPlano } from "@/lib/supabase/evolucao";
@@ -109,6 +110,7 @@ export type Relacionamento = {
   aniversariantes: Aniversariante[];
   semRetorno: SemRetorno;
   origens: Origem[];
+  nps: ResumoNps;
 };
 
 /**
@@ -248,7 +250,7 @@ export async function dadosClinica(
     // Painel principal: recorte escolhido, ritmo do mês, reservas e ocupação
     const inicioMesAnt = new Date(agora.getFullYear(), agora.getMonth() - 1, 1);
     const ha24Meses = new Date(agora.getFullYear() - 2, agora.getMonth(), 1);
-    const [disponibilidadeTodas, bloqueios, receitasAnoPassado, historico, leads] = await Promise.all([
+    const [disponibilidadeTodas, bloqueios, receitasAnoPassado, historico, leads, nps] = await Promise.all([
       getDisponibilidade(),
       getBloqueios(),
       // Mês passado e este mês, um ano antes
@@ -259,6 +261,7 @@ export async function dadosClinica(
       ),
       getHistoricoPacientes(orgId, ha24Meses, fimJanela),
       getOrigensLeads(orgId, inicioMesAnt),
+      resumoNps(orgId, org?.pesquisa_ativa ?? false),
     ]);
     const daClinica = new Set(profissionais.map((p) => p.id));
     const disponibilidade = disponibilidadeTodas.filter((d) => !daClinica.size || daClinica.has(d.medico_id));
@@ -280,6 +283,7 @@ export async function dadosClinica(
       aniversariantes: aniversariantes(agora, historico),
       semRetorno: semRetorno(agora, historico),
       origens: origens(leads, recorteIni, recorteFim),
+      nps,
     };
 
     // Pendências do dinheiro, no topo da lista quando vencidas

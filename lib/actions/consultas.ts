@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { comunicarConsulta } from "@/lib/comunicacao/consulta";
 import { sincronizarReceita } from "@/lib/financeiro/agenda";
+import { programarPesquisa, suspenderPesquisa } from "@/lib/avaliacoes";
 import { createAdminClient, adminDisponivel } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { emModoDemo } from "@/lib/supabase/queries";
@@ -59,6 +60,9 @@ export async function atualizarStatus(
   if (antes && antes.status !== status) {
     // A receita da consulta acompanha o status (cancelada sai das contas)
     await sincronizarReceita(id);
+    // Atendimento concluído: a pesquisa de satisfação sai algumas horas depois
+    if (status === "realizada") await programarPesquisa(id);
+    else if (antes.status === "realizada") await suspenderPesquisa(id);
     if (status === "cancelada") {
       await comunicarConsulta(id, {
         tipo: "cancelada",

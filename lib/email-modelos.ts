@@ -638,6 +638,29 @@ export function emailAgendaDoDia(
 }
 
 /** Consulta cancelada, para o paciente. Sem culpa e com o caminho de volta. */
+/** Pesquisa de satisfação (NPS) depois da consulta. */
+export function emailPacientePesquisa(m: MarcaEmail, d: { paciente: string; link: string }): Modelo {
+  const corpo = `
+  <tr><td style="padding:24px 32px;">
+    ${faixa(TEAL, MENTA, "Como foi o seu atendimento?")}
+    <p style="margin:0 0 4px;font-size:16px;color:${TEXTO};">Olá, ${esc(d.paciente)}!</p>
+    <p style="margin:0;font-size:15px;color:${CINZA};line-height:1.6;">
+      Obrigado por escolher a ${esc(m.clinica)}. Queremos saber como foi a sua consulta:
+      é uma pergunta só e leva menos de um minuto.
+    </p>
+    ${botao("Avaliar o atendimento", d.link)}
+    <p style="margin:0;font-size:13px;color:${CINZA};line-height:1.6;">
+      Sua opinião vai direto para a equipe da clínica.
+    </p>
+  </td></tr>`;
+
+  return {
+    assunto: `Como foi o seu atendimento na ${m.clinica}?`,
+    html: layout(m, corpo),
+    texto: `Ola, ${d.paciente}! Obrigado por escolher a ${m.clinica}. Como foi o seu atendimento? Responda em menos de um minuto: ${d.link}`,
+  };
+}
+
 export function emailPacienteCancelada(m: MarcaEmail, d: DadosEmailConsulta): Modelo {
   const corpo = `
   <tr><td style="padding:24px 32px;">

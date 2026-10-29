@@ -70,6 +70,10 @@ export type Organization = {
   /** Hora do dia (0–23) em que o disparo acontece. */
   lembrete_hora: number;
   lembrete_ativo: boolean;
+  /** Pesquisa de satisfação automática após a consulta (opcional até o SQL rodar). */
+  pesquisa_ativa?: boolean;
+  /** Link para o paciente avaliar a clínica no Google. */
+  link_avaliacao?: string | null;
   /**
    * Conexão do Merge que envia as mensagens desta clínica — o número
    * de WhatsApp que ela conectou por QR code. Nulo enquanto ninguém
@@ -122,6 +126,21 @@ export type Consulta = {
   observacao: string | null;
   valor: number | null; // valor da consulta (R$)
   criado_por: string | null;
+  created_at: string;
+};
+
+/** Resposta da pesquisa de satisfação (NPS) de uma consulta. */
+export type Avaliacao = {
+  id: string;
+  consulta_id: string;
+  organization_id: string;
+  medico_id: string | null;
+  paciente_nome: string;
+  token: string;
+  enviado_em: string | null;
+  nota: number | null;
+  comentario: string | null;
+  respondido_em: string | null;
   created_at: string;
 };
 
@@ -904,6 +923,17 @@ export interface Database {
         Consulta,
         Omit<Consulta, "id" | "created_at"> & { id?: string },
         Partial<Consulta>
+      >;
+      avaliacoes: Tabela<
+        Avaliacao,
+        Omit<Avaliacao, "id" | "created_at" | "enviado_em" | "nota" | "comentario" | "respondido_em"> & {
+          id?: string;
+          enviado_em?: string | null;
+          nota?: number | null;
+          comentario?: string | null;
+          respondido_em?: string | null;
+        },
+        Partial<Avaliacao>
       >;
       disponibilidade: Tabela<
         Disponibilidade,

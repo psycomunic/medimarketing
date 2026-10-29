@@ -272,7 +272,11 @@ function FormClinica({
     lembreteAtivo: o.lembrete_ativo ?? true,
     lembreteDiasUteis: String(o.lembrete_dias_uteis ?? 1),
     lembreteHora: String(o.lembrete_hora ?? 9),
+    pesquisaAtiva: o.pesquisa_ativa ?? false,
+    linkAvaliacao: o.link_avaliacao ?? "",
   });
+  // As colunas da pesquisa só existem depois do SQL: sem elas, nem envia
+  const temPesquisa = o.pesquisa_ativa !== undefined;
   const [erro, setErro] = useState<string | null>(null);
   const [salvo, setSalvo] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -284,6 +288,8 @@ function FormClinica({
       const res = await salvarClinica({
         organizationId: o.id,
         ...v,
+        pesquisaAtiva: temPesquisa ? v.pesquisaAtiva : undefined,
+        linkAvaliacao: temPesquisa ? v.linkAvaliacao : undefined,
         lembreteDiasUteis: Number(v.lembreteDiasUteis || 1),
         lembreteHora: Number(v.lembreteHora || 9),
       });
@@ -438,6 +444,47 @@ function FormClinica({
           </label>
         </div>
       </section>
+
+      {temPesquisa && (
+        <section className="rounded-lg border border-border bg-white p-6 shadow-soft">
+          <h2 className="font-heading text-lg font-semibold text-azul-medico">Pesquisa de satisfação</h2>
+          <p className="mt-1 text-sm text-cinza-suave">
+            Duas horas depois da consulta marcada como realizada, o paciente recebe uma pergunta: de 0 a 10, o
+            quanto recomendaria a clínica. As respostas formam o NPS no Início.
+          </p>
+          <div className="mt-5 grid gap-4">
+            <label className="flex items-start gap-2.5 rounded-md border border-border bg-branco-clinico px-4 py-3">
+              <input
+                type="checkbox"
+                checked={v.pesquisaAtiva}
+                onChange={(e) => setV({ ...v, pesquisaAtiva: e.target.checked })}
+                className="mt-0.5 size-4 accent-teal"
+              />
+              <span className="text-sm text-cinza-texto">
+                Enviar a pesquisa automaticamente
+                <span className="mt-0.5 block text-xs text-cinza-suave">
+                  Pelo WhatsApp da clínica ou, sem ele, por e-mail. Desligado, a recepção pode enviar pelo botão
+                  &quot;Enviar pesquisa&quot; na consulta.
+                </span>
+              </span>
+            </label>
+            <div className="grid gap-1.5">
+              <Label htmlFor="link-avaliacao">Link para avaliar no Google (opcional)</Label>
+              <Input
+                id="link-avaliacao"
+                type="url"
+                value={v.linkAvaliacao}
+                onChange={(e) => setV({ ...v, linkAvaliacao: e.target.value })}
+                placeholder="https://g.page/r/..."
+              />
+              <p className="text-xs text-cinza-suave">
+                Quem dá nota 9 ou 10 é convidado a deixar a avaliação também no Google. O link fica no Perfil da
+                Empresa no Google, em &quot;Pedir avaliações&quot;.
+              </p>
+            </div>
+          </div>
+        </section>
+      )}
 
       {erro && (
         <p className="rounded-md bg-coral/10 px-4 py-2.5 text-sm text-coral">{erro}</p>

@@ -46,6 +46,9 @@ const clinicaSchema = z.object({
   lembreteAtivo: z.boolean(),
   lembreteDiasUteis: z.number().int().min(1).max(10),
   lembreteHora: z.number().int().min(0).max(23),
+  /** Ausentes enquanto o SQL da pesquisa não rodou: aí não entram no update. */
+  pesquisaAtiva: z.boolean().optional(),
+  linkAvaliacao: z.string().trim().url("Link de avaliação inválido.").optional().or(z.literal("")),
   /** Só a equipe Medi Marketing muda o plano; para os demais é ignorado. */
   plano: z.enum(["essencial", "performance", "full"]).optional(),
 });
@@ -83,6 +86,8 @@ export async function salvarClinica(input: ClinicaInput): Promise<ActionResult> 
       lembrete_ativo: d.lembreteAtivo,
       lembrete_dias_uteis: d.lembreteDiasUteis,
       lembrete_hora: d.lembreteHora,
+      ...(d.pesquisaAtiva !== undefined ? { pesquisa_ativa: d.pesquisaAtiva } : {}),
+      ...(d.linkAvaliacao !== undefined ? { link_avaliacao: d.linkAvaliacao || null } : {}),
       ...(d.plano && ctx.profile.role === "super_admin" ? { plano: d.plano } : {}),
     })
     .eq("id", orgId);

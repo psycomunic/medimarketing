@@ -143,6 +143,23 @@ export function msgAgendada(d: DadosConsulta): string {
 }
 
 /**
+ * Pesquisa de satisfação, algumas horas depois da consulta.
+ *
+ * Curta e sem pressão: uma pergunta, um link. Quem responde em 10
+ * segundos responde; quem precisa ler um parágrafo não responde.
+ */
+export function msgPesquisa(d: { paciente: string; clinica: string; link: string }): string {
+  return montar([
+    `Olá, ${primeiroNome(d.paciente)}! Aqui é da ${d.clinica}.`,
+    "",
+    "Obrigado por vir hoje. Como foi o seu atendimento? Leva menos de um minuto:",
+    d.link,
+    "",
+    "Sua opinião ajuda a gente a cuidar cada vez melhor de você.",
+  ]);
+}
+
+/**
  * Novo horário depois de um pedido de remarcação.
  *
  * Começa reconhecendo o pedido: o paciente pediu, e a primeira coisa que

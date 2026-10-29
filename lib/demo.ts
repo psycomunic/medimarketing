@@ -64,6 +64,8 @@ function org(
     lembrete_dias_uteis: 1,
     lembrete_hora: 9,
     lembrete_ativo: true,
+    pesquisa_ativa: true,
+    link_avaliacao: "https://g.page/r/clinica-vida-derma/review",
     // Na demonstração nada sai de verdade: sem conexão, o painel mostra
     // a fila de envio manual, que é o que se quer demonstrar mesmo.
     merge_connection_id: null,
