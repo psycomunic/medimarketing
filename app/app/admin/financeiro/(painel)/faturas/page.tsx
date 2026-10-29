@@ -6,6 +6,7 @@ import { hojeIso } from "@/lib/financeiro/calculos";
 import { Indicador, mesDaUrl } from "@/components/app/financeiro/ui";
 import { pct, reais } from "@/components/graficos/formato";
 import { ListaFaturas } from "@/components/app/agencia/faturas-ui";
+import { FabCobranca } from "@/components/app/botoes-flutuantes";
 
 export const metadata = { title: "Faturas · Financeiro da agência" };
 
@@ -34,6 +35,7 @@ export default async function FaturasPage({ searchParams }: { searchParams: { me
       <p className="text-xs text-cinza-suave">
         As mensalidades do mês são geradas sozinhas no dia 1 para todo contrato ativo. A baixa é manual até a integração com o banco ou o gateway de cobrança.
       </p>
+      <FabCobranca />
     </div>
   );
 }

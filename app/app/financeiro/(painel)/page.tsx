@@ -44,6 +44,7 @@ import { BarrasAgrupadas, LinhaArea, Medidor, Ranking, Rosca } from "@/component
 import { COR, SERIES, pct, reais } from "@/components/graficos/formato";
 import { Indicador, Painel, Situacao, limites, mesDaUrl } from "@/components/app/financeiro/ui";
 import { rotuloFormaPagamento } from "@/lib/rotulos";
+import { FabLancamentos } from "@/components/app/botoes-flutuantes";
 
 export const metadata = { title: "Financeiro" };
 
@@ -409,6 +410,7 @@ export default async function VisaoGeralFinanceiro({ searchParams }: { searchPar
           </div>
         </Painel>
       )}
+      <FabLancamentos mes={mes} />
     </div>
   );
 }

@@ -12,6 +12,7 @@ import { reais } from "@/components/graficos/formato";
 import { Campo, CampoReais, Erro, Girando, hojeLocal, numero, useAcao } from "@/components/app/financeiro/form-comum";
 import { Situacao } from "@/components/app/financeiro/ui";
 import { cn } from "@/lib/utils";
+import { useAcaoFlutuante } from "@/components/app/botao-flutuante";
 import type { Cliente } from "./contratos-ui";
 
 const dataBr = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString("pt-BR");
@@ -22,6 +23,7 @@ export function ListaFaturas({ faturas, clientes, mes, demo }: { faturas: Fatura
   const [avulsa, setAvulsa] = useState(false);
   const [menu, setMenu] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+  useAcaoFlutuante("fab:cobranca-avulsa", () => setAvulsa(true));
   const { pending, erro, executar } = useAcao();
   const hoje = hojeLocal();
   const nome = (id: string) => clientes.find((c) => c.id === id)?.nome ?? "Clínica";

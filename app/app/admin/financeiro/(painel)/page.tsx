@@ -6,6 +6,7 @@ import { mesAnterior, mesCurto, mesLongo, ultimosMeses, variacao } from "@/lib/f
 import { BarrasAgrupadas, Cascata, LinhaArea, Rosca } from "@/components/graficos/graficos";
 import { COR, SERIES, pct, reais } from "@/components/graficos/formato";
 import { Indicador, Painel, Situacao, mesDaUrl } from "@/components/app/financeiro/ui";
+import { FabAgencia } from "@/components/app/botoes-flutuantes";
 
 export const metadata = { title: "Financeiro da agência" };
 
@@ -159,6 +160,7 @@ export default async function FinanceiroAgencia({ searchParams }: { searchParams
           )}
         </Painel>
       </div>
+      <FabAgencia mes={mes} />
     </div>
   );
 }

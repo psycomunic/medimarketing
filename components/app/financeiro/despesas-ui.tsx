@@ -14,6 +14,7 @@ import { reais } from "@/components/graficos/formato";
 import { Campo, CampoReais, Erro, Girando, emTexto, hojeLocal, numero, useAcao } from "./form-comum";
 import { Situacao } from "./ui";
 import { cn } from "@/lib/utils";
+import { useAcaoFlutuante } from "@/components/app/botao-flutuante";
 
 const dataBr = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString("pt-BR");
 
@@ -199,6 +200,7 @@ export function ListaDespesas({ despesas, demo }: { despesas: Despesa[]; demo: b
   const [nova, setNova] = useState(false);
   const [menu, setMenu] = useState<string | null>(null);
   const { pending, erro, executar } = useAcao();
+  useAcaoFlutuante("fab:nova-despesa", () => setNova(true));
   const hoje = hojeLocal();
 
   const lista = useMemo(

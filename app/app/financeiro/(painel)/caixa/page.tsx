@@ -7,6 +7,7 @@ import { rotuloCategoria } from "@/lib/financeiro/calculos";
 import { BarrasAgrupadas, LinhaArea } from "@/components/graficos/graficos";
 import { COR, reais } from "@/components/graficos/formato";
 import { Indicador, Painel, Situacao } from "@/components/app/financeiro/ui";
+import { FabLancamentos } from "@/components/app/botoes-flutuantes";
 
 export const metadata = { title: "Fluxo de caixa · Financeiro" };
 
@@ -114,6 +115,7 @@ export default async function CaixaPage() {
           )}
         </Painel>
       </div>
+      <FabLancamentos />
     </div>
   );
 }

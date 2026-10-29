@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { Megaphone } from "lucide-react";
+import { BotaoFlutuante, useAcaoFlutuante } from "@/components/app/botao-flutuante";
 import { useRouter } from "next/navigation";
 import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import type { Campanha, PlataformaAds, StatusCampanha } from "@/lib/supabase/types";
@@ -45,6 +47,7 @@ export function Campanhas({
   const router = useRouter();
   const [filtro, setFiltro] = useState<StatusCampanha | "todas">("todas");
   const [editando, setEditando] = useState<Campanha | "nova" | null>(null);
+  useAcaoFlutuante("fab:nova-campanha", () => podeEditar && setEditando("nova"));
   const [erro, setErro] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -69,6 +72,7 @@ export function Campanhas({
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-3">
+      {podeEditar && <BotaoFlutuante acoes={[{ rotulo: "Nova campanha", icone: Megaphone, evento: "fab:nova-campanha" }]} />}
         <div className="flex rounded-lg border border-border bg-white p-1">
           {(["todas", "ativa", "pausada", "encerrada"] as const).map((s) => (
             <button

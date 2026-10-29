@@ -4,6 +4,7 @@ import { getConfigFinanceira, getMinhasFaturas, getPrecos } from "@/lib/supabase
 import { MinhasFaturas } from "@/components/app/financeiro/listas-simples";
 import { CONFIG_PADRAO } from "@/lib/financeiro/calculos";
 import { FormConfig, TabelaPrecos } from "@/components/app/financeiro/config-ui";
+import { FabNovoPreco } from "@/components/app/botoes-flutuantes";
 
 export const metadata = { title: "Preços e taxas · Financeiro" };
 
@@ -21,6 +22,7 @@ export default async function ConfigFinanceiroPage() {
       <FormConfig config={config ?? CONFIG_PADRAO(orgId ?? "")} demo={demo} />
       <TabelaPrecos precos={precos} demo={demo} />
       {orgId && <MinhasFaturas faturas={faturas} />}
+      <FabNovoPreco />
     </div>
   );
 }

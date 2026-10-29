@@ -14,6 +14,7 @@ import { reais } from "@/components/graficos/formato";
 import { Campo, CampoReais, Erro, Girando, emTexto, hojeLocal, numero, useAcao } from "@/components/app/financeiro/form-comum";
 import { Situacao } from "@/components/app/financeiro/ui";
 import { cn } from "@/lib/utils";
+import { useAcaoFlutuante } from "@/components/app/botao-flutuante";
 
 const dataBr = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString("pt-BR");
 
@@ -264,6 +265,7 @@ export function ListaContratos({ contratos, clientes, demo }: { contratos: Contr
   const [status, setStatus] = useState<{ c: Contrato; acao: "pausar" | "reativar" | "cancelar" } | null>(null);
   const [menu, setMenu] = useState<string | null>(null);
   const [filtro, setFiltro] = useState<"ativos" | "todos">("ativos");
+  useAcaoFlutuante("fab:novo-contrato", () => setNovo(true));
   const nome = (id: string) => clientes.find((c) => c.id === id)?.nome ?? "Clínica";
   const ocupados = new Set(contratos.filter((c) => c.status !== "cancelado").map((c) => c.organization_id));
   const hoje = hojeLocal();

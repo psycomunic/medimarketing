@@ -7,6 +7,7 @@ import { BarrasAgrupadas, Ranking } from "@/components/graficos/graficos";
 import { SERIES, reais } from "@/components/graficos/formato";
 import { Indicador, Painel, limites, mesDaUrl } from "@/components/app/financeiro/ui";
 import { ListaDespesas } from "@/components/app/financeiro/despesas-ui";
+import { FabNovaDespesa } from "@/components/app/botoes-flutuantes";
 
 export const metadata = { title: "Despesas · Financeiro" };
 
@@ -67,6 +68,7 @@ export default async function DespesasPage({ searchParams }: { searchParams: { m
       </div>
 
       <ListaDespesas despesas={doMes} demo={demo} />
+      <FabNovaDespesa />
     </div>
   );
 }

@@ -14,6 +14,7 @@ import { rotuloFormaPagamento } from "@/lib/rotulos";
 import { Campo, CampoReais, Erro, Girando, emTexto, hojeLocal, numero, useAcao } from "./form-comum";
 import { Situacao } from "./ui";
 import { cn } from "@/lib/utils";
+import { useAcaoFlutuante } from "@/components/app/botao-flutuante";
 
 const FORMAS = Object.keys(rotuloFormaPagamento) as FormaPagamento[];
 const dataBr = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString("pt-BR");
@@ -346,6 +347,7 @@ export function ListaReceitas({
   const [receber, setReceber] = useState<Lancamento | null>(null);
   const [menu, setMenu] = useState<string | null>(null);
   const { erro, executar } = useAcao();
+  useAcaoFlutuante("fab:nova-receita", () => setNova(true));
   const hoje = hojeLocal();
   const atrasada = (l: Lancamento) => l.status === "atrasado" || (l.status === "previsto" && dataDeEntrada(l) < hoje);
 

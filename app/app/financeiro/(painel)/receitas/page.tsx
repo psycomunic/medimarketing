@@ -14,6 +14,7 @@ import { BarrasAgrupadas, Ranking } from "@/components/graficos/graficos";
 import { COR, SERIES, reais } from "@/components/graficos/formato";
 import { Indicador, Painel, limites, mesDaUrl } from "@/components/app/financeiro/ui";
 import { ListaReceitas } from "@/components/app/financeiro/receitas-ui";
+import { FabNovaReceita } from "@/components/app/botoes-flutuantes";
 
 export const metadata = { title: "Receitas · Financeiro" };
 
@@ -107,6 +108,7 @@ export default async function ReceitasPage({ searchParams }: { searchParams: { m
         Consultas marcadas na agenda viram receita sozinhas (ícone de estetoscópio). O pagamento é registrado aqui ou na
         ficha da consulta.
       </p>
+      <FabNovaReceita />
     </div>
   );
 }

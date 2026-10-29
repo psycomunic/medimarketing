@@ -6,6 +6,7 @@ import { hojeIso, somarDias } from "@/lib/financeiro/calculos";
 import { Indicador } from "@/components/app/financeiro/ui";
 import { reais } from "@/components/graficos/formato";
 import { ListaContratos } from "@/components/app/agencia/contratos-ui";
+import { FabNovoContrato } from "@/components/app/botoes-flutuantes";
 
 export const metadata = { title: "Contratos · Financeiro da agência" };
 
@@ -30,6 +31,7 @@ export default async function ContratosPage() {
         />
       </div>
       <ListaContratos contratos={contratos} clientes={clientes} demo={demo} />
+      <FabNovoContrato />
     </div>
   );
 }

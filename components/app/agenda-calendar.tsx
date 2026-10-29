@@ -28,6 +28,7 @@ import {
   UserRound,
   MessageCircle,
   Video,
+  CalendarPlus,
 } from "lucide-react";
 import { linkWhatsApp } from "@/lib/lembretes";
 import type { ConsultaComContexto, OpcoesAgenda } from "@/lib/supabase/queries";
@@ -55,6 +56,7 @@ import {
   type FiltrosAgenda,
 } from "@/components/app/agenda-filtros";
 import { FaixaDias, SeletorData } from "@/components/app/agenda-navegacao";
+import { BotaoFlutuante, useAcaoFlutuante } from "@/components/app/botao-flutuante";
 
 type Visao = "mes" | "semana" | "dia";
 type Consulta = ConsultaComContexto;
@@ -161,6 +163,8 @@ export function AgendaCalendar({
       : visao === "semana"
         ? isSameDay(startOfWeek(cursor, { weekStartsOn: 0 }), startOfWeek(hojeAgora, { weekStartsOn: 0 }))
         : isSameDay(cursor, hojeAgora);
+
+  useAcaoFlutuante("fab:nova-consulta", () => abrirNova());
 
   function abrirNova(d?: Date) {
     setDataNova(d ?? cursor);
@@ -387,6 +391,7 @@ export function AgendaCalendar({
         demo={demo}
         onOpenChange={(o) => !o && setSelecionada(null)}
       />
+      <BotaoFlutuante acoes={[{ rotulo: "Nova consulta", icone: CalendarPlus, evento: "fab:nova-consulta" }]} />
       <NovaConsultaDialog
         aberto={novaAberta}
         data={dataNova}

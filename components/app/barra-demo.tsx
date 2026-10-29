@@ -25,7 +25,7 @@ export function BarraDemo({ papelAtual }: { papelAtual: Role }) {
   const [pendente, iniciar] = useTransition();
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex justify-center p-3 sm:p-4">
+    <div data-barra-demo className="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex justify-center p-3 sm:p-4">
       <div className="pointer-events-auto flex max-w-[calc(100vw-1.5rem)] flex-wrap items-center justify-center gap-x-3 gap-y-2 rounded-2xl border border-white/10 bg-azul-medico/95 px-3 py-2.5 shadow-card backdrop-blur">
         {/* No celular fica só o olho: com as duas palavras a barra
             quebrava em duas linhas e virava um bloco no rodapé. */}

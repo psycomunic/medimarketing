@@ -6,6 +6,7 @@ import { Indicador, Painel, Situacao, mesDaUrl } from "@/components/app/financei
 import { Rosca } from "@/components/graficos/graficos";
 import { pct, reais } from "@/components/graficos/formato";
 import { ListaCustos } from "@/components/app/agencia/custos-ui";
+import { FabNovoCusto } from "@/components/app/botoes-flutuantes";
 
 export const metadata = { title: "Custos e margem · Financeiro da agência" };
 
@@ -67,6 +68,7 @@ export default async function CustosPage({ searchParams }: { searchParams: { mes
         </Painel>
       </div>
       <ListaCustos custos={doMes} clientes={clientes} mes={mes} demo={demo} />
+      <FabNovoCusto />
     </div>
   );
 }

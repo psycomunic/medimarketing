@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { reais } from "@/components/graficos/formato";
 import { Campo, CampoReais, Erro, Girando, emTexto, numero, useAcao } from "./form-comum";
+import { useAcaoFlutuante } from "@/components/app/botao-flutuante";
 
 const FORMAS = Object.keys(rotuloFormaPagamento) as FormaPagamento[];
 
@@ -105,6 +106,7 @@ export function TabelaPrecos({ precos, demo }: { precos: PrecoProcedimento[]; de
   const [editar, setEditar] = useState<PrecoProcedimento | null>(null);
   const [novo, setNovo] = useState(false);
   const { erro, executar } = useAcao();
+  useAcaoFlutuante("fab:novo-preco", () => setNovo(true));
   const grupos = new Map<string, PrecoProcedimento[]>();
   for (const p of precos) grupos.set(p.procedimento, [...(grupos.get(p.procedimento) ?? []), p]);
 

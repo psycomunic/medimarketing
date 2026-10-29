@@ -11,12 +11,14 @@ import { Select } from "@/components/ui/select";
 import { reais } from "@/components/graficos/formato";
 import { Campo, CampoReais, Erro, Girando, emTexto, numero, useAcao } from "@/components/app/financeiro/form-comum";
 import type { Cliente } from "./contratos-ui";
+import { useAcaoFlutuante } from "@/components/app/botao-flutuante";
 import { CATEGORIAS_CUSTO, rotuloCusto } from "@/lib/financeiro/agencia";
 
 export function ListaCustos({ custos, clientes, mes, demo }: { custos: CustoAgencia[]; clientes: Cliente[]; mes: string; demo: boolean }) {
   const [editar, setEditar] = useState<CustoAgencia | null>(null);
   const [novo, setNovo] = useState(false);
   const { pending, erro, executar } = useAcao();
+  useAcaoFlutuante("fab:novo-custo", () => setNovo(true));
   const nome = (id: string | null) => (id ? clientes.find((c) => c.id === id)?.nome ?? "Clínica" : null);
   const lista = [...custos].sort((a, b) => Number(b.valor) - Number(a.valor));
 

@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { UserPlus } from "lucide-react";
+import { BotaoFlutuante, useAcaoFlutuante } from "@/components/app/botao-flutuante";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
@@ -71,6 +73,7 @@ export function Funil({
   const [filtros, setFiltros] = useState<Filtros>(VAZIOS);
   const [aberto, setAberto] = useState<LeadComContexto | null>(null);
   const [novoAberto, setNovoAberto] = useState(false);
+  useAcaoFlutuante("fab:novo-lead", () => setNovoAberto(true));
   const [erro, setErro] = useState<string | null>(null);
 
   const origens = useMemo(
@@ -277,6 +280,8 @@ export function Funil({
         demo={demo}
         onOpenChange={(o) => !o && setAberto(null)}
       />
+
+      <BotaoFlutuante acoes={[{ rotulo: "Novo lead", icone: UserPlus, evento: "fab:novo-lead" }]} />
 
       {/* Novo lead */}
       <LeadForm
