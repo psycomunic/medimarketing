@@ -99,7 +99,7 @@ export function BarrasAgrupadas({
                   width={banda - 4}
                   height={H}
                   rx={6}
-                  fill={foco === i ? "#EEF6F5" : "#F3F8F9"}
+                  fill={foco === i ? "var(--g-foco)" : "var(--g-destaque)"}
                 />
               )}
               {barras.map((s, j) => {
@@ -146,7 +146,7 @@ export function BarrasAgrupadas({
                 <polyline
                   points={pts}
                   fill="none"
-                  stroke="#fff"
+                  stroke="var(--g-halo)"
                   strokeWidth={5}
                   strokeLinejoin="round"
                   strokeLinecap="round"
@@ -161,7 +161,7 @@ export function BarrasAgrupadas({
                   strokeLinecap="round"
                 />
                 {s.valores.map((v, i) => (
-                  <circle key={i} cx={cx(i)} cy={y(v)} r={foco === i ? 4.5 : 3} fill={s.cor} stroke="#fff" strokeWidth={2} />
+                  <circle key={i} cx={cx(i)} cy={y(v)} r={foco === i ? 4.5 : 3} fill={s.cor} stroke="var(--g-halo)" strokeWidth={2} />
                 ))}
               </g>
             );
@@ -237,7 +237,7 @@ export function LinhaArea({
         <svg width={W} height={altura} role="img" aria-label="Gráfico de linha" className="block overflow-visible">
           <defs>
             {series.map((s, k) => (
-              <linearGradient key={k} id={`area-${k}-${s.cor.slice(1)}`} x1="0" x2="0" y1="0" y2="1">
+              <linearGradient key={k} id={`area-${k}-${s.cor.replace(/[^a-z0-9]/gi, "")}`} x1="0" x2="0" y1="0" y2="1">
                 <stop offset="0%" stopColor={s.cor} stopOpacity={0.22} />
                 <stop offset="100%" stopColor={s.cor} stopOpacity={0.02} />
               </linearGradient>
@@ -245,7 +245,7 @@ export function LinhaArea({
           </defs>
           {marcas.map((m) => (
             <g key={m}>
-              <line x1={EIXO_Y} x2={W} y1={y(m)} y2={y(m)} stroke={m === 0 ? "#C9D3D8" : COR.grade} />
+              <line x1={EIXO_Y} x2={W} y1={y(m)} y2={y(m)} stroke={m === 0 ? "var(--g-zero)" : COR.grade} />
               <text x={EIXO_Y - 8} y={y(m)} dy="0.32em" textAnchor="end" fontSize={11} fill={COR.eixo}>
                 {fmtEixo(m, formato)}
               </text>
@@ -253,7 +253,7 @@ export function LinhaArea({
           ))}
           {/* Abaixo de zero: faixa de alerta */}
           {vMin < 0 && (
-            <rect x={EIXO_Y} y={y(0)} width={util + 8} height={y(vMin) - y(0)} fill="#FDECE6" opacity={0.6} />
+            <rect x={EIXO_Y} y={y(0)} width={util + 8} height={y(vMin) - y(0)} fill="var(--g-negativo)" opacity={0.6} />
           )}
           {marcadorHoje !== undefined && marcadorHoje >= 0 && marcadorHoje < n && (
             <g>
@@ -269,7 +269,7 @@ export function LinhaArea({
             const area = `M${pts[0]?.[0] ?? 0},${y(Math.max(vMin, 0))} L${linha.replace(/ /g, " L")} L${pts[pts.length - 1]?.[0] ?? 0},${y(Math.max(vMin, 0))} Z`;
             return (
               <g key={s.nome} pointerEvents="none">
-                {s.area && pts.length > 1 && <path d={area} fill={`url(#area-${k}-${s.cor.slice(1)})`} />}
+                {s.area && pts.length > 1 && <path d={area} fill={`url(#area-${k}-${s.cor.replace(/[^a-z0-9]/gi, "")})`} />}
                 <polyline
                   points={linha}
                   fill="none"
@@ -301,9 +301,9 @@ export function LinhaArea({
           })}
           {foco !== null && (
             <g pointerEvents="none">
-              <line x1={x(foco)} x2={x(foco)} y1={TOPO} y2={TOPO + H} stroke="#9AA9B0" strokeWidth={1} />
+              <line x1={x(foco)} x2={x(foco)} y1={TOPO} y2={TOPO + H} stroke="var(--g-cursor)" strokeWidth={1} />
               {series.map((s) => (
-                <circle key={s.nome} cx={x(foco)} cy={y(s.valores[foco] ?? 0)} r={4.5} fill={s.cor} stroke="#fff" strokeWidth={2} />
+                <circle key={s.nome} cx={x(foco)} cy={y(s.valores[foco] ?? 0)} r={4.5} fill={s.cor} stroke="var(--g-halo)" strokeWidth={2} />
               ))}
             </g>
           )}
@@ -441,7 +441,7 @@ export function Ranking({
             <span className="shrink-0 font-semibold tabular-nums text-azul-medico">{fmt(i.valor, formato)}</span>
           </div>
           <div className="mt-1.5 flex items-center gap-2">
-            <div className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-[#EEF3F5]">
+            <div className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-[var(--g-trilho)]">
               <div className="h-full rounded-full" style={{ width: `${Math.max((i.valor / max) * 100, 1.5)}%`, background: cor }} />
             </div>
             {i.detalhe && <span className="w-24 shrink-0 truncate text-right text-[11px] text-cinza-suave">{i.detalhe}</span>}
@@ -515,7 +515,7 @@ export function Cascata({ etapas, altura = 260 }: { etapas: Etapa[]; altura?: nu
                   x2={x}
                   y1={y(b.de)}
                   y2={y(b.de)}
-                  stroke="#9AA9B0"
+                  stroke="var(--g-cursor)"
                   strokeDasharray="2 3"
                 />
               )}
@@ -578,7 +578,7 @@ export function Medidor({
           <strong className="text-cinza-texto">{fmt(valor, formato)}</strong> de {fmt(meta, formato)}
         </span>
       </div>
-      <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-[#EEF3F5]">
+      <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-[var(--g-trilho)]">
         <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(p, 100)}%`, background: cor }} />
       </div>
       <p className="mt-1 text-right text-xs font-semibold tabular-nums" style={{ color: cor }}>

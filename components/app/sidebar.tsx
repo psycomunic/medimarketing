@@ -3,14 +3,22 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogOut, Menu, X, Building2, Bell } from "lucide-react";
+import { LogOut, Menu, X, Building2, Bell, ChevronsLeft, ChevronsRight, Plus } from "lucide-react";
 import { Logo } from "@/components/logo";
 import { MarcaClinica } from "@/components/marca-clinica";
+import { SeletorTema } from "@/components/app/tema";
 import { logout } from "@/lib/actions/auth";
 import { cn } from "@/lib/utils";
 import { GRUPOS, modulosDoPapel, rotuloPapel } from "@/lib/rbac";
 import type { Role } from "@/lib/supabase/types";
 
+/**
+ * Menu lateral do painel.
+ *
+ * No computador ele recolhe para uma faixa só de ícones, liberando a
+ * tela para agenda, gráficos e tabelas. A escolha fica num cookie e vale
+ * para as próximas visitas. No celular o menu é sempre a gaveta inteira.
+ */
 export function Sidebar({
   nome,
   fotoUrl = null,
@@ -18,6 +26,7 @@ export function Sidebar({
   organizacao,
   logoUrl = null,
   naoLidas = 0,
+  recolhidoInicial = false,
 }: {
   nome: string;
   /** Foto de perfil; sem ela, as iniciais. */
@@ -28,20 +37,44 @@ export function Sidebar({
   logoUrl?: string | null;
   /** Notificações não lidas, para o contador do sino. */
   naoLidas?: number;
+  /** Como o menu estava na última visita (cookie). */
+  recolhidoInicial?: boolean;
 }) {
   const pathname = usePathname();
   const [aberto, setAberto] = useState(false);
+  const [recolhido, setRecolhido] = useState(recolhidoInicial);
+
+  function alternar() {
+    const novo = !recolhido;
+    setRecolhido(novo);
+    document.cookie = `medi_menu=${novo ? "recolhido" : "aberto"}; path=/; max-age=31536000; samesite=lax`;
+  }
 
   // Só aparece o que o papel pode acessar
   const modulos = modulosDoPapel(role);
   const emNotificacoes = pathname.startsWith("/app/notificacoes");
 
-  const conteudo = (
+  const conteudo = (compacto: boolean) => (
     <div className="flex h-full flex-col">
-      <div className="p-6 pb-4">
+      <div className={cn("pb-4", compacto ? "px-3 pt-5" : "p-6")}>
         {/* A marca da clínica manda no painel dela. A da plataforma vira
             assinatura no rodapé. Sem clínica (super admin), o contrário. */}
-        {organizacao ? (
+        {compacto ? (
+          <Link href="/app" className="mx-auto grid size-10 place-items-center" aria-label={organizacao ?? "Medi Marketing"} title={organizacao ?? "Medi Marketing"}>
+            {organizacao && logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={logoUrl} alt={organizacao} className="logo-clinica size-10 rounded-lg object-contain" />
+            ) : organizacao ? (
+              <span className="grid size-10 place-items-center rounded-lg bg-azul-medico font-heading text-base font-bold text-white">
+                {organizacao.trim().charAt(0).toUpperCase()}
+              </span>
+            ) : (
+              <span className="grid size-10 place-items-center rounded-full bg-azul-medico text-teal-claro">
+                <Plus className="size-6" strokeWidth={3} />
+              </span>
+            )}
+          </Link>
+        ) : organizacao ? (
           logoUrl ? (
             // Com logo, ela já diz quem é: o nome fica só no texto alternativo
             <Link href="/app" className="block" aria-label={organizacao}>
@@ -49,17 +82,20 @@ export function Sidebar({
               <img
                 src={logoUrl}
                 alt={organizacao}
-                className="h-9 w-auto max-w-[160px] object-contain object-left"
+                className="logo-clinica h-9 w-auto max-w-[160px] object-contain object-left"
               />
             </Link>
           ) : (
             <MarcaClinica nome={organizacao} logoUrl={null} href="/app" />
           )
         ) : (
-          <Logo href="/app" />
+          <>
+            <Logo href="/app" className="so-claro" />
+            <Logo href="/app" light className="so-escuro" />
+          </>
         )}
 
-        {!organizacao && (
+        {!organizacao && !compacto && (
           <div className="mt-4 flex items-center gap-2 rounded-lg bg-verde-menta px-3 py-2">
             <Building2 className="size-4 shrink-0 text-teal" />
             <span className="truncate text-xs font-semibold text-azul-medico">
@@ -72,8 +108,10 @@ export function Sidebar({
         <Link
           href="/app/notificacoes"
           onClick={() => setAberto(false)}
+          title={compacto ? "Notificações" : undefined}
           className={cn(
-            "mt-2 flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+            "mt-2 flex items-center rounded-lg py-2.5 text-sm font-medium transition-colors",
+            compacto ? "justify-center px-0" : "gap-3 px-3",
             emNotificacoes
               ? "bg-verde-menta text-azul-medico"
               : naoLidas > 0
@@ -87,8 +125,8 @@ export function Sidebar({
               <span className="absolute -right-1.5 -top-1 size-2 rounded-full bg-coral" />
             )}
           </span>
-          <span className="truncate">Notificações</span>
-          {naoLidas > 0 && (
+          {!compacto && <span className="truncate">Notificações</span>}
+          {!compacto && naoLidas > 0 && (
             <span className="ml-auto shrink-0 rounded-full bg-coral px-1.5 py-0.5 text-[10px] font-bold text-white">
               {naoLidas > 99 ? "99+" : naoLidas}
             </span>
@@ -96,16 +134,20 @@ export function Sidebar({
         </Link>
       </div>
 
-      <nav className="flex-1 space-y-5 overflow-y-auto px-3 pb-4">
+      <nav className={cn("flex-1 overflow-y-auto overflow-x-hidden pb-4", compacto ? "space-y-3 px-2.5" : "space-y-5 px-3")}>
         {GRUPOS.map((grupo) => {
           const doGrupo = modulos.filter((m) => m.grupo === grupo.id);
           if (doGrupo.length === 0) return null;
 
           return (
             <div key={grupo.id}>
-              <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-cinza-suave/70">
-                {grupo.label}
-              </p>
+              {compacto ? (
+                <div className="mx-auto mb-2 h-px w-8 bg-border" aria-hidden />
+              ) : (
+                <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-cinza-suave/70">
+                  {grupo.label}
+                </p>
+              )}
               <div className="space-y-0.5">
                 {doGrupo.map((m) => {
                   const ativo =
@@ -117,16 +159,19 @@ export function Sidebar({
                       key={m.href}
                       href={m.href}
                       onClick={() => setAberto(false)}
+                      title={compacto ? m.label : undefined}
+                      aria-label={compacto ? m.label : undefined}
                       className={cn(
-                        "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                        "flex items-center rounded-lg py-2.5 text-sm font-medium transition-colors",
+                        compacto ? "justify-center px-0" : "gap-3 px-3",
                         ativo
                           ? "bg-verde-menta text-azul-medico"
                           : "text-cinza-suave hover:bg-verde-menta/60 hover:text-azul-medico"
                       )}
                     >
                       <m.icone className="size-5 shrink-0" />
-                      <span className="truncate">{m.label}</span>
-                      {m.fase > 1 && (
+                      {!compacto && <span className="truncate">{m.label}</span>}
+                      {!compacto && m.fase > 1 && (
                         <span className="ml-auto shrink-0 rounded-full bg-alerta/12 px-1.5 py-0.5 text-[9px] font-semibold text-alerta">
                           F{m.fase}
                         </span>
@@ -140,42 +185,73 @@ export function Sidebar({
         })}
       </nav>
 
-      <div className="border-t border-border p-3">
-        <div className="flex items-center gap-3 rounded-lg px-3 py-2">
-          {fotoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={fotoUrl} alt="" className="size-9 shrink-0 rounded-full object-cover" />
-          ) : (
-            <span className="grid size-9 shrink-0 place-items-center rounded-full bg-azul-medico text-sm font-semibold text-white">
-              {inicial(nome)}
-            </span>
-          )}
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-cinza-texto">{nome}</p>
-            <p className="truncate text-xs text-cinza-suave">{rotuloPapel(role)}</p>
+      <div className={cn("border-t border-border", compacto ? "px-2.5 py-3" : "p-3")}>
+        {compacto ? (
+          <div className="flex flex-col items-center gap-1">
+            <Link href="/app/perfil" title={`${nome} · ${rotuloPapel(role)}`} className="mb-1">
+              {fotoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={fotoUrl} alt="" className="size-9 rounded-full object-cover" />
+              ) : (
+                <span className="grid size-9 place-items-center rounded-full bg-azul-medico text-sm font-semibold text-white">
+                  {inicial(nome)}
+                </span>
+              )}
+            </Link>
+            <SeletorTema compacto />
+            <form action={logout}>
+              <button
+                type="submit"
+                title="Sair"
+                aria-label="Sair"
+                className="grid size-10 place-items-center rounded-lg text-cinza-suave transition-colors hover:bg-coral/10 hover:text-coral"
+              >
+                <LogOut className="size-5" />
+              </button>
+            </form>
           </div>
-        </div>
-        <form action={logout}>
-          <button
-            type="submit"
-            className="mt-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-cinza-suave transition-colors hover:bg-coral/10 hover:text-coral"
-          >
-            <LogOut className="size-5" /> Sair
-          </button>
-        </form>
+        ) : (
+          <>
+            <Link href="/app/perfil" className="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors hover:bg-branco-clinico">
+              {fotoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={fotoUrl} alt="" className="size-9 shrink-0 rounded-full object-cover" />
+              ) : (
+                <span className="grid size-9 shrink-0 place-items-center rounded-full bg-azul-medico text-sm font-semibold text-white">
+                  {inicial(nome)}
+                </span>
+              )}
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-cinza-texto">{nome}</p>
+                <p className="truncate text-xs text-cinza-suave">{rotuloPapel(role)}</p>
+              </div>
+            </Link>
+            <div className="mt-2 px-1">
+              <SeletorTema />
+            </div>
+            <form action={logout}>
+              <button
+                type="submit"
+                className="mt-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-cinza-suave transition-colors hover:bg-coral/10 hover:text-coral"
+              >
+                <LogOut className="size-5" /> Sair
+              </button>
+            </form>
 
-        {/* Assinatura discreta: o painel é da clínica, a plataforma é nossa */}
-        {organizacao && (
-          <a
-            href="https://medimarketing.com.br"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1.5 px-3 pt-2 text-[10px] text-cinza-suave/70 opacity-80 transition-opacity hover:opacity-100"
-          >
-            Feito com
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo-medimarketing-email.png" alt="Medi Marketing" className="h-3 w-auto" />
-          </a>
+            {/* Assinatura discreta: o painel é da clínica, a plataforma é nossa */}
+            {organizacao && (
+              <a
+                href="https://medimarketing.com.br"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 px-3 pt-2 text-[10px] text-cinza-suave/70 opacity-80 transition-opacity hover:opacity-100"
+              >
+                Feito com
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/logo-medimarketing-email.png" alt="Medi Marketing" className="h-3 w-auto" />
+              </a>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -188,7 +264,10 @@ export function Sidebar({
         {organizacao ? (
           <MarcaClinica nome={organizacao} logoUrl={logoUrl} href="/app" tamanho="sm" />
         ) : (
-          <Logo href="/app" />
+          <>
+            <Logo href="/app" className="so-claro" />
+            <Logo href="/app" light className="so-escuro" />
+          </>
         )}
         <div className="flex items-center gap-1">
           {/* No celular o sino fica no topo: é o atalho mais usado */}
@@ -218,8 +297,22 @@ export function Sidebar({
       </div>
 
       {/* Sidebar desktop */}
-      <aside className="hidden w-64 shrink-0 border-r border-border bg-white lg:block print:hidden">
-        <div className="sticky top-0 h-screen">{conteudo}</div>
+      <aside
+        className={cn(
+          "relative hidden shrink-0 border-r border-border bg-white transition-[width] duration-200 lg:block print:hidden",
+          recolhido ? "w-[76px]" : "w-64"
+        )}
+      >
+        <div className="sticky top-0 h-screen">{conteudo(recolhido)}</div>
+        <button
+          type="button"
+          onClick={alternar}
+          className="absolute -right-3.5 top-7 z-20 grid size-7 place-items-center rounded-full border border-border bg-white text-cinza-suave shadow-soft transition-colors hover:border-teal hover:text-teal"
+          aria-label={recolhido ? "Expandir menu" : "Recolher menu"}
+          title={recolhido ? "Expandir menu" : "Recolher menu"}
+        >
+          {recolhido ? <ChevronsRight className="size-4" /> : <ChevronsLeft className="size-4" />}
+        </button>
       </aside>
 
       {/* Drawer mobile */}
@@ -238,7 +331,7 @@ export function Sidebar({
             >
               <X />
             </button>
-            {conteudo}
+            {conteudo(false)}
           </div>
         </div>
       )}

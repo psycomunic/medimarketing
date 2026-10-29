@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { BotaoPdf } from "./botao-pdf";
+import { ForcarTemaClaro } from "@/components/app/tema";
 import { cn } from "@/lib/utils";
 
 /**
@@ -55,6 +56,7 @@ export function Documento({
   return (
     <div className="doc-fundo min-h-screen bg-[#EEF2F4] px-3 py-6 sm:px-6 print:min-h-0">
       <style dangerouslySetInnerHTML={{ __html: ESTILO_IMPRESSAO }} />
+      <ForcarTemaClaro />
 
       {/* Barra de ações: fica fora do PDF */}
       <div className="mx-auto mb-5 flex max-w-[210mm] flex-wrap items-center justify-between gap-3 print:hidden">

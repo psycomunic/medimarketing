@@ -1,4 +1,6 @@
+import { cookies } from "next/headers";
 import { Info } from "lucide-react";
+import { SCRIPT_TEMA, TemaDoPainel } from "@/components/app/tema";
 import { BarraDemo } from "@/components/app/barra-demo";
 import { Sidebar } from "@/components/app/sidebar";
 import { exigirSessao } from "@/lib/acesso";
@@ -22,9 +24,15 @@ export default async function AppLayout({
     contarNaoLidas(profile),
   ]);
 
+  const menuRecolhido = (await cookies()).get("medi_menu")?.value === "recolhido";
+
   return (
     <div className="flex min-h-screen flex-col bg-branco-clinico lg:flex-row print:bg-white">
+      {/* Antes de tudo: aplica o tema escolhido sem piscar a tela */}
+      <script dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA }} />
+      <TemaDoPainel />
       <Sidebar
+        recolhidoInicial={menuRecolhido}
         nome={profile.nome || "Usuário"}
         fotoUrl={profile.foto_url}
         role={role}

@@ -45,7 +45,7 @@ export function MarcaClinica({
           height={px}
           unoptimized
           className={cn(
-            "shrink-0 rounded-lg object-contain",
+            "logo-clinica shrink-0 rounded-lg object-contain",
             // Logo costuma ser larga: altura fixa e largura livre, sem espremer
             tamanho === "lg"
               ? "h-18 w-auto max-w-[200px]"
