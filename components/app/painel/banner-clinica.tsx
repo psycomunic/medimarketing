@@ -25,7 +25,7 @@ export function BannerClinica({
     />
   );
   const classe = cn(
-    "block overflow-hidden rounded-2xl border border-border bg-branco-clinico shadow-soft",
+    "block overflow-hidden rounded-2xl",
     link && "transition-all hover:-translate-y-0.5 hover:shadow-card",
     className
   );
