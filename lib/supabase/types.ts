@@ -125,8 +125,50 @@ export type Consulta = {
   motivo: string | null; // queixa / motivo da consulta
   observacao: string | null;
   valor: number | null; // valor da consulta (R$)
+  /** Ficha do paciente (nulo até o SQL do banco de pacientes rodar). */
+  paciente_id?: string | null;
   criado_por: string | null;
   created_at: string;
+};
+
+/** Ficha do paciente: uma por pessoa, ligada a todas as consultas dela. */
+export type Paciente = {
+  id: string;
+  organization_id: string;
+  nome: string;
+  telefone: string | null;
+  telefone_chave: string | null;
+  email: string | null;
+  nascimento: string | null; // "YYYY-MM-DD"
+  cpf: string | null;
+  sexo: "feminino" | "masculino" | "outro" | null;
+  cidade: string | null;
+  convenio: string | null;
+  carteirinha: string | null;
+  origem: string | null;
+  lead_id: string | null;
+  tags: string[];
+  observacoes: string | null;
+  ativo: boolean;
+  consentimento_marketing: boolean;
+  consentimento_em: string | null;
+  consentimento_canal: string | null;
+  descadastrado_em: string | null;
+  criado_por: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/** Ficha com o resumo calculado a partir das consultas e receitas. */
+export type PacienteResumo = Paciente & {
+  mes_nascimento: number | null;
+  consultas_realizadas: number;
+  faltas: number;
+  primeira_consulta: string | null;
+  ultima_consulta: string | null;
+  proxima_consulta: string | null;
+  total_gasto: number;
+  profissional_principal: string | null;
 };
 
 /** Resposta da pesquisa de satisfação (NPS) de uma consulta. */
@@ -924,6 +966,15 @@ export interface Database {
         Omit<Consulta, "id" | "created_at"> & { id?: string },
         Partial<Consulta>
       >;
+      pacientes: Tabela<
+        Paciente,
+        Partial<Omit<Paciente, "id" | "created_at" | "updated_at" | "telefone_chave">> & {
+          organization_id: string;
+          nome: string;
+          id?: string;
+        },
+        Partial<Paciente>
+      >;
       avaliacoes: Tabela<
         Avaliacao,
         Omit<Avaliacao, "id" | "created_at" | "enviado_em" | "nota" | "comentario" | "respondido_em"> & {
@@ -1193,7 +1244,9 @@ export interface Database {
     };
     // Empty-key form (não use Record<string, never>: isso faria keyof = string
     // e todo nome de tabela casaria com a sobrecarga de "view", quebrando os tipos).
-    Views: { [_ in never]: never };
+    Views: {
+      pacientes_resumo: { Row: PacienteResumo; Relationships: [] };
+    };
     Functions: {
       enviar_formulario: { Args: { p_id: string }; Returns: undefined };
       reabrir_formulario: { Args: { p_id: string }; Returns: undefined };

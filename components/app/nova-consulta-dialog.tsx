@@ -1,5 +1,6 @@
 "use client";
 
+import type { PacienteBasico } from "@/lib/supabase/pacientes";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { addDays, addMinutes, differenceInCalendarDays, differenceInYears, format, isValid } from "date-fns";
@@ -181,6 +182,7 @@ export function NovaConsultaDialog({
   organizationId,
   conveniosUsados = [],
   consultas = [],
+  pacientesBanco = [],
   disponibilidade = [],
   bloqueios = [],
   envioAutomatico = false,
@@ -200,6 +202,8 @@ export function NovaConsultaDialog({
   conveniosUsados?: string[];
   /** Consultas já carregadas: dão os horários ocupados e os pacientes conhecidos. */
   consultas?: ConsultaComContexto[];
+  /** Fichas do banco de pacientes, inclusive quem ainda não tem consulta. */
+  pacientesBanco?: PacienteBasico[];
   /** Horário de atendimento semanal de cada profissional. */
   disponibilidade?: Disponibilidade[];
   /** Folgas e férias. */
@@ -323,8 +327,24 @@ export function NovaConsultaDialog({
         valor: c.valor != null ? Number(c.valor) : null,
       });
     }
+    // Quem está no banco mas nunca veio (cadastro manual ou importação)
+    for (const b of pacientesBanco) {
+      if (clinicaId && b.organization_id !== clinicaId) continue;
+      const chave = soDigitos(b.telefone ?? "") || b.nome.trim().toLowerCase();
+      if (mapa.has(chave)) continue;
+      mapa.set(chave, {
+        nome: b.nome,
+        telefone: b.telefone,
+        email: b.email,
+        nascimento: b.nascimento,
+        convenio: b.convenio,
+        consultas: 0,
+        ultima: "",
+        valor: null,
+      });
+    }
     return [...mapa.values()];
-  }, [consultas, clinicaId]);
+  }, [consultas, pacientesBanco, clinicaId]);
 
   const sugestoes = useMemo(() => {
     const termo = nome.trim().toLowerCase();
@@ -348,7 +368,8 @@ export function NovaConsultaDialog({
     const conv = p.convenio?.trim() || "Particular";
     setConvenio(conv);
     setConvenioOutro(false);
-    setTipo("retorno");
+    // Ficha sem consulta (cadastrada ou importada): é a primeira vez
+    setTipo(p.consultas > 0 ? "retorno" : "primeira");
     if (!valor && p.valor) setValor(String(p.valor).replace(".", ","));
     setBuscando(false);
   }
@@ -700,7 +721,7 @@ export function NovaConsultaDialog({
                   {buscando && sugestoes.length > 0 && (
                     <ul className="absolute left-0 right-0 top-full z-30 mt-1 overflow-hidden rounded-lg border border-border bg-white shadow-card">
                       <li className="border-b border-border bg-branco-clinico px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-cinza-suave">
-                        Pacientes já atendidos
+                        Pacientes cadastrados
                       </li>
                       {sugestoes.map((p) => (
                         <li key={`${p.nome}-${p.telefone}`}>
@@ -716,9 +737,10 @@ export function NovaConsultaDialog({
                             <span className="min-w-0 flex-1">
                               <span className="block truncate text-sm font-medium text-cinza-texto">{p.nome}</span>
                               <span className="block truncate text-xs text-cinza-suave">
-                                {p.telefone ? mascaraTelefone(p.telefone) : "Sem telefone"} · {p.consultas}{" "}
-                                consulta{p.consultas === 1 ? "" : "s"} · última em{" "}
-                                {format(new Date(p.ultima), "dd/MM/yyyy")}
+                                {p.telefone ? mascaraTelefone(p.telefone) : "Sem telefone"} ·{" "}
+                                {p.ultima
+                                  ? `${p.consultas} consulta${p.consultas === 1 ? "" : "s"} · última em ${format(new Date(p.ultima), "dd/MM/yyyy")}`
+                                  : "ainda sem consulta"}
                               </span>
                             </span>
                           </button>
@@ -732,9 +754,17 @@ export function NovaConsultaDialog({
                   <p className="mt-3 flex flex-wrap items-center gap-2 rounded-md bg-verde-menta/60 px-3 py-2 text-xs text-azul-medico">
                     <History className="size-4 shrink-0 text-teal" />
                     <span>
-                      <strong>Paciente já atendido</strong> · {conhecido.consultas} consulta
-                      {conhecido.consultas === 1 ? "" : "s"}, a última em{" "}
-                      {format(new Date(conhecido.ultima), "dd/MM/yyyy")}. Dados preenchidos com o cadastro.
+                      {conhecido.ultima ? (
+                        <>
+                          <strong>Paciente já atendido</strong> · {conhecido.consultas} consulta
+                          {conhecido.consultas === 1 ? "" : "s"}, a última em {format(new Date(conhecido.ultima), "dd/MM/yyyy")}.
+                          Dados preenchidos com o cadastro.
+                        </>
+                      ) : (
+                        <>
+                          <strong>Paciente cadastrado</strong> · primeira consulta. Dados preenchidos com a ficha.
+                        </>
+                      )}
                     </span>
                     <button
                       type="button"

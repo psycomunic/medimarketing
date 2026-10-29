@@ -2048,3 +2048,179 @@ alter table public.avaliacoes enable row level security;
 drop policy if exists "avaliacoes_select" on public.avaliacoes;
 create policy "avaliacoes_select" on public.avaliacoes for select to authenticated
   using (organization_id = public.minha_org() or public.is_super_admin());
+
+-- ============================================================
+-- 2026-10-29 — Banco de pacientes (Fase 1)
+-- Até aqui o paciente existia só como texto dentro de cada consulta.
+-- Agora cada pessoa tem uma ficha, e toda consulta aponta para ela.
+-- O vínculo é feito por gatilho no banco, então vale para qualquer
+-- caminho que crie consulta (painel, importação, integrações).
+-- ============================================================
+
+-- Mesmo número escrito de jeitos diferentes vira a mesma chave:
+-- sem +55, sem máscara e sem depender do 9 extra do celular (DDD + 8 finais)
+create or replace function public.chave_telefone(t text)
+returns text language plpgsql immutable as $$
+declare d text := regexp_replace(coalesce(t, ''), '\D', '', 'g');
+begin
+  if length(d) >= 12 and left(d, 2) = '55' then d := substr(d, 3); end if;
+  if length(d) < 10 then return null; end if;
+  return left(d, 2) || right(d, 8);
+end $$;
+
+create table if not exists public.pacientes (
+  id                      uuid primary key default uuid_generate_v4(),
+  organization_id         uuid not null references public.organizations(id) on delete cascade,
+  nome                    text not null check (length(trim(nome)) > 0),
+  telefone                text,
+  telefone_chave          text,
+  email                   text,
+  nascimento              date,
+  cpf                     text,
+  sexo                    text check (sexo in ('feminino', 'masculino', 'outro')),
+  cidade                  text,
+  convenio                text,
+  carteirinha             text,
+  origem                  text,
+  lead_id                 uuid references public.leads(id) on delete set null,
+  tags                    text[] not null default '{}',
+  observacoes             text,
+  ativo                   boolean not null default true,
+  -- LGPD: marketing só com consentimento registrado; descadastro vale sempre
+  consentimento_marketing boolean not null default false,
+  consentimento_em        timestamptz,
+  consentimento_canal     text,
+  descadastrado_em        timestamptz,
+  criado_por              uuid references public.profiles(id) on delete set null,
+  created_at              timestamptz not null default now(),
+  updated_at              timestamptz not null default now()
+);
+
+create unique index if not exists ux_pacientes_telefone
+  on public.pacientes (organization_id, telefone_chave) where telefone_chave is not null;
+create index if not exists idx_pacientes_nome on public.pacientes (organization_id, lower(nome));
+
+create or replace function public.pacientes_normalizar()
+returns trigger language plpgsql as $$
+begin
+  new.nome := trim(new.nome);
+  new.telefone_chave := public.chave_telefone(new.telefone);
+  new.updated_at := now();
+  return new;
+end $$;
+
+drop trigger if exists trg_pacientes_normalizar on public.pacientes;
+create trigger trg_pacientes_normalizar before insert or update on public.pacientes
+  for each row execute function public.pacientes_normalizar();
+
+alter table public.consultas add column if not exists paciente_id uuid references public.pacientes(id) on delete set null;
+create index if not exists idx_consultas_paciente on public.consultas (paciente_id);
+
+-- Liga a consulta à ficha: pelo telefone; sem telefone, pelo nome.
+-- Não achou, cria a ficha com os dados da consulta (e a origem do lead, se houver).
+create or replace function public.consultas_vincular_paciente()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_chave       text := public.chave_telefone(new.paciente_telefone);
+  v_id          uuid;
+  v_lead_id     uuid;
+  v_lead_origem text;
+begin
+  if new.organization_id is null or new.paciente_id is not null then return new; end if;
+
+  if v_chave is not null then
+    select id into v_id from pacientes
+      where organization_id = new.organization_id and telefone_chave = v_chave limit 1;
+  else
+    select id into v_id from pacientes
+      where organization_id = new.organization_id and lower(nome) = lower(trim(new.paciente_nome))
+      order by created_at limit 1;
+  end if;
+
+  if v_id is null then
+    if v_chave is not null then
+      select id, origem into v_lead_id, v_lead_origem from leads
+        where organization_id = new.organization_id and public.chave_telefone(whatsapp) = v_chave
+        order by created_at desc limit 1;
+    end if;
+    insert into pacientes (organization_id, nome, telefone, email, nascimento, convenio, origem, lead_id, criado_por)
+    values (new.organization_id, new.paciente_nome, new.paciente_telefone, new.paciente_email,
+            new.paciente_nascimento, nullif(new.convenio, ''), v_lead_origem, v_lead_id, new.criado_por)
+    returning id into v_id;
+  else
+    -- Completa o que a ficha ainda não tinha, sem sobrescrever o que já está lá
+    update pacientes set
+      telefone   = coalesce(telefone, new.paciente_telefone),
+      email      = coalesce(email, new.paciente_email),
+      nascimento = coalesce(nascimento, new.paciente_nascimento),
+      convenio   = coalesce(convenio, nullif(new.convenio, ''))
+    where id = v_id;
+  end if;
+
+  new.paciente_id := v_id;
+  return new;
+end $$;
+
+drop trigger if exists trg_consultas_paciente on public.consultas;
+create trigger trg_consultas_paciente
+  before insert or update of paciente_nome, paciente_telefone, paciente_id on public.consultas
+  for each row execute function public.consultas_vincular_paciente();
+
+alter table public.pacientes enable row level security;
+
+-- Dono e atendimento veem todos da clínica; o médico, quem ele atendeu
+drop policy if exists "pacientes_select" on public.pacientes;
+create policy "pacientes_select" on public.pacientes for select to authenticated using (
+  public.is_super_admin()
+  or (organization_id = public.minha_org() and public.is_operacional())
+  or exists (select 1 from public.consultas c where c.paciente_id = pacientes.id and c.medico_id = auth.uid())
+);
+
+drop policy if exists "pacientes_insert" on public.pacientes;
+create policy "pacientes_insert" on public.pacientes for insert to authenticated
+  with check (public.is_super_admin() or organization_id = public.minha_org());
+
+drop policy if exists "pacientes_update" on public.pacientes;
+create policy "pacientes_update" on public.pacientes for update to authenticated using (
+  public.is_super_admin()
+  or (organization_id = public.minha_org() and public.is_operacional())
+  or exists (select 1 from public.consultas c where c.paciente_id = pacientes.id and c.medico_id = auth.uid())
+) with check (public.is_super_admin() or organization_id = public.minha_org());
+
+drop policy if exists "pacientes_delete" on public.pacientes;
+create policy "pacientes_delete" on public.pacientes for delete to authenticated
+  using (public.is_super_admin() or (organization_id = public.minha_org() and public.is_gestor()));
+
+-- Resumo de cada paciente, calculado na hora a partir das consultas e receitas.
+-- security_invoker: quem consulta só enxerga o que a própria RLS permite.
+create or replace view public.pacientes_resumo with (security_invoker = true) as
+select
+  p.*,
+  extract(month from p.nascimento)::int as mes_nascimento,
+  count(c.id) filter (where c.status = 'realizada')::int as consultas_realizadas,
+  count(c.id) filter (where c.status = 'faltou')::int as faltas,
+  min(c.data_hora) filter (where c.status = 'realizada') as primeira_consulta,
+  max(c.data_hora) filter (where c.status = 'realizada') as ultima_consulta,
+  min(c.data_hora) filter (where c.data_hora > now() and c.status in ('pendente', 'confirmada')) as proxima_consulta,
+  coalesce((
+    select sum(greatest(l.valor - coalesce(l.desconto, 0), 0))
+    from public.lancamentos l join public.consultas c2 on c2.id = l.consulta_id
+    where c2.paciente_id = p.id and l.status <> 'cancelado'
+  ), 0)::numeric as total_gasto,
+  (
+    select c3.medico_id from public.consultas c3
+    where c3.paciente_id = p.id group by c3.medico_id order by count(*) desc limit 1
+  ) as profissional_principal
+from public.pacientes p
+left join public.consultas c on c.paciente_id = p.id
+group by p.id;
+
+-- Migração: cria as fichas a partir de todas as consultas já existentes,
+-- da mais recente para a mais antiga (a ficha nasce com os dados atuais).
+do $$
+declare r record;
+begin
+  for r in select id from public.consultas where paciente_id is null order by data_hora desc loop
+    update public.consultas set paciente_nome = paciente_nome where id = r.id;
+  end loop;
+end $$;

@@ -28,12 +28,14 @@ import {
   ClipboardCheck,
   type LucideIcon,
   Landmark,
+  Contact,
 } from "lucide-react";
 import type { Role } from "@/lib/supabase/types";
 
 export type ModuloId =
   | "dashboard"
   | "agenda"
+  | "pacientes"
   | "confirmacoes"
   | "disponibilidade"
   | "crm"
@@ -95,6 +97,16 @@ export const MODULOS: readonly Modulo[] = [
     fase: 1,
     grupo: "operacao",
     resumo: "Consultas por mês, semana e dia, com status e confirmação.",
+  },
+  {
+    id: "pacientes",
+    label: "Pacientes",
+    href: "/app/pacientes",
+    icone: Contact,
+    papeis: TODOS,
+    fase: 1,
+    grupo: "operacao",
+    resumo: "Ficha única de cada paciente, com histórico, gastos e consentimento para mensagens.",
   },
   {
     id: "confirmacoes",

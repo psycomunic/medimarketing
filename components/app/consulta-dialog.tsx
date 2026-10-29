@@ -19,6 +19,7 @@ import {
   XCircle,
   UserX,
   MessageSquareHeart,
+  Contact,
   Loader2,
   Save,
 } from "lucide-react";
@@ -32,6 +33,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { linkPesquisa } from "@/lib/actions/avaliacoes";
+import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -132,6 +134,14 @@ export function ConsultaDialog({
           <div className="flex flex-wrap items-center gap-2">
             <DialogTitle>{consulta.paciente_nome}</DialogTitle>
             <Badge variant={consulta.status}>{rotuloStatus[consulta.status]}</Badge>
+            {consulta.paciente_id && (
+              <Link
+                href={`/app/pacientes/${consulta.paciente_id}`}
+                className="inline-flex items-center gap-1 text-xs font-medium text-teal hover:underline"
+              >
+                <Contact className="size-3.5" /> Ver ficha
+              </Link>
+            )}
           </div>
           <DialogDescription className="capitalize">
             {format(data, "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })} · {format(data, "HH:mm")}

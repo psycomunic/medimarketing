@@ -4,6 +4,7 @@ import { exigirModulo } from "@/lib/acesso";
 import { getClinicasDisponiveis, getUsuarios } from "@/lib/supabase/usuarios";
 import { getConfirmacoesDaAgenda } from "@/lib/supabase/confirmacoes";
 import { whatsappConfigurado } from "@/lib/envio";
+import { getPacientesBasicos } from "@/lib/supabase/pacientes";
 
 export const metadata = { title: "Agenda" };
 
@@ -21,13 +22,14 @@ export default async function AgendaPage() {
   const inicio = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
   const fim = new Date(hoje.getFullYear(), hoje.getMonth() + 3, 0, 23, 59, 59);
 
-  const [{ consultas, opcoes }, equipe, clinicas, demo, disponibilidade, bloqueios] = await Promise.all([
+  const [{ consultas, opcoes }, equipe, clinicas, demo, disponibilidade, bloqueios, pacientes] = await Promise.all([
     getAgenda(inicio.toISOString(), fim.toISOString()),
     getUsuarios(escopo),
     getClinicasDisponiveis(escopo),
     emModoDemo(),
     getDisponibilidade(),
     getBloqueios(),
+    getPacientesBasicos(),
   ]);
 
   // Estado da confirmação de cada consulta, para a ficha já abrir com ele
@@ -48,6 +50,7 @@ export default async function AgendaPage() {
     <div className="mx-auto max-w-6xl px-5 py-8 md:px-8 md:py-10">
       <AgendaCalendar
         consultasIniciais={consultas}
+        pacientes={pacientes}
         opcoes={opcoes}
         profissionais={profissionais}
         clinicas={clinicas}

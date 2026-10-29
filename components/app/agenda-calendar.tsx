@@ -1,5 +1,6 @@
 "use client";
 
+import type { PacienteBasico } from "@/lib/supabase/pacientes";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   addDays,
@@ -63,6 +64,7 @@ type Consulta = ConsultaComContexto;
 
 export function AgendaCalendar({
   consultasIniciais,
+  pacientes = [],
   opcoes,
   profissionais = [],
   clinicas = [],
@@ -76,6 +78,8 @@ export function AgendaCalendar({
   demo = false,
 }: {
   consultasIniciais: ConsultaComContexto[];
+  /** Banco de pacientes: entra na busca da Nova consulta. */
+  pacientes?: PacienteBasico[];
   opcoes: OpcoesAgenda;
   profissionais?: OpcaoProfissional[];
   clinicas?: { id: string; nome: string }[];
@@ -403,6 +407,7 @@ export function AgendaCalendar({
         organizationId={organizationId}
         conveniosUsados={opcoes.convenios}
         consultas={consultasIniciais}
+        pacientesBanco={pacientes}
         disponibilidade={disponibilidade}
         bloqueios={bloqueios}
         envioAutomatico={envioAutomatico}
