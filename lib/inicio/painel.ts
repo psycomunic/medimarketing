@@ -36,6 +36,8 @@ export type Recorte = {
   aReceber: number;
   ticketMedio: number;
   atendimentos: number;
+  /** O mesmo mês um ano antes (só nos recortes de mês). */
+  anoPassado: { rotulo: string; valor: number; pct: number | null } | null;
   /** Só nos recortes de mês fechado ou corrente. */
   lucro: number | null;
   margem: number | null;
@@ -69,6 +71,8 @@ export type PainelNumeros = {
   reservas: { quantidade: number; valor: number; confirmadas: number };
   proximos14: { rotulo: string; confirmadas: number; aConfirmar: number }[];
   ocupacao: Ocupacao | null;
+  /** Dias de atendimento que ainda restam no mês, contando hoje. */
+  diasRestantes: number;
 };
 
 const n = (v: unknown) => Number(v ?? 0) || 0;
@@ -93,6 +97,7 @@ export function montarPainel({
   resumoDe,
   disponibilidade,
   bloqueios,
+  receitasAnoPassado = [],
 }: {
   periodo: Periodo;
   agora: Date;
@@ -103,6 +108,8 @@ export function montarPainel({
   resumoDe: (mes: string) => ResumoMes;
   disponibilidade: Disponibilidade[];
   bloqueios: Bloqueio[];
+  /** Receitas de 12 a 13 meses atrás, para o comparativo anual. */
+  receitasAnoPassado?: Lancamento[];
 }): PainelNumeros {
   const hoje0 = new Date(agora);
   hoje0.setHours(0, 0, 0, 0);
@@ -211,6 +218,21 @@ export function montarPainel({
   const ativasR = doRecorteC.filter(ativa);
   const resumo = mesResumo ? resumoDe(mesResumo) : null;
 
+  let anoPassado: Recorte["anoPassado"] = null;
+  if (mesResumo) {
+    const base = new Date(Number(mesResumo.slice(0, 4)) - 1, Number(mesResumo.slice(5, 7)) - 1, 1);
+    const prefixo = iso(base).slice(0, 7);
+    const valor = receitasAnoPassado
+      .filter((l) => l.status !== "cancelado" && l.data_competencia.startsWith(prefixo))
+      .reduce((s, l) => s + bruto(l), 0);
+    if (valor > 0)
+      anoPassado = {
+        rotulo: `${mesLongo(base)} de ${base.getFullYear()}`,
+        valor,
+        pct: variacao(faturamento, valor),
+      };
+  }
+
   const recorte: Recorte = {
     periodo,
     titulo,
@@ -221,6 +243,7 @@ export function montarPainel({
     aReceber: doRecorteR.filter((l) => l.status !== "recebido").reduce((s, l) => s + bruto(l), 0),
     ticketMedio: cobrados.length ? cobrados.reduce((s, l) => s + bruto(l), 0) / cobrados.length : 0,
     atendimentos: cobrados.length,
+    anoPassado,
     lucro: resumo ? resumo.lucro : null,
     margem: resumo ? resumo.margem : null,
     status,
@@ -263,7 +286,16 @@ export function montarPainel({
     },
     proximos14,
     ocupacao: calcularOcupacao(hoje0, consultas, disponibilidade, bloqueios),
+    diasRestantes: diasDeAtendimento(hoje0, inicioProxMes, disponibilidade),
   };
+}
+
+/** Dias com atendimento entre hoje e o fim do mês (sem disponibilidade: segunda a sábado). */
+function diasDeAtendimento(hoje0: Date, fimMes: Date, disponibilidade: Disponibilidade[]): number {
+  const semana = new Set(disponibilidade.length ? disponibilidade.map((d) => d.dia_semana) : [1, 2, 3, 4, 5, 6]);
+  let total = 0;
+  for (let d = new Date(hoje0); d < fimMes; d = somar(d, 1)) if (semana.has(d.getDay())) total += 1;
+  return total;
 }
 
 /**

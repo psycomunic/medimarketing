@@ -128,11 +128,26 @@ export function PainelDeNumeros({
                     </>
                   )}
                   . O mês passado fechou em {reais(p.anteriorTotal)}.
+                  {r.anoPassado && (
+                    <>
+                      {" "}Em {r.anoPassado.rotulo}, foram {reais(r.anoPassado.valor)}.
+                    </>
+                  )}
                 </>
               ) : (
                 <>
                   {r.atendimentos} atendimento{r.atendimentos === 1 ? "" : "s"} cobrado{r.atendimentos === 1 ? "" : "s"} {r.quando}, ticket médio de{" "}
                   <strong className="text-white">{reais(r.ticketMedio)}</strong>.
+                  {r.anoPassado && r.anoPassado.pct !== null && (
+                    <>
+                      {" "}Contra {r.anoPassado.rotulo}:{" "}
+                      <strong className={r.anoPassado.pct >= 0 ? "text-[#86EFAC]" : "text-[#FDA4AF]"}>
+                        {r.anoPassado.pct >= 0 ? "+" : "−"}
+                        {pct(Math.abs(r.anoPassado.pct), 1)}
+                      </strong>
+                      .
+                    </>
+                  )}
                 </>
               )}
             </p>
@@ -151,6 +166,19 @@ export function PainelDeNumeros({
                     style={{ width: `${Math.min(metaPct, 100)}%` }}
                   />
                 </div>
+                <p className="mt-2 text-xs text-white/75">
+                  {p.faturamentoMes >= meta ? (
+                    <>Meta batida. Tudo o que entrar agora é acima do planejado.</>
+                  ) : p.diasRestantes > 0 ? (
+                    <>
+                      Faltam <strong className="text-white">{reais(meta - p.faturamentoMes)}</strong> além do que já está agendado:{" "}
+                      <strong className="text-white">{reais((meta - p.faturamentoMes) / p.diasRestantes)}</strong> por dia de atendimento nos{" "}
+                      {p.diasRestantes} dia{p.diasRestantes === 1 ? "" : "s"} que restam.
+                    </>
+                  ) : (
+                    <>Faltaram {reais(meta - p.faturamentoMes)} para a meta.</>
+                  )}
+                </p>
               </div>
             )}
 

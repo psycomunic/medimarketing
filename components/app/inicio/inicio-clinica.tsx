@@ -23,6 +23,7 @@ import { Medidor } from "@/components/graficos/graficos";
 import { pct, reais } from "@/components/graficos/formato";
 import { Indicador, Painel } from "@/components/app/financeiro/ui";
 import { PainelDeNumeros } from "./painel-numeros";
+import { RelacionamentoPacientes } from "./relacionamento";
 import { AgendaHoje, Cabecalho, FunilComercial, PedeAtencao, PrimeirosPassos, ProximosPacientes, RecadoMedi } from "./blocos";
 
 const banner = (org: Organization | null) =>
@@ -85,6 +86,19 @@ export function InicioGestor({ profile, org, dados, nomes }: { profile: Profile;
           <PedeAtencao itens={dados.pendencias} vazio="Lembretes em dia, ninguém esperando resposta e nenhuma conta atrasada." />
         </div>
       </div>
+
+      {dados.relacionamento && (
+        <RelacionamentoPacientes
+          dados={dados.relacionamento}
+          clinica={org?.nome ?? "clínica"}
+          nomes={nomes}
+          mesRotulo={new Date(
+            new Date().getFullYear(),
+            new Date().getMonth() - (dados.painel?.recorte.periodo === "mes-passado" ? 1 : 0),
+            1
+          ).toLocaleDateString("pt-BR", { month: "long" })}
+        />
+      )}
 
       <div className="grid gap-5 lg:grid-cols-2">
         <Painel titulo="Metas do mês">

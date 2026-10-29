@@ -356,6 +356,13 @@ export function demoConsultas(): Consulta[] {
     base({ id: "d13", paciente_nome: "Larissa Pinto", paciente_nascimento: "1998-12-01", data_hora: em(-1, 10, 0), tipo: "retorno", status: "realizada", valor: 0 }),
     base({ id: "d14", paciente_nome: "Bruno Almeida", paciente_telefone: "(11) 99000-1122", data_hora: em(-1, 14, 0), tipo: "primeira", status: "realizada", motivo: "Dermatite", valor: 350 }),
 
+    // Pacientes que não voltaram há meses: alimentam o "sem retorno" do painel
+    base({ id: "d29", paciente_nome: "Gabriela Antunes", paciente_telefone: "(11) 99431-2210", data_hora: em(-205, 10, 0), tipo: "primeira", status: "realizada", motivo: "Acne", valor: 350 }),
+    base({ id: "d30", paciente_nome: "Márcio Tavares", paciente_telefone: "(11) 99876-5541", data_hora: em(-248, 15, 30), tipo: "retorno", status: "realizada", valor: 0 }),
+    base({ id: "d31", organization_id: DEMO_ORG_ID, medico_id: "med-vd-2", paciente_nome: "Paula Siqueira", paciente_telefone: "(11) 98123-7788", data_hora: em(-290, 9, 0), tipo: "primeira", status: "realizada", motivo: "Melasma", valor: 400 }),
+    // Aniversariante da semana: nascimento sempre daqui a dois dias
+    base({ id: "d32", paciente_nome: "Roberta Campos", paciente_telefone: "(11) 99654-3321", paciente_nascimento: `1988-${em(2, 12).slice(5, 10)}`, data_hora: em(-40, 11, 0), tipo: "retorno", status: "realizada", valor: 0 }),
+
     // Faltas recentes: alimentam a taxa de faltas do painel
     base({ id: "d27", paciente_nome: "Vinícius Prado", paciente_telefone: "(11) 99121-3434", data_hora: em(-2, 9, 0), tipo: "primeira", status: "faltou", motivo: "Avaliação de pintas", valor: 350 }),
     base({ id: "d28", organization_id: DEMO_ORG_ID, medico_id: "med-vd-2", paciente_nome: "Sabrina Lopes", data_hora: em(-3, 15, 0), tipo: "retorno", status: "faltou", valor: 0 }),

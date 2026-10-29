@@ -72,7 +72,8 @@ export function demoReceitas(): Lancamento[] {
   const hoje = new Date();
   const lista: Lancamento[] = [];
   let k = 0;
-  for (let dia = 364; dia >= -21; dia--) {
+  // Pouco mais de um ano para trás: o painel compara com o mesmo mês do ano anterior
+  for (let dia = 430; dia >= -21; dia--) {
     const d = new Date(hoje);
     d.setDate(d.getDate() - dia);
     if (d.getDay() === 0) continue;

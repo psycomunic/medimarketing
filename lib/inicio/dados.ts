@@ -3,6 +3,17 @@ import { createClient } from "@/lib/supabase/server";
 
 import { emModoDemo, getBloqueios, getConsultas, getDisponibilidade } from "@/lib/supabase/queries";
 import { montarPainel, type Periodo, type PainelNumeros } from "@/lib/inicio/painel";
+import {
+  aniversariantes,
+  horariosVagos,
+  origens,
+  semRetorno,
+  type Aniversariante,
+  type Origem,
+  type SemRetorno,
+  type Vagas,
+} from "@/lib/inicio/relacionamento";
+import { demoLeads } from "@/lib/demo";
 import { getPainel, type PendenciaPainel } from "@/lib/supabase/painel";
 import { getIndicadores, getClientes } from "@/lib/supabase/indicadores";
 import { getPlano } from "@/lib/supabase/evolucao";
@@ -54,6 +65,8 @@ import type { Consulta, Contrato, IndicadorMensal, Organization, PlanoCliente, P
 
 const mesDe = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 const n = (v: unknown) => Number(v ?? 0) || 0;
+const isoLocal = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
 function inicioDoDia(d = new Date()) {
   const x = new Date(d);
@@ -87,7 +100,50 @@ export type DadosClinica = {
   repasses: Repasse[];
   /** Números do painel principal do dono (só gestor). */
   painel: PainelNumeros | null;
+  /** Ações de relacionamento com pacientes (só gestor). */
+  relacionamento: Relacionamento | null;
 };
+
+export type Relacionamento = {
+  vagas: Vagas | null;
+  aniversariantes: Aniversariante[];
+  semRetorno: SemRetorno;
+  origens: Origem[];
+};
+
+/**
+ * Consultas dos últimos 24 meses, só com o que identifica o paciente.
+ * Paginado porque o Supabase devolve no máximo 1000 linhas por vez.
+ */
+async function getHistoricoPacientes(orgId: string, desde: Date, ate: Date): Promise<Consulta[]> {
+  if (await emModoDemo()) return getConsultas(desde.toISOString(), ate.toISOString());
+  const supabase = await createClient();
+  const lista: Consulta[] = [];
+  for (let pagina = 0; pagina < 20; pagina++) {
+    const { data } = await supabase
+      .from("consultas")
+      .select("id,medico_id,paciente_nome,paciente_telefone,paciente_nascimento,data_hora,status,tipo")
+      .eq("organization_id", orgId)
+      .gte("data_hora", desde.toISOString())
+      .lte("data_hora", ate.toISOString())
+      .order("data_hora", { ascending: true })
+      .range(pagina * 1000, pagina * 1000 + 999);
+    lista.push(...((data ?? []) as Consulta[]));
+    if (!data || data.length < 1000) break;
+  }
+  return lista;
+}
+
+async function getOrigensLeads(orgId: string, desde: Date) {
+  if (await emModoDemo()) return demoLeads();
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("leads")
+    .select("origem,etapa_funil,status,created_at")
+    .eq("organization_id", orgId)
+    .gte("created_at", desde.toISOString());
+  return data ?? [];
+}
 
 
 export type { PainelNumeros } from "@/lib/inicio/painel";
@@ -153,6 +209,7 @@ export async function dadosClinica(
 
   let financeiro: DadosClinica["financeiro"] = null;
   let painelNumeros: PainelNumeros | null = null;
+  let relacionamento: Relacionamento | null = null;
   let checklist: PassoChecklist[] = [];
   const pendencias = [...painel.pendencias];
 
@@ -189,8 +246,22 @@ export async function dadosClinica(
     };
 
     // Painel principal: recorte escolhido, ritmo do mês, reservas e ocupação
-    const [disponibilidade, bloqueios] = await Promise.all([getDisponibilidade(), getBloqueios()]);
+    const inicioMesAnt = new Date(agora.getFullYear(), agora.getMonth() - 1, 1);
+    const ha24Meses = new Date(agora.getFullYear() - 2, agora.getMonth(), 1);
+    const [disponibilidadeTodas, bloqueios, receitasAnoPassado, historico, leads] = await Promise.all([
+      getDisponibilidade(),
+      getBloqueios(),
+      // Mês passado e este mês, um ano antes
+      getReceitas(
+        orgId,
+        isoLocal(new Date(agora.getFullYear() - 1, agora.getMonth() - 1, 1)),
+        isoLocal(new Date(agora.getFullYear() - 1, agora.getMonth() + 1, 0))
+      ),
+      getHistoricoPacientes(orgId, ha24Meses, fimJanela),
+      getOrigensLeads(orgId, inicioMesAnt),
+    ]);
     const daClinica = new Set(profissionais.map((p) => p.id));
+    const disponibilidade = disponibilidadeTodas.filter((d) => !daClinica.size || daClinica.has(d.medico_id));
     painelNumeros = montarPainel({
       periodo,
       agora,
@@ -198,9 +269,18 @@ export async function dadosClinica(
       receitas,
       serieTicket: series.map((s) => s.ticketMedio),
       resumoDe,
-      disponibilidade: disponibilidade.filter((d) => !daClinica.size || daClinica.has(d.medico_id)),
+      disponibilidade,
       bloqueios,
+      receitasAnoPassado,
     });
+    const recorteIni = painelNumeros.recorte.periodo === "mes-passado" ? inicioMesAnt : inicioMes;
+    const recorteFim = painelNumeros.recorte.periodo === "mes-passado" ? inicioMes : inicioProxMes;
+    relacionamento = {
+      vagas: horariosVagos(agora, minhas, disponibilidade, bloqueios),
+      aniversariantes: aniversariantes(agora, historico),
+      semRetorno: semRetorno(agora, historico),
+      origens: origens(leads, recorteIni, recorteFim),
+    };
 
     // Pendências do dinheiro, no topo da lista quando vencidas
     if (instalado) {
@@ -262,7 +342,7 @@ export async function dadosClinica(
 
   const repasses = role === "medico" ? await getMeusRepasses(profile.id) : [];
 
-  return { pendencias, hoje, proximos, semana, indicadores, plano, consultasMes, financeiro, checklist, repasses, painel: painelNumeros };
+  return { pendencias, hoje, proximos, semana, indicadores, plano, consultasMes, financeiro, checklist, repasses, painel: painelNumeros, relacionamento };
 }
 
 async function existeConsulta(orgId: string): Promise<boolean> {
