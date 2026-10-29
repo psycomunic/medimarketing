@@ -81,8 +81,9 @@ export function lerHistorico(fechamentos: FechamentoFinanceiro[], composicoes: C
   const ultimo = meses[meses.length - 1];
   const varPct = (a?: number | null, b?: number | null) => (a && b ? ((b - a) / Math.abs(a)) * 100 : null);
 
-  const receitas = composicoes.filter((c) => c.tipo === "receita").sort((a, b) => n(b.valor) - n(a.valor));
-  const saidasComp = composicoes.filter((c) => c.tipo === "saida").sort((a, b) => n(b.valor) - n(a.valor));
+  const agregadas = agregarComposicoes(composicoes);
+  const receitas = agregadas.filter((c) => c.tipo === "receita");
+  const saidasComp = agregadas.filter((c) => c.tipo === "saida");
   const somaNat = (nat: NaturezaComposicao) => saidasComp.filter((c) => c.natureza === nat).reduce((s, c) => s + n(c.valor), 0);
   const totalReceitasComp = receitas.reduce((s, c) => s + n(c.valor), 0);
 
@@ -105,7 +106,12 @@ export function lerHistorico(fechamentos: FechamentoFinanceiro[], composicoes: C
     variacaoSaldo: varPct(saldoInicial, ultimo?.saldo),
     receitas,
     saidasComp,
-    periodo: composicoes.length ? { inicio: composicoes[0].inicio, fim: composicoes[0].fim } : null,
+    periodo: composicoes.length
+      ? {
+          inicio: composicoes.reduce((m, c) => (c.inicio < m ? c.inicio : m), composicoes[0].inicio),
+          fim: composicoes.reduce((m, c) => (c.fim > m ? c.fim : m), composicoes[0].fim),
+        }
+      : null,
     socios: somaNat("socios"),
     financeiro: somaNat("financeiro"),
     investimento: somaNat("investimento"),
@@ -115,4 +121,36 @@ export function lerHistorico(fechamentos: FechamentoFinanceiro[], composicoes: C
       ? (receitas.filter((c) => c.natureza === "convenio").reduce((s, c) => s + n(c.valor), 0) / totalReceitasComp) * 100
       : 0,
   };
+}
+
+/**
+ * Junta a composição do período (vinda de um documento) com o detalhe
+ * lançado mês a mês. Um mês já coberto por um período maior não entra
+ * de novo; o resto é somado por fonte ou categoria.
+ */
+export function agregarComposicoes(composicoes: ComposicaoFinanceira[]): ComposicaoFinanceira[] {
+  const cobre = (maior: ComposicaoFinanceira, c: ComposicaoFinanceira) =>
+    maior !== c && maior.tipo === c.tipo && maior.inicio <= c.inicio && maior.fim >= c.fim &&
+    (maior.inicio < c.inicio || maior.fim > c.fim);
+  const validas = composicoes.filter((c) => !composicoes.some((m) => cobre(m, c)));
+  const mapa = new Map<string, ComposicaoFinanceira>();
+  for (const c of validas) {
+    const k = `${c.tipo}|${c.item.trim().toLowerCase()}`;
+    const atual = mapa.get(k);
+    if (atual) {
+      mapa.set(k, { ...atual, valor: n(atual.valor) + n(c.valor), estimado: atual.estimado || c.estimado, observacao: atual.observacao ?? c.observacao });
+    } else mapa.set(k, { ...c, valor: n(c.valor) });
+  }
+  return [...mapa.values()].sort((a, b) => n(b.valor) - n(a.valor));
+}
+
+/** Fontes e categorias já usadas pela clínica, para sugerir no lançamento. */
+export function itensConhecidos(composicoes: ComposicaoFinanceira[]) {
+  const mapa = new Map<string, { tipo: "receita" | "saida"; item: string; natureza: NaturezaComposicao; valor: number }>();
+  for (const c of composicoes) {
+    const k = `${c.tipo}|${c.item.trim().toLowerCase()}`;
+    const atual = mapa.get(k);
+    mapa.set(k, { tipo: c.tipo, item: c.item.trim(), natureza: c.natureza, valor: (atual?.valor ?? 0) + n(c.valor) });
+  }
+  return [...mapa.values()].sort((a, b) => b.valor - a.valor);
 }

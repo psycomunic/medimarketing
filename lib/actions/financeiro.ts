@@ -564,6 +564,18 @@ const fechamentoSchema = z.object({
   saldoFinal: z.coerce.number().min(-100_000_000).max(100_000_000).nullable(),
   receitaOperacional: z.coerce.number().min(0).max(100_000_000).nullable(),
   observacao: z.string().trim().max(300).optional().or(z.literal("")),
+  /** Detalhe do mês: entradas por fonte e saídas por categoria. Omitido = não mexe. */
+  itens: z
+    .array(
+      z.object({
+        tipo: z.enum(["receita", "saida"]),
+        item: z.string().trim().min(1).max(80),
+        valor: z.coerce.number().min(0).max(100_000_000),
+        natureza: z.enum(["convenio", "particular", "outras", "operacional", "socios", "financeiro", "investimento"]),
+      })
+    )
+    .max(60)
+    .optional(),
 });
 
 export type FechamentoInput = z.input<typeof fechamentoSchema>;
@@ -591,6 +603,40 @@ export async function salvarFechamento(input: FechamentoInput): Promise<ActionRe
     { onConflict: "organization_id,mes" }
   );
   if (error) return erroBanco(error, "Não foi possível salvar o fechamento.");
+
+  // O detalhe do mês substitui o anterior daquele mês
+  if (d.itens) {
+    const [a, m] = d.mes.split("-").map(Number);
+    const inicio = `${d.mes}-01`;
+    const fim = `${d.mes}-${String(new Date(a, m, 0).getDate()).padStart(2, "0")}`;
+    await ctx.supabase.from("composicoes_financeiras").delete().eq("organization_id", orgId).eq("inicio", inicio).eq("fim", fim);
+    const linhas = d.itens
+      .filter((i) => i.valor > 0)
+      .map((i, k) => ({
+        organization_id: orgId,
+        inicio,
+        fim,
+        tipo: i.tipo,
+        item: i.item,
+        valor: i.valor,
+        natureza: i.natureza,
+        estimado: false,
+        ordem: k,
+      }));
+    // Mesmo nome duas vezes no mês: soma numa linha só
+    const unicas = new Map<string, (typeof linhas)[number]>();
+    for (const l of linhas) {
+      const k = `${l.tipo}|${l.item.toLowerCase()}`;
+      const j = unicas.get(k);
+      if (j) j.valor += l.valor;
+      else unicas.set(k, { ...l });
+    }
+    if (unicas.size) {
+      const { error: e2 } = await ctx.supabase.from("composicoes_financeiras").insert([...unicas.values()]);
+      if (e2) return erroBanco(e2, "O fechamento foi salvo, mas o detalhamento não.");
+    }
+  }
+
   revalidar();
   revalidatePath("/app/clinicas", "layout");
   return { ok: true };
@@ -599,8 +645,14 @@ export async function salvarFechamento(input: FechamentoInput): Promise<ActionRe
 export async function excluirFechamento(id: string): Promise<ActionResult> {
   const ctx = await contexto(GESTAO);
   if (ctx.estado !== "ok") return bloqueio(ctx);
+  const { data: f } = await ctx.supabase.from("fechamentos_financeiros").select("organization_id,mes").eq("id", id).maybeSingle();
   const { error } = await ctx.supabase.from("fechamentos_financeiros").delete().eq("id", id);
   if (error) return erroBanco(error, "Não foi possível excluir.");
+  if (f) {
+    const [a, m] = f.mes.split("-").map(Number);
+    const fim = `${f.mes.slice(0, 7)}-${String(new Date(a, m, 0).getDate()).padStart(2, "0")}`;
+    await ctx.supabase.from("composicoes_financeiras").delete().eq("organization_id", f.organization_id).eq("inicio", f.mes).eq("fim", fim);
+  }
   revalidar();
   revalidatePath("/app/clinicas", "layout");
   return { ok: true };

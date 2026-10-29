@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowDownLeft, ArrowUpRight, FileDown, Landmark, PiggyBank, Sparkles, TriangleAlert } from "lucide-react";
-import type { FechamentoFinanceiro } from "@/lib/supabase/types";
+import type { ComposicaoFinanceira, FechamentoFinanceiro } from "@/lib/supabase/types";
 import type { LeituraHistorico } from "@/lib/financeiro/historico";
 import { ROTULO_NATUREZA } from "@/lib/financeiro/historico";
 import { mesCurto, mesLongo } from "@/lib/financeiro/calculos";
@@ -52,6 +52,7 @@ export function frasesHistorico(h: LeituraHistorico) {
 export function HistoricoCaixa({
   h,
   fechamentos,
+  composicoes,
   organizationId,
   podeEditar,
   demo,
@@ -59,6 +60,7 @@ export function HistoricoCaixa({
 }: {
   h: LeituraHistorico;
   fechamentos: FechamentoFinanceiro[];
+  composicoes: ComposicaoFinanceira[];
   organizationId?: string;
   podeEditar: boolean;
   demo: boolean;
@@ -70,7 +72,7 @@ export function HistoricoCaixa({
         <Vazio titulo="Nenhum fechamento de caixa ainda">
           Lance o fechamento de cada mês (entradas, saídas e saldo) para ver a evolução, os meses de pressão e a geração de caixa do período.
         </Vazio>
-        <TabelaFechamentos fechamentos={fechamentos} organizationId={organizationId} podeEditar={podeEditar} demo={demo} />
+        <TabelaFechamentos fechamentos={fechamentos} composicoes={composicoes} organizationId={organizationId} podeEditar={podeEditar} demo={demo} />
       </div>
     );
   }
@@ -213,7 +215,7 @@ export function HistoricoCaixa({
         </Painel>
       </div>
 
-      <TabelaFechamentos fechamentos={fechamentos} organizationId={organizationId} podeEditar={podeEditar} demo={demo} />
+      <TabelaFechamentos fechamentos={fechamentos} composicoes={composicoes} organizationId={organizationId} podeEditar={podeEditar} demo={demo} />
       {temEstimado && (
         <p className="text-xs text-cinza-suave">
           * Valor calculado a partir do percentual informado no documento de origem (os valores exatos não vieram discriminados).

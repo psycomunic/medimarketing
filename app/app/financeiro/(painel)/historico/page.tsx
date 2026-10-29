@@ -13,6 +13,7 @@ export default async function HistoricoPage() {
     <HistoricoCaixa
       h={lerHistorico(fechamentos, composicoes)}
       fechamentos={fechamentos}
+      composicoes={composicoes}
       podeEditar={role === "gestor" || role === "super_admin"}
       demo={demo}
       relatorioHref="/app/financeiro/relatorio-historico"

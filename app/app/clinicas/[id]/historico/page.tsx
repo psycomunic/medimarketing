@@ -35,6 +35,7 @@ export default async function HistoricoClientePage({ params }: { params: { id: s
         <HistoricoCaixa
           h={lerHistorico(fechamentos, composicoes)}
           fechamentos={fechamentos}
+          composicoes={composicoes}
           organizationId={cliente.id}
           podeEditar
           demo={demo}
