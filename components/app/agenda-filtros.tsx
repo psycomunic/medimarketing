@@ -177,7 +177,7 @@ export function AgendaFiltros({
             aria-label="Filtrar por status"
           >
             <option value="">Todos</option>
-            {(["confirmada", "pendente", "realizada", "cancelada"] as StatusConsulta[]).map(
+            {(["confirmada", "pendente", "realizada", "cancelada", "faltou"] as StatusConsulta[]).map(
               (s) => (
                 <option key={s} value={s}>
                   {rotuloStatus[s]}

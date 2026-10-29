@@ -2008,3 +2008,10 @@ drop policy if exists "composicoes_all" on public.composicoes_financeiras;
 create policy "composicoes_all" on public.composicoes_financeiras for all to authenticated
   using ((organization_id = public.minha_org() and public.is_gestor()) or public.is_super_admin())
   with check ((organization_id = public.minha_org() and public.is_gestor()) or public.is_super_admin());
+
+-- ============================================================
+-- 2026-10-29 — Painel do dono: status "faltou"
+-- A consulta em que o paciente não apareceu deixa de contar como
+-- pendente/confirmada e sai do faturamento (como o cancelamento).
+-- ============================================================
+alter type public.status_consulta add value if not exists 'faltou';

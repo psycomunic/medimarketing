@@ -66,8 +66,6 @@ export function InicioGestor({ profile, org, dados, nomes }: { profile: Profile;
           p={dados.painel}
           hoje={dados.hoje}
           meta={metaFat}
-          lucro={f ? f.atual.lucro : null}
-          margem={f ? f.atual.margem : null}
           nomes={nomes}
         />
       ) : (

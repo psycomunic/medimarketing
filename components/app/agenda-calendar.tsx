@@ -374,6 +374,7 @@ export function AgendaCalendar({
             ["pendente", "Pendente"],
             ["realizada", "Realizada"],
             ["cancelada", "Cancelada"],
+            ["faltou", "Faltou"],
           ] as const
         ).map(([k, label]) => (
           <span key={k} className="flex items-center gap-1.5">
@@ -432,6 +433,7 @@ const tomStatus: Record<Consulta["status"], { borda: string; fundo: string; text
   confirmada: { borda: "border-l-sucesso", fundo: "bg-[#ECFBF1] hover:bg-[#DDF6E6]", texto: "text-[#15803D]" },
   realizada: { borda: "border-l-teal", fundo: "bg-[#E8F6F4] hover:bg-[#D8EFEC]", texto: "text-teal" },
   cancelada: { borda: "border-l-cinza-suave/50", fundo: "bg-[#F3F5F6] hover:bg-[#EAEEF0]", texto: "text-cinza-suave" },
+  faltou: { borda: "border-l-[#8B5CF6]", fundo: "bg-[#F4F0FF] hover:bg-[#EAE3FF]", texto: "text-[#6D28D9]" },
 };
 
 /** Minuto atual, atualizado a cada 30 s, para a linha do "agora". */

@@ -1,7 +1,8 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 
-import { emModoDemo, getConsultas } from "@/lib/supabase/queries";
+import { emModoDemo, getBloqueios, getConsultas, getDisponibilidade } from "@/lib/supabase/queries";
+import { montarPainel, type Periodo, type PainelNumeros } from "@/lib/inicio/painel";
 import { getPainel, type PendenciaPainel } from "@/lib/supabase/painel";
 import { getIndicadores, getClientes } from "@/lib/supabase/indicadores";
 import { getPlano } from "@/lib/supabase/evolucao";
@@ -88,30 +89,15 @@ export type DadosClinica = {
   painel: PainelNumeros | null;
 };
 
-export type PainelNumeros = {
-  /** Faturamento acumulado dia a dia: este mês (até hoje) e o anterior. */
-  ritmo: { dia: number; atual: number | null; anterior: number }[];
-  faturamentoMes: number;
-  /** O mês anterior até o mesmo dia, para comparar ritmo. */
-  anteriorMesmoDia: number;
-  anteriorTotal: number;
-  faturamentoHoje: number;
-  recebidoMes: number;
-  aReceberMes: number;
-  ticketMedio: number;
-  /** Ticket médio dos últimos 6 meses. */
-  serieTicket: number[];
-  /** Parte do faturamento do mês que vem de hoje para trás. */
-  ateHoje: number;
-  reservas: { quantidade: number; valor: number; confirmadas: number };
-  proximos14: { rotulo: string; confirmadas: number; aConfirmar: number }[];
-  status: { confirmadas: number; pendentes: number; realizadas: number; canceladas: number };
-  tipos: { primeira: number; retorno: number; teleconsulta: number };
-  novosPacientes: number;
-  porProfissional: { medicoId: string; valor: number; atendimentos: number }[];
-};
 
-export async function dadosClinica(role: Role, profile: Profile, org: Organization | null): Promise<DadosClinica> {
+export type { PainelNumeros } from "@/lib/inicio/painel";
+
+export async function dadosClinica(
+  role: Role,
+  profile: Profile,
+  org: Organization | null,
+  periodo: Periodo = "mes"
+): Promise<DadosClinica> {
   const orgId = org?.id ?? null;
   const agora = new Date();
   const hoje0 = inicioDoDia(agora);
@@ -122,7 +108,9 @@ export async function dadosClinica(role: Role, profile: Profile, org: Organizati
   // 31 dias à frente: a agenda futura vira "reservas" no painel do dono
   fimJanela.setDate(fimJanela.getDate() + 31);
   const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1);
-  const desde = domingo < inicioMes ? domingo : inicioMes;
+  // O dono pode olhar o mês passado inteiro no painel
+  const inicioJanela = role === "gestor" ? new Date(agora.getFullYear(), agora.getMonth() - 1, 1) : inicioMes;
+  const desde = domingo < inicioJanela ? domingo : inicioJanela;
 
   const [painel, consultas, indicadores, plano] = await Promise.all([
     getPainel(role, orgId),
@@ -136,7 +124,7 @@ export async function dadosClinica(role: Role, profile: Profile, org: Organizati
   const amanha0 = new Date(hoje0);
   amanha0.setDate(amanha0.getDate() + 1);
   const hoje = minhas.filter((c) => new Date(c.data_hora) >= hoje0 && new Date(c.data_hora) < amanha0);
-  const proximos = minhas.filter((c) => new Date(c.data_hora) >= amanha0 && c.status !== "cancelada").slice(0, 8);
+  const proximos = minhas.filter((c) => new Date(c.data_hora) >= amanha0 && c.status !== "cancelada" && c.status !== "faltou").slice(0, 8);
 
   const nomes = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
   const semana: DiaSemana[] = Array.from({ length: 7 }, (_, i) => {
@@ -158,7 +146,7 @@ export async function dadosClinica(role: Role, profile: Profile, org: Organizati
     return d >= inicioMes && d < inicioProxMes;
   });
   const consultasMes = {
-    agendadas: doMes.filter((c) => c.status !== "cancelada").length,
+    agendadas: doMes.filter((c) => c.status !== "cancelada" && c.status !== "faltou").length,
     realizadas: doMes.filter((c) => c.status === "realizada").length,
     canceladas: doMes.filter((c) => c.status === "cancelada").length,
   };
@@ -200,75 +188,19 @@ export async function dadosClinica(role: Role, profile: Profile, org: Organizati
       metaLucro: config?.meta_lucro ? n(config.meta_lucro) : null,
     };
 
-    // Painel principal: ritmo do mês, hoje, reservas e composição
-    const [ano, mesNum] = mes.split("-").map(Number);
-    const diasNoMes = new Date(ano, mesNum, 0).getDate();
-    const mesAnt = mesAnterior(mes);
-    const validasR = receitas.filter((l) => l.status !== "cancelado");
-    const porDia = (m: string, d: number) =>
-      validasR.filter((l) => l.data_competencia === `${m}-${String(d).padStart(2, "0")}`).reduce((s, l) => s + bruto(l), 0);
-    const diaHoje = agora.getDate();
-    let acA = 0;
-    let acB = 0;
-    const ritmo = Array.from({ length: diasNoMes }, (_, i) => {
-      const d = i + 1;
-      acB += porDia(mesAnt, d);
-      if (d <= diaHoje) acA += porDia(mes, d);
-      return { dia: d, atual: d <= diaHoje ? acA : null, anterior: acB };
-    });
-    const doMesR = validasR.filter((l) => l.data_competencia.startsWith(mes));
-    const cobrados = doMesR.filter((l) => bruto(l) > 0);
-    const futuras = minhas.filter((c) => new Date(c.data_hora) >= agora && c.status !== "cancelada");
-    const proximos14 = Array.from({ length: 14 }, (_, i) => {
-      const d = new Date(hoje0);
-      d.setDate(d.getDate() + i);
-      const doDia = minhas.filter((c) => new Date(c.data_hora).toDateString() === d.toDateString() && c.status !== "cancelada");
-      return {
-        rotulo: i === 0 ? "hoje" : `${d.getDate()}/${d.getMonth() + 1}`,
-        confirmadas: doDia.filter((c) => c.status === "confirmada" || c.status === "realizada").length,
-        aConfirmar: doDia.filter((c) => c.status === "pendente").length,
-      };
-    });
-    const profs = new Map<string, { valor: number; atendimentos: number }>();
-    for (const l of doMesR) {
-      if (!l.medico_id) continue;
-      const a = profs.get(l.medico_id) ?? { valor: 0, atendimentos: 0 };
-      a.valor += bruto(l);
-      a.atendimentos += 1;
-      profs.set(l.medico_id, a);
-    }
-    painelNumeros = {
-      ritmo,
-      // Mês inteiro por competência, como no financeiro: inclui o que já está agendado
-      faturamentoMes: doMesR.reduce((s, l) => s + bruto(l), 0),
-      anteriorMesmoDia: ritmo[Math.min(diaHoje, diasNoMes) - 1]?.anterior ?? 0,
-      anteriorTotal: acB,
-      faturamentoHoje: porDia(mes, diaHoje),
-      recebidoMes: doMesR.filter((l) => l.status === "recebido").reduce((s, l) => s + bruto(l), 0),
-      aReceberMes: doMesR.filter((l) => l.status !== "recebido").reduce((s, l) => s + bruto(l), 0),
+    // Painel principal: recorte escolhido, ritmo do mês, reservas e ocupação
+    const [disponibilidade, bloqueios] = await Promise.all([getDisponibilidade(), getBloqueios()]);
+    const daClinica = new Set(profissionais.map((p) => p.id));
+    painelNumeros = montarPainel({
+      periodo,
+      agora,
+      consultas: minhas,
+      receitas,
       serieTicket: series.map((s) => s.ticketMedio),
-      ateHoje: acA,
-      ticketMedio: cobrados.length ? cobrados.reduce((s, l) => s + bruto(l), 0) / cobrados.length : 0,
-      reservas: {
-        quantidade: futuras.length,
-        valor: futuras.reduce((s, c) => s + n(c.valor), 0),
-        confirmadas: futuras.filter((c) => c.status === "confirmada").length,
-      },
-      proximos14,
-      status: {
-        confirmadas: doMes.filter((c) => c.status === "confirmada").length,
-        pendentes: doMes.filter((c) => c.status === "pendente").length,
-        realizadas: doMes.filter((c) => c.status === "realizada").length,
-        canceladas: doMes.filter((c) => c.status === "cancelada").length,
-      },
-      tipos: {
-        primeira: doMes.filter((c) => c.status !== "cancelada" && c.tipo === "primeira").length,
-        retorno: doMes.filter((c) => c.status !== "cancelada" && c.tipo === "retorno").length,
-        teleconsulta: doMes.filter((c) => c.status !== "cancelada" && c.tipo === "teleconsulta").length,
-      },
-      novosPacientes: doMes.filter((c) => c.status !== "cancelada" && c.tipo === "primeira").length,
-      porProfissional: [...profs.entries()].map(([medicoId, v]) => ({ medicoId, ...v })).sort((a, b) => b.valor - a.valor),
-    };
+      resumoDe,
+      disponibilidade: disponibilidade.filter((d) => !daClinica.size || daClinica.has(d.medico_id)),
+      bloqueios,
+    });
 
     // Pendências do dinheiro, no topo da lista quando vencidas
     if (instalado) {

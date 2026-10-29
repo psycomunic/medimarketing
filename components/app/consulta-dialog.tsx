@@ -17,6 +17,7 @@ import {
   DollarSign,
   CheckCircle2,
   XCircle,
+  UserX,
   Loader2,
   Save,
 } from "lucide-react";
@@ -219,7 +220,20 @@ export function ConsultaDialog({
               <CalendarCheck className="size-4" /> Confirmar
             </Button>
           )}
-          {consulta.status !== "cancelada" && !cancelando && (
+          {/* Falta só faz sentido depois do horário */}
+          {(consulta.status === "pendente" || consulta.status === "confirmada") &&
+            new Date(consulta.data_hora).getTime() < Date.now() && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => mudarStatus("faltou")}
+                disabled={pending}
+                className="text-[#6D28D9] hover:bg-[#8B5CF6]/10"
+              >
+                <UserX className="size-4" /> Paciente faltou
+              </Button>
+            )}
+          {consulta.status !== "cancelada" && consulta.status !== "faltou" && !cancelando && (
             <Button
               variant="ghost"
               size="sm"

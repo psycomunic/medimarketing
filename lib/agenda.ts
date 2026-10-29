@@ -6,6 +6,7 @@ export const rotuloStatus: Record<StatusConsulta, string> = {
   confirmada: "Confirmada",
   cancelada: "Cancelada",
   realizada: "Realizada",
+  faltou: "Faltou",
 };
 
 /** Rótulos de tipo de consulta. */
@@ -21,6 +22,7 @@ export const corStatus: Record<StatusConsulta, string> = {
   confirmada: "bg-sucesso",
   cancelada: "bg-coral",
   realizada: "bg-teal",
+  faltou: "bg-[#8B5CF6]",
 };
 
 /** Deixa apenas a primeira letra maiúscula (evita "10 De Julho" do CSS capitalize). */

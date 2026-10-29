@@ -11,6 +11,7 @@ const badgeVariants = cva(
         pendente: "bg-alerta/12 text-alerta",
         cancelada: "bg-coral/12 text-coral",
         realizada: "bg-teal/12 text-teal",
+        faltou: "bg-[#8B5CF6]/12 text-[#7C3AED]",
         neutro: "bg-verde-menta text-azul-medico",
       },
     },

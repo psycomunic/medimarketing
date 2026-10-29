@@ -41,7 +41,8 @@ export async function sincronizarReceita(consultaId: string): Promise<void> {
     const convenio = c.convenio && c.convenio.toLowerCase() !== "particular" ? c.convenio : null;
     const competencia = new Date(c.data_hora).toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" });
 
-    if (c.status === "cancelada") {
+    // Falta não é cobrada: sai das contas como o cancelamento
+    if (c.status === "cancelada" || c.status === "faltou") {
       if (existente && existente.status !== "recebido") {
         await admin.from("lancamentos").update({ status: "cancelado" }).eq("id", existente.id);
       }

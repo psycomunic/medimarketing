@@ -7,7 +7,8 @@ export type StatusConsulta =
   | "pendente"
   | "confirmada"
   | "cancelada"
-  | "realizada";
+  | "realizada"
+  | "faltou";
 
 export type TipoConsulta = "primeira" | "retorno" | "teleconsulta";
 

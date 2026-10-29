@@ -1,6 +1,17 @@
 import Link from "next/link";
-import { ArrowDownRight, ArrowRight, ArrowUpRight, CalendarCheck2, CalendarClock, Receipt, Sparkles, UserPlus } from "lucide-react";
-import type { PainelNumeros } from "@/lib/inicio/dados";
+import {
+  AlertTriangle,
+  ArrowDownRight,
+  ArrowRight,
+  ArrowUpRight,
+  CalendarCheck2,
+  CalendarClock,
+  Receipt,
+  Sparkles,
+  UserPlus,
+  UserX,
+} from "lucide-react";
+import { PERIODOS, type PainelNumeros } from "@/lib/inicio/painel";
 import type { Consulta } from "@/lib/supabase/types";
 import { BarrasAgrupadas, LinhaArea, Medidor, Ranking, Rosca } from "@/components/graficos/graficos";
 import { COR, SERIES, pct, reais } from "@/components/graficos/formato";
@@ -10,86 +21,120 @@ import { cn } from "@/lib/utils";
 const hora = (iso: string) =>
   new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
 
+/** Cor fixa da falta: o mesmo roxo da agenda. */
+const COR_FALTA = "#8B5CF6";
+/** Acima disso a falta pede ação (lembrete, confirmação, régua). */
+const FALTAS_ALERTA = 10;
+
 /**
- * Painel principal do dono da clínica: o mês e o dia em números, o ritmo
- * do faturamento contra o mês anterior e a agenda já reservada.
+ * Painel principal do dono da clínica: o período escolhido em números,
+ * o ritmo do faturamento no mês e a agenda que já está reservada.
  */
 export function PainelDeNumeros({
   p,
   hoje,
   meta,
-  lucro,
-  margem,
   nomes,
 }: {
   p: PainelNumeros;
   hoje: Consulta[];
   meta: number | null;
-  lucro: number | null;
-  margem: number | null;
   nomes: Record<string, string>;
 }) {
-  const ritmoPct = p.anteriorMesmoDia ? ((p.ateHoje - p.anteriorMesmoDia) / p.anteriorMesmoDia) * 100 : null;
+  const r = p.recorte;
+  const ehMes = r.periodo === "mes";
   const diaHoje = p.ritmo.filter((d) => d.atual !== null).length;
   const agendado = Math.max(p.faturamentoMes - p.ateHoje, 0);
-  const metaPct = meta ? (p.faturamentoMes / meta) * 100 : null;
-  const totalStatus = p.status.confirmadas + p.status.pendentes + p.status.realizadas + p.status.canceladas;
-  const mesNome = new Date().toLocaleDateString("pt-BR", { month: "long", timeZone: "America/Sao_Paulo" });
-  const Seta = ritmoPct === null || ritmoPct >= 0 ? ArrowUpRight : ArrowDownRight;
+  const metaPct = ehMes && meta ? (p.faturamentoMes / meta) * 100 : null;
+  const st = r.status;
+  const totalStatus = st.confirmadas + st.pendentes + st.realizadas + st.canceladas + st.faltas;
+  const tiposTotal = r.tipos.primeira + r.tipos.retorno + r.tipos.teleconsulta;
+  const subiu = r.comparacao === null || r.comparacao.pct >= 0;
+  const Seta = subiu ? ArrowUpRight : ArrowDownRight;
 
-  const ativasHoje = hoje.filter((c) => c.status !== "cancelada");
+  const ativasHoje = hoje.filter((c) => c.status !== "cancelada" && c.status !== "faltou");
   const confirmadasHoje = ativasHoje.filter((c) => c.status === "confirmada" || c.status === "realizada").length;
   const agora = Date.now();
   const proxima = ativasHoje
     .filter((c) => new Date(c.data_hora).getTime() >= agora && c.status !== "realizada")
     .sort((a, b) => a.data_hora.localeCompare(b.data_hora))[0];
+  const confHoje = `${confirmadasHoje} confirmada${confirmadasHoje === 1 ? "" : "s"}`;
 
   const semana = p.proximos14.slice(0, 7);
   const marcadas7 = semana.reduce((s, d) => s + d.confirmadas + d.aConfirmar, 0);
   const confirmadas7 = semana.reduce((s, d) => s + d.confirmadas, 0);
-  const tiposTotal = p.tipos.primeira + p.tipos.retorno + p.tipos.teleconsulta;
-  const confHoje = `${confirmadasHoje} confirmada${confirmadasHoje === 1 ? "" : "s"}`;
+  const aConfirmar7 = marcadas7 - confirmadas7;
 
   const mini: { r: string; v: string; n?: string }[] = [
-    { r: "Hoje", v: reais(p.faturamentoHoje) },
-    { r: "Recebido", v: reais(p.recebidoMes) },
-    { r: "A receber", v: reais(p.aReceberMes) },
-    lucro !== null
-      ? { r: "Lucro", v: reais(lucro), n: margem !== null ? `margem ${pct(margem, 1)}` : undefined }
-      : { r: "Ticket médio", v: reais(p.ticketMedio) },
+    ehMes ? { r: "Hoje", v: reais(p.faturamentoHoje) } : { r: "Atendimentos", v: String(r.atendimentos) },
+    { r: "Recebido", v: reais(r.recebido) },
+    { r: "A receber", v: reais(r.aReceber) },
+    r.lucro !== null
+      ? { r: "Lucro", v: reais(r.lucro), n: r.margem !== null ? `margem ${pct(r.margem, 1)}` : undefined }
+      : { r: "Ticket médio", v: reais(r.ticketMedio) },
   ];
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-5">
-      {/* Destaque do mês e números do dia */}
+      {/* Período */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="font-heading text-lg font-semibold text-azul-medico">Visão geral</h2>
+        <nav aria-label="Período" className="inline-flex rounded-full border border-border bg-white p-1 shadow-soft">
+          {PERIODOS.map((x) => (
+            <Link
+              key={x.chave}
+              href={x.chave === "mes" ? "/app" : `/app?periodo=${x.chave}`}
+              scroll={false}
+              aria-current={x.chave === r.periodo ? "page" : undefined}
+              className={cn(
+                "rounded-full px-3 py-1.5 text-xs font-semibold transition-colors sm:px-4 sm:text-sm",
+                x.chave === r.periodo ? "bg-azul-medico text-white" : "text-cinza-suave hover:text-azul-medico"
+              )}
+            >
+              {x.rotulo}
+            </Link>
+          ))}
+        </nav>
+      </div>
+
+      {/* Destaque do período e números do dia */}
       <div className="grid gap-5 xl:grid-cols-5">
         <section className="relative min-w-0 overflow-hidden rounded-2xl bg-gradient-to-br from-azul-profundo via-azul-medico to-[#0E6A7E] p-5 text-white shadow-card sm:p-6 xl:col-span-3">
           <div aria-hidden className="pointer-events-none absolute -right-16 -top-20 size-64 rounded-full bg-teal/30 blur-3xl" />
           <div aria-hidden className="pointer-events-none absolute -bottom-24 left-1/3 size-56 rounded-full bg-white/5 blur-2xl" />
           <div className="relative">
-            <p className="text-xs font-semibold uppercase tracking-wider text-white/70">Faturamento de {mesNome}</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-white/70">{r.titulo}</p>
             <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
-              <p className="font-heading text-[2.5rem] font-bold leading-none tabular-nums sm:text-5xl">{reais(p.faturamentoMes)}</p>
-              {ritmoPct !== null && (
+              <p className="font-heading text-[2.5rem] font-bold leading-none tabular-nums sm:text-5xl">{reais(r.faturamento)}</p>
+              {r.comparacao && (
                 <span
                   className={cn(
-                    "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold",
-                    ritmoPct >= 0 ? "bg-white/10 text-[#86EFAC] ring-1 ring-inset ring-[#86EFAC]/30" : "bg-white/10 text-[#FDA4AF] ring-1 ring-inset ring-[#FDA4AF]/30"
+                    "inline-flex items-center gap-1 rounded-full bg-white/10 px-2.5 py-1 text-xs font-semibold ring-1 ring-inset",
+                    subiu ? "text-[#86EFAC] ring-[#86EFAC]/30" : "text-[#FDA4AF] ring-[#FDA4AF]/30"
                   )}
                 >
                   <Seta className="size-3.5" />
-                  {pct(Math.abs(ritmoPct), 1)} {ritmoPct >= 0 ? "acima" : "abaixo"} do mesmo dia do mês passado
+                  {pct(Math.abs(r.comparacao.pct), 1)} {subiu ? "acima" : "abaixo"} {r.comparacao.rotulo}
                 </span>
               )}
             </div>
             <p className="mt-3 text-sm leading-relaxed text-white/75">
-              <strong className="text-white">{reais(p.ateHoje)}</strong> até hoje
-              {agendado > 0 && (
+              {ehMes ? (
                 <>
-                  {" "}+ <strong className="text-white">{reais(agendado)}</strong> já agendados até o fim do mês
+                  <strong className="text-white">{reais(p.ateHoje)}</strong> até hoje
+                  {agendado > 0 && (
+                    <>
+                      {" "}+ <strong className="text-white">{reais(agendado)}</strong> já agendados até o fim do mês
+                    </>
+                  )}
+                  . O mês passado fechou em {reais(p.anteriorTotal)}.
+                </>
+              ) : (
+                <>
+                  {r.atendimentos} atendimento{r.atendimentos === 1 ? "" : "s"} cobrado{r.atendimentos === 1 ? "" : "s"} {r.quando}, ticket médio de{" "}
+                  <strong className="text-white">{reais(r.ticketMedio)}</strong>.
                 </>
               )}
-              . O mês passado fechou em {reais(p.anteriorTotal)}.
             </p>
 
             {meta && metaPct !== null && (
@@ -135,11 +180,11 @@ export function PainelDeNumeros({
             nota={`${reais(p.reservas.valor)} previstos`}
             destaque
           />
-          <Indicador icone={UserPlus} rotulo="Novos pacientes" valor={String(p.novosPacientes)} nota="Primeiras consultas no mês" />
+          <Indicador icone={UserPlus} rotulo="Novos pacientes" valor={String(r.novosPacientes)} nota={`Primeiras consultas ${r.quando}`} />
           <Indicador
             icone={Receipt}
             rotulo="Ticket médio"
-            valor={reais(p.ticketMedio)}
+            valor={reais(r.ticketMedio)}
             nota="Por atendimento cobrado"
             serie={p.serieTicket.some((v) => v > 0) ? p.serieTicket : undefined}
             cor={COR.receita}
@@ -147,11 +192,11 @@ export function PainelDeNumeros({
         </div>
       </div>
 
-      {/* Ritmo do faturamento + situação das consultas */}
+      {/* Ritmo do mês + situação das consultas do período */}
       <div className="grid gap-5 lg:grid-cols-3">
         <Painel
           className="lg:col-span-2"
-          titulo="Ritmo do faturamento"
+          titulo="Ritmo do faturamento no mês"
           descricao="Acumulado dia a dia: este mês contra o mês passado."
           acao={
             <Link href="/app/financeiro" className="inline-flex items-center gap-1 text-sm font-medium text-teal hover:underline">
@@ -173,26 +218,30 @@ export function PainelDeNumeros({
             <Vazio texto="O ritmo aparece quando as primeiras receitas forem lançadas." />
           )}
         </Painel>
-        <Painel titulo="Consultas do mês" descricao={`${totalStatus} marcadas em ${mesNome}`}>
+        <Painel titulo="Consultas" descricao={`${totalStatus} marcadas ${r.quando}`}>
           {totalStatus ? (
-            <Rosca
-              itens={[
-                { nome: "Realizadas", valor: p.status.realizadas, cor: SERIES[0] },
-                { nome: "Confirmadas", valor: p.status.confirmadas, cor: SERIES[1] },
-                { nome: "A confirmar", valor: p.status.pendentes, cor: SERIES[4] },
-                { nome: "Canceladas", valor: p.status.canceladas, cor: COR.neutro },
-              ]}
-              centro={{ valor: String(totalStatus), rotulo: "consultas" }}
-              formato="numero"
-              tamanho={150}
-            />
+            <div className="grid gap-4">
+              <Rosca
+                itens={[
+                  { nome: "Realizadas", valor: st.realizadas, cor: SERIES[0] },
+                  { nome: "Confirmadas", valor: st.confirmadas, cor: SERIES[1] },
+                  { nome: "A confirmar", valor: st.pendentes, cor: SERIES[4] },
+                  { nome: "Faltaram", valor: st.faltas, cor: COR_FALTA },
+                  { nome: "Canceladas", valor: st.canceladas, cor: COR.neutro },
+                ]}
+                centro={{ valor: String(totalStatus), rotulo: "consultas" }}
+                formato="numero"
+                tamanho={150}
+              />
+              <TaxaFaltas taxa={r.taxaFaltas} faltas={st.faltas} />
+            </div>
           ) : (
-            <Vazio texto="Nenhuma consulta marcada neste mês ainda." />
+            <Vazio texto={`Nenhuma consulta marcada ${r.quando}.`} />
           )}
         </Painel>
       </div>
 
-      {/* Agenda reservada + confirmação da semana */}
+      {/* Agenda reservada + próximos 7 dias */}
       <div className="grid gap-5 lg:grid-cols-3">
         <Painel
           className="lg:col-span-2"
@@ -215,41 +264,71 @@ export function PainelDeNumeros({
             altura={230}
           />
         </Painel>
-        <Painel titulo="Confirmação da semana" descricao="Próximos 7 dias, contando hoje.">
-          {marcadas7 ? (
-            <div className="grid gap-4">
-              <Medidor rotulo="Confirmadas" valor={confirmadas7} meta={marcadas7} formato="numero" />
-              <dl className="grid grid-cols-2 gap-3 text-sm">
-                <div className="rounded-lg bg-branco-clinico px-3 py-2">
-                  <dt className="text-xs text-cinza-suave">Marcadas</dt>
-                  <dd className="font-heading text-lg font-bold tabular-nums text-azul-medico">{marcadas7}</dd>
+        <Painel titulo="Próximos 7 dias" descricao="Ocupação da agenda e confirmações.">
+          <div className="grid gap-5">
+            {p.ocupacao ? (
+              <div>
+                <div className="flex items-baseline justify-between gap-3 text-sm">
+                  <span className="text-cinza-texto">Ocupação da agenda</span>
+                  <strong className="font-heading tabular-nums text-azul-medico">{pct(p.ocupacao.pct)}</strong>
                 </div>
-                <div className="rounded-lg bg-branco-clinico px-3 py-2">
-                  <dt className="text-xs text-cinza-suave">A confirmar</dt>
-                  <dd className="font-heading text-lg font-bold tabular-nums text-azul-medico">{marcadas7 - confirmadas7}</dd>
+                <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-[var(--g-trilho)]">
+                  <div className="h-full rounded-full bg-teal" style={{ width: `${Math.min(Math.max(p.ocupacao.pct, 1), 100)}%` }} />
                 </div>
-              </dl>
-              {marcadas7 - confirmadas7 > 0 && (
-                <Link
-                  href="/app/agenda"
-                  className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium text-azul-medico hover:bg-branco-clinico"
-                >
-                  Confirmar pacientes <ArrowRight className="size-4" />
-                </Link>
-              )}
-            </div>
-          ) : (
-            <Vazio texto="Nenhuma consulta marcada para os próximos 7 dias." />
-          )}
+                <p className="mt-1.5 text-xs text-cinza-suave">
+                  {horas(p.ocupacao.horasMarcadas)} marcadas de {horas(p.ocupacao.horasDisponiveis)} de atendimento.
+                </p>
+                <ul className="mt-3 grid grid-cols-7 gap-1.5" aria-label="Ocupação por dia">
+                  {p.ocupacao.porDia.map((d, i) => (
+                    <li
+                      key={i}
+                      className="grid justify-items-center gap-1"
+                      title={d.disponivel ? `${d.rotulo}: ${pct(d.pct)} ocupado` : `${d.rotulo}: sem atendimento`}
+                    >
+                      <span className="relative h-12 w-full max-w-6 overflow-hidden rounded-md bg-[var(--g-trilho)]">
+                        {d.disponivel && (
+                          <span className="absolute inset-x-0 bottom-0 rounded-md bg-teal" style={{ height: `${Math.max(d.pct, 4)}%` }} />
+                        )}
+                      </span>
+                      <span className={cn("text-[10px]", i === 0 ? "font-semibold text-azul-medico" : "text-cinza-suave")}>{d.rotulo}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <p className="rounded-lg bg-branco-clinico px-3 py-2.5 text-xs text-cinza-suave">
+                Cadastre os horários de atendimento em{" "}
+                <Link href="/app/disponibilidade" className="font-medium text-teal hover:underline">
+                  Disponibilidade
+                </Link>{" "}
+                para ver a ocupação da agenda.
+              </p>
+            )}
+            {marcadas7 ? (
+              <div>
+                <Medidor rotulo="Confirmadas" valor={confirmadas7} meta={marcadas7} formato="numero" />
+                {aConfirmar7 > 0 && (
+                  <Link
+                    href="/app/confirmacoes"
+                    className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium text-azul-medico hover:bg-branco-clinico"
+                  >
+                    Confirmar {aConfirmar7} paciente{aConfirmar7 === 1 ? "" : "s"} <ArrowRight className="size-4" />
+                  </Link>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-cinza-suave">Nenhuma consulta marcada para os próximos 7 dias.</p>
+            )}
+          </div>
         </Painel>
       </div>
 
-      {/* Quem atende e o quê */}
-      <div className="grid gap-5 lg:grid-cols-2">
-        <Painel titulo="Faturamento por profissional" descricao={`Em ${mesNome}.`}>
-          {p.porProfissional.length ? (
+      {/* Quem atende, por onde paga e o quê */}
+      <div className="grid gap-5 lg:grid-cols-3">
+        <Painel titulo="Faturamento por profissional" descricao={`${capitalizar(r.quando)}.`}>
+          {r.porProfissional.length ? (
             <Ranking
-              itens={p.porProfissional.map((x) => ({
+              itens={r.porProfissional.map((x) => ({
                 nome: nomes[x.medicoId] ?? "Profissional",
                 valor: x.valor,
                 detalhe: `${x.atendimentos} atend.`,
@@ -261,10 +340,71 @@ export function PainelDeNumeros({
             <Vazio texto="Aparece quando as receitas tiverem o profissional que atendeu." />
           )}
         </Painel>
-        <Painel titulo="Tipos de atendimento" descricao={`${tiposTotal} consultas em ${mesNome}.`}>
-          <TiposBarra tipos={p.tipos} total={tiposTotal} />
+        <Painel titulo="Convênio × particular" descricao={`Faturamento ${r.quando}.`}>
+          {r.convenios.length ? (
+            <Rosca
+              itens={coresConvenios(r.convenios)}
+              centro={{ valor: pct(participacaoParticular(r.convenios)), rotulo: "particular" }}
+              tamanho={140}
+            />
+          ) : (
+            <Vazio texto={`Sem receitas ${r.quando}.`} />
+          )}
+        </Painel>
+        <Painel titulo="Tipos de atendimento" descricao={`${tiposTotal} consultas ${r.quando}.`}>
+          <TiposBarra tipos={r.tipos} total={tiposTotal} quando={r.quando} />
         </Painel>
       </div>
+    </div>
+  );
+}
+
+const capitalizar = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+
+function horas(h: number) {
+  const inteiras = Math.floor(h);
+  const min = Math.round((h - inteiras) * 60);
+  return min ? `${inteiras}h${String(min).padStart(2, "0")}` : `${inteiras}h`;
+}
+
+/** Particular sempre na cor da receita; convênios seguem a ordem fixa da paleta. */
+function coresConvenios(itens: { nome: string; valor: number }[]) {
+  const ordem = [SERIES[1], SERIES[3], SERIES[2], SERIES[4], SERIES[5]];
+  let k = 0;
+  return itens.map((c) => ({ ...c, cor: c.nome === "Particular" ? SERIES[0] : ordem[k++ % ordem.length] }));
+}
+
+function participacaoParticular(itens: { nome: string; valor: number }[]) {
+  const total = itens.reduce((s, i) => s + i.valor, 0);
+  const part = itens.find((i) => i.nome === "Particular")?.valor ?? 0;
+  return total ? (part / total) * 100 : 0;
+}
+
+function TaxaFaltas({ taxa, faltas }: { taxa: number | null; faltas: number }) {
+  if (taxa === null) return null;
+  if (!faltas)
+    return (
+      <p className="flex items-center gap-2 rounded-lg bg-branco-clinico px-3 py-2.5 text-sm text-cinza-texto">
+        <UserX className="size-4 shrink-0 text-[#7C3AED]" /> Nenhuma falta. Todos os pacientes vieram.
+      </p>
+    );
+  const alta = taxa > FALTAS_ALERTA;
+  const Icone = alta ? AlertTriangle : UserX;
+  return (
+    <div
+      className={cn(
+        "flex items-start gap-2.5 rounded-lg px-3 py-2.5 text-sm",
+        alta ? "bg-[#FFF4E5] text-[#9A5B00]" : "bg-branco-clinico text-cinza-texto"
+      )}
+    >
+      <Icone className={cn("mt-0.5 size-4 shrink-0", alta ? "text-[#D97706]" : "text-[#7C3AED]")} />
+      <p>
+        <strong className="tabular-nums">{pct(taxa, 1)}</strong> de faltas
+        <span className={alta ? undefined : "text-cinza-suave"}>
+          {" "}· {faltas} paciente{faltas === 1 ? "" : "s"} não {faltas === 1 ? "veio" : "vieram"}
+          {alta ? ". Vale reforçar os lembretes." : "."}
+        </span>
+      </p>
     </div>
   );
 }
@@ -273,13 +413,13 @@ function Vazio({ texto }: { texto: string }) {
   return <p className="grid min-h-32 place-items-center px-4 text-center text-sm text-cinza-suave">{texto}</p>;
 }
 
-function TiposBarra({ tipos, total }: { tipos: PainelNumeros["tipos"]; total: number }) {
+function TiposBarra({ tipos, total, quando }: { tipos: PainelNumeros["recorte"]["tipos"]; total: number; quando: string }) {
   const itens = [
     { nome: "Primeira consulta", valor: tipos.primeira, cor: SERIES[3] },
     { nome: "Retorno", valor: tipos.retorno, cor: SERIES[0] },
     { nome: "Teleconsulta", valor: tipos.teleconsulta, cor: SERIES[1] },
   ];
-  if (!total) return <Vazio texto="Sem consultas no mês ainda." />;
+  if (!total) return <Vazio texto={`Sem consultas ${quando}.`} />;
   return (
     <div>
       <div className="flex h-3 gap-0.5 overflow-hidden rounded-full">
@@ -304,7 +444,7 @@ function TiposBarra({ tipos, total }: { tipos: PainelNumeros["tipos"]; total: nu
       </ul>
       <p className="mt-4 flex items-center gap-1.5 text-xs text-cinza-suave">
         <Sparkles className="size-3.5 shrink-0 text-teal" />
-        {pct((tipos.primeira / total) * 100)} das consultas do mês são de pacientes novos.
+        {pct((tipos.primeira / total) * 100)} das consultas são de pacientes novos.
       </p>
     </div>
   );

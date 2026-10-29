@@ -48,7 +48,13 @@ export async function atualizarStatus(
     .update({ status })
     .eq("id", id);
 
-  if (error) return { ok: false, erro: "Não foi possível atualizar o status." };
+  if (error) {
+    // O status "faltou" depende do SQL de 2026-10-29 (Painel do dono)
+    if (status === "faltou" && error.code === "22P02") {
+      return { ok: false, erro: "O status \"Faltou\" ainda não foi ativado no banco. Rode o SQL da atualização do painel." };
+    }
+    return { ok: false, erro: "Não foi possível atualizar o status." };
+  }
 
   if (antes && antes.status !== status) {
     // A receita da consulta acompanha o status (cancelada sai das contas)

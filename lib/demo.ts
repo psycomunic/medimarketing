@@ -356,6 +356,10 @@ export function demoConsultas(): Consulta[] {
     base({ id: "d13", paciente_nome: "Larissa Pinto", paciente_nascimento: "1998-12-01", data_hora: em(-1, 10, 0), tipo: "retorno", status: "realizada", valor: 0 }),
     base({ id: "d14", paciente_nome: "Bruno Almeida", paciente_telefone: "(11) 99000-1122", data_hora: em(-1, 14, 0), tipo: "primeira", status: "realizada", motivo: "Dermatite", valor: 350 }),
 
+    // Faltas recentes: alimentam a taxa de faltas do painel
+    base({ id: "d27", paciente_nome: "Vinícius Prado", paciente_telefone: "(11) 99121-3434", data_hora: em(-2, 9, 0), tipo: "primeira", status: "faltou", motivo: "Avaliação de pintas", valor: 350 }),
+    base({ id: "d28", organization_id: DEMO_ORG_ID, medico_id: "med-vd-2", paciente_nome: "Sabrina Lopes", data_hora: em(-3, 15, 0), tipo: "retorno", status: "faltou", valor: 0 }),
+
     // Segundo médico da mesma clínica — dá o que filtrar por profissional
     base({ id: "d15", organization_id: DEMO_ORG_ID, medico_id: "med-vd-2", paciente_nome: "Camila Nogueira", paciente_telefone: "(11) 98111-2020", data_hora: daquiA(75), tipo: "primeira", status: "confirmada", motivo: "Melasma", valor: 400 }),
     base({ id: "d16", organization_id: DEMO_ORG_ID, medico_id: "med-vd-2", paciente_nome: "Rodrigo Salles", data_hora: em(1, 14, 0), tipo: "retorno", status: "pendente", valor: 0 }),
@@ -425,6 +429,10 @@ export function demoDisponibilidade(): Disponibilidade[] {
     hora_inicio: "08:00",
     hora_fim: "18:00",
   }));
+  // Segunda profissional da clínica: terças e quintas à tarde
+  for (const d of [2, 4]) {
+    dias.push({ id: `disp-vd2-${d}`, medico_id: "med-vd-2", dia_semana: d, hora_inicio: "13:00", hora_fim: "19:00" });
+  }
   dias.push({
     id: "disp-6",
     medico_id: DEMO_USER_ID,
