@@ -302,9 +302,11 @@ export function LinhaArea({
           {foco !== null && (
             <g pointerEvents="none">
               <line x1={x(foco)} x2={x(foco)} y1={TOPO} y2={TOPO + H} stroke="var(--g-cursor)" strokeWidth={1} />
-              {series.map((s) => (
-                <circle key={s.nome} cx={x(foco)} cy={y(s.valores[foco] ?? 0)} r={4.5} fill={s.cor} stroke="var(--g-halo)" strokeWidth={2} />
-              ))}
+              {series
+                .filter((s) => s.valores[foco] !== undefined)
+                .map((s) => (
+                  <circle key={s.nome} cx={x(foco)} cy={y(s.valores[foco])} r={4.5} fill={s.cor} stroke="var(--g-halo)" strokeWidth={2} />
+                ))}
             </g>
           )}
         </svg>
@@ -314,7 +316,9 @@ export function LinhaArea({
             y={4}
             largura={W}
             titulo={rotulos[foco]}
-            linhas={series.map((s) => ({ nome: s.nome, cor: s.cor, valor: fmt(s.valores[foco] ?? 0, formato) }))}
+            linhas={series
+              .filter((s) => s.valores[foco] !== undefined)
+              .map((s) => ({ nome: s.nome, cor: s.cor, valor: fmt(s.valores[foco], formato) }))}
           />
         )}
       </div>

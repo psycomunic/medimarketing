@@ -8,10 +8,8 @@ import {
   HandCoins,
   Landmark,
   MessageCircle,
-  Percent,
   Send,
   Stethoscope,
-  TrendingUp,
   UserPlus,
   Users,
   Wallet,
@@ -19,11 +17,12 @@ import {
 import type { Organization, Profile, Role } from "@/lib/supabase/types";
 import type { DadosClinica } from "@/lib/inicio/dados";
 import { calcularEvolucao } from "@/lib/evolucao";
-import { variacao, mesLongo } from "@/lib/financeiro/calculos";
+import { mesLongo } from "@/lib/financeiro/calculos";
 import { rotuloPapel } from "@/lib/rbac";
-import { BarrasAgrupadas, Medidor } from "@/components/graficos/graficos";
-import { COR, pct, reais } from "@/components/graficos/formato";
+import { Medidor } from "@/components/graficos/graficos";
+import { pct, reais } from "@/components/graficos/formato";
 import { Indicador, Painel } from "@/components/app/financeiro/ui";
+import { PainelDeNumeros } from "./painel-numeros";
 import { AgendaHoje, Cabecalho, FunilComercial, PedeAtencao, PrimeirosPassos, ProximosPacientes, RecadoMedi } from "./blocos";
 
 const banner = (org: Organization | null) =>
@@ -41,14 +40,11 @@ export function InicioGestor({ profile, org, dados, nomes }: { profile: Profile;
   const confirmadasHoje = ativasHoje.filter((c) => c.status === "confirmada" || c.status === "realizada").length;
   const ind = dados.indicadores;
   const ultimo = ind[ind.length - 1] ?? null;
-  const penultimo = ind[ind.length - 2] ?? null;
   const ev = calcularEvolucao(ind, dados.plano);
   const metaFat = dados.plano?.meta_faturamento ? Number(dados.plano.meta_faturamento) : null;
   const metaConsultas = dados.plano?.meta_consultas ? Number(dados.plano.meta_consultas) : null;
   const metaLeads = dados.plano?.meta_leads ? Number(dados.plano.meta_leads) : null;
   const leadsMes = ultimo && ultimo.mes.startsWith(new Date().toISOString().slice(0, 7)) ? Number(ultimo.leads) : null;
-  const roi = ultimo && Number(ultimo.investimento) > 0 ? Number(ultimo.faturamento) / Number(ultimo.investimento) : null;
-  const roiAnt = penultimo && Number(penultimo.investimento) > 0 ? Number(penultimo.faturamento) / Number(penultimo.investimento) : null;
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
@@ -65,13 +61,23 @@ export function InicioGestor({ profile, org, dados, nomes }: { profile: Profile;
 
       <PrimeirosPassos passos={dados.checklist} />
 
-      {/* O dia em quatro números */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Indicador icone={CalendarCheck2} rotulo="Consultas hoje" valor={String(ativasHoje.length)} nota={`${confirmadasHoje} confirmada${confirmadasHoje === 1 ? "" : "s"}`} />
-        <Indicador icone={Banknote} rotulo="Previsto para hoje" valor={reais(f?.previstoHoje ?? 0)} nota="Valor das consultas do dia" />
-        <Indicador icone={HandCoins} rotulo="Recebido hoje" valor={reais(f?.recebidoHoje ?? 0)} nota="Pagamentos registrados" />
-        <Indicador icone={Landmark} rotulo="Saldo em caixa" valor={reais(f?.saldoCaixa ?? 0)} nota="Informado no financeiro" destaque />
-      </div>
+      {dados.painel ? (
+        <PainelDeNumeros
+          p={dados.painel}
+          hoje={dados.hoje}
+          meta={metaFat}
+          lucro={f ? f.atual.lucro : null}
+          margem={f ? f.atual.margem : null}
+          nomes={nomes}
+        />
+      ) : (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <Indicador icone={CalendarCheck2} rotulo="Consultas hoje" valor={String(ativasHoje.length)} nota={`${confirmadasHoje} confirmada${confirmadasHoje === 1 ? "" : "s"}`} />
+          <Indicador icone={Banknote} rotulo="Previsto para hoje" valor={reais(f?.previstoHoje ?? 0)} nota="Valor das consultas do dia" />
+          <Indicador icone={HandCoins} rotulo="Recebido hoje" valor={reais(f?.recebidoHoje ?? 0)} nota="Pagamentos registrados" />
+          <Indicador icone={Landmark} rotulo="Saldo em caixa" valor={reais(f?.saldoCaixa ?? 0)} nota="Informado no financeiro" destaque />
+        </div>
+      )}
 
       <div className="grid gap-5 lg:grid-cols-5">
         <div className="min-w-0 lg:col-span-3">
@@ -82,57 +88,7 @@ export function InicioGestor({ profile, org, dados, nomes }: { profile: Profile;
         </div>
       </div>
 
-      {/* O mês */}
-      <section>
-        <h2 className="mb-3 font-heading text-lg font-semibold text-azul-medico">O mês até agora</h2>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <Indicador
-            icone={Banknote}
-            rotulo="Faturamento"
-            valor={reais(f?.atual.receitaBruta ?? 0)}
-            variacao={f ? variacao(f.atual.receitaBruta, f.anterior.receitaBruta) : null}
-            nota={f ? `Ticket médio ${reais(f.atual.ticketMedio)}` : undefined}
-            serie={f?.serieFaturamento}
-            cor={COR.receita}
-          />
-          <Indicador
-            icone={TrendingUp}
-            rotulo="Lucro"
-            valor={reais(f?.atual.lucro ?? 0)}
-            variacao={f ? variacao(f.atual.lucro, f.anterior.lucro) : null}
-            nota={f ? `Margem de ${pct(f.atual.margem, 1)}` : undefined}
-            serie={f?.serieLucro}
-            destaque
-          />
-          <Indicador
-            icone={Users}
-            rotulo="Consultas no mês"
-            valor={String(dados.consultasMes.agendadas)}
-            nota={`${dados.consultasMes.realizadas} realizadas · ${dados.consultasMes.canceladas} canceladas`}
-          />
-          <Indicador
-            icone={Percent}
-            rotulo="Retorno (ROI)"
-            valor={roi === null ? "—" : `${roi.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}x`}
-            variacao={roi !== null && roiAnt !== null ? variacao(roi, roiAnt) : null}
-            nota={ultimo ? `${Number(ultimo.leads)} leads em ${mesLongo(ultimo.mes.slice(0, 7)).split(" ")[0]}` : "Sem indicadores lançados"}
-          />
-        </div>
-      </section>
-
-      <div className="grid gap-5 lg:grid-cols-3">
-        <Painel className="lg:col-span-2" titulo="Sua semana" descricao="Consultas marcadas e já atendidas em cada dia.">
-          <BarrasAgrupadas
-            categorias={dados.semana.map((d) => d.rotulo)}
-            barras={[
-              { nome: "Marcadas", cor: COR.previsto, valores: dados.semana.map((d) => d.agendadas) },
-              { nome: "Atendidas", cor: COR.receita, valores: dados.semana.map((d) => d.atendidas) },
-            ]}
-            destaque={dados.semana.findIndex((d) => d.hoje)}
-            formato="numero"
-            altura={230}
-          />
-        </Painel>
+      <div className="grid gap-5 lg:grid-cols-2">
         <Painel titulo="Metas do mês">
           <div className="grid gap-5">
             {metaFat ? <Medidor rotulo="Faturamento" valor={f?.atual.receitaBruta ?? 0} meta={metaFat} /> : null}
@@ -144,9 +100,6 @@ export function InicioGestor({ profile, org, dados, nomes }: { profile: Profile;
             )}
           </div>
         </Painel>
-      </div>
-
-      <div className="grid gap-5 lg:grid-cols-3">
         <FunilComercial indicador={ultimo} />
         <Painel titulo="Evolução desde o início" descricao={ev ? "Faturamento médio do marco zero contra o último mês lançado." : undefined}>
           {ev && ultimo ? (
