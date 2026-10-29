@@ -110,6 +110,37 @@ export async function getPacientes(f: FiltrosPacientes): Promise<ListaPacientes>
 
   const supabase = await createClient();
   const pagina = Math.max(f.pagina ?? 1, 1);
+  const { data, count, error } = await (await consultaFiltrada(supabase, f)).q.range((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA - 1);
+  if (error) return { instalado: false, lista: [], total: 0, convenios: [], tags: [] };
+
+  const { data: opcoes } = await supabase.from("pacientes").select("convenio,tags").limit(5000);
+  return {
+    instalado: true,
+    lista: (data ?? []).map(normalizar),
+    total: count ?? 0,
+    ...opcoesDe(opcoes ?? []),
+  };
+}
+
+/**
+ * Todos os pacientes de um filtro (o público de um disparo), sem paginar
+ * a tela. Até 10 mil fichas, lidas de mil em mil.
+ */
+export async function getPacientesFiltrados(f: FiltrosPacientes): Promise<PacienteResumo[] | null> {
+  if (await emModoDemo()) return filtrarEmMemoria(await pacientesDemo(), { ...f, pagina: 1 }, Infinity).lista;
+  const supabase = await createClient();
+  const lista: PacienteResumo[] = [];
+  for (let pagina = 0; pagina < 10; pagina++) {
+    const { data, error } = await (await consultaFiltrada(supabase, f)).q.range(pagina * 1000, pagina * 1000 + 999);
+    if (error) return pagina ? lista : null;
+    lista.push(...(data ?? []).map(normalizar));
+    if (!data || data.length < 1000) break;
+  }
+  return lista;
+}
+
+/** A consulta da lista com todos os filtros aplicados, pronta para paginar. */
+async function consultaFiltrada(supabase: Awaited<ReturnType<typeof createClient>>, f: FiltrosPacientes) {
   let q = supabase.from("pacientes_resumo").select("*", { count: "exact" });
 
   const situacao = f.situacao ?? "ativos";
@@ -144,17 +175,9 @@ export async function getPacientes(f: FiltrosPacientes): Promise<ListaPacientes>
   else if (ordem === "gasto") q = q.order("total_gasto", { ascending: false });
   else if (ordem === "ultima") q = q.order("ultima_consulta", { ascending: false, nullsFirst: false });
   else q = q.order("created_at", { ascending: false });
-
-  const { data, count, error } = await q.range((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA - 1);
-  if (error) return { instalado: false, lista: [], total: 0, convenios: [], tags: [] };
-
-  const { data: opcoes } = await supabase.from("pacientes").select("convenio,tags").limit(5000);
-  return {
-    instalado: true,
-    lista: (data ?? []).map(normalizar),
-    total: count ?? 0,
-    ...opcoesDe(opcoes ?? []),
-  };
+  // Desempate estável: sem ele, a mesma ficha pode cair em duas páginas.
+  // Embrulhado: devolver a consulta solta de uma função async a executaria.
+  return { q: q.order("id") };
 }
 
 export async function getNumerosPacientes(): Promise<NumerosPacientes | null> {
@@ -194,6 +217,7 @@ export type FichaPaciente = {
   receitas: Lancamento[];
   avaliacoes: { consulta_id: string; nota: number; comentario: string | null; respondido_em: string }[];
   mensagens: Pick<Envio, "id" | "evento" | "canal" | "status" | "created_at" | "enviado_em" | "consulta_id">[];
+  campanhas: { nome: string; canal: string; quando: string; status: string }[];
 };
 
 export async function getFichaPaciente(id: string): Promise<FichaPaciente | null> {
@@ -204,7 +228,7 @@ export async function getFichaPaciente(id: string): Promise<FichaPaciente | null
     const consultas = (await consultasDemo())
       .filter((c) => chaveDemo(c) === id)
       .sort((a, b) => b.data_hora.localeCompare(a.data_hora));
-    return { paciente, consultas, receitas: [], avaliacoes: [], mensagens: [] };
+    return { paciente, consultas, receitas: [], avaliacoes: [], mensagens: [], campanhas: [] };
   }
 
   const supabase = await createClient();
@@ -232,7 +256,27 @@ export async function getFichaPaciente(id: string): Promise<FichaPaciente | null
       ])
     : [{ data: [] }, { data: [] }, { data: [] }];
 
+  // Disparos que o paciente recebeu (sem a tabela, a ficha segue sem eles)
+  const { data: recebidos } = await supabase
+    .from("disparo_destinatarios")
+    .select("disparo_id,status,previsto_para")
+    .eq("paciente_id", id)
+    .in("status", ["programado", "enviado"])
+    .lte("previsto_para", new Date().toISOString())
+    .limit(100);
+  const disparoIds = [...new Set((recebidos ?? []).map((r) => r.disparo_id))];
+  const { data: disparos } = disparoIds.length
+    ? await supabase.from("disparos").select("id,nome,canal").in("id", disparoIds)
+    : { data: [] as { id: string; nome: string; canal: string }[] };
+  const porDisparo = new Map((disparos ?? []).map((d) => [d.id, d]));
+
   return {
+    campanhas: (recebidos ?? []).map((r) => ({
+      nome: porDisparo.get(r.disparo_id)?.nome ?? "Campanha",
+      canal: porDisparo.get(r.disparo_id)?.canal ?? "whatsapp",
+      quando: r.previsto_para,
+      status: r.status,
+    })),
     paciente: normalizar(p),
     consultas: consultas ?? [],
     receitas: (receitas.data ?? []) as Lancamento[],
@@ -451,7 +495,7 @@ export async function pacientesDemo(): Promise<PacienteResumo[]> {
   });
 }
 
-function filtrarEmMemoria(todos: PacienteResumo[], f: FiltrosPacientes): ListaPacientes {
+function filtrarEmMemoria(todos: PacienteResumo[], f: FiltrosPacientes, porPagina = POR_PAGINA): ListaPacientes {
   const situacao = f.situacao ?? "ativos";
   const corte = corteSemRetorno().toISOString();
   const busca = semAcento(f.busca ?? "");
@@ -491,7 +535,7 @@ function filtrarEmMemoria(todos: PacienteResumo[], f: FiltrosPacientes): ListaPa
   const pagina = Math.max(f.pagina ?? 1, 1);
   return {
     instalado: true,
-    lista: lista.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA),
+    lista: porPagina === Infinity ? lista : lista.slice((pagina - 1) * porPagina, pagina * porPagina),
     total: lista.length,
     ...opcoesDe(todos),
   };

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarClock, ChevronLeft, ChevronRight, Contact, Copy, Download, MailCheck, UserPlus, UserRoundX, Users } from "lucide-react";
+import { CalendarClock, ChevronLeft, ChevronRight, Contact, Copy, Download, MailCheck, Send, UserPlus, UserRoundX, Users } from "lucide-react";
 import { exigirModulo } from "@/lib/acesso";
 import { getNumerosPacientes, getPacientes, POR_PAGINA, type FiltrosPacientes, type Ordem, type Situacao } from "@/lib/supabase/pacientes";
 import { getProfissionais } from "@/lib/supabase/financeiro-dados";
@@ -42,6 +42,9 @@ export default async function PacientesPage({ searchParams }: { searchParams: Bu
     return `/app/pacientes${p.size ? `?${p}` : ""}`;
   };
   const podeImportar = role !== "medico";
+  const filtroDisparo = new URLSearchParams(
+    Object.entries(searchParams).filter(([k, v]) => v && ["busca", "situacao", "convenio", "profissional", "tag"].includes(k)) as [string, string][]
+  );
 
   return (
     <div className="mx-auto grid max-w-6xl grid-cols-[minmax(0,1fr)] gap-6 px-4 py-8 sm:px-5 md:px-8 md:py-10">
@@ -113,11 +116,15 @@ export default async function PacientesPage({ searchParams }: { searchParams: Bu
             <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-3 text-sm text-cinza-suave">
               <span>
                 <strong className="text-cinza-texto">{dados.total.toLocaleString("pt-BR")}</strong> paciente{dados.total === 1 ? "" : "s"}
+                {paginas > 1 && ` · página ${pagina} de ${paginas}`}
               </span>
-              {paginas > 1 && (
-                <span>
-                  Página {pagina} de {paginas}
-                </span>
+              {podeImportar && dados.total > 0 && filtros.situacao !== "arquivados" && (
+                <Link
+                  href={`/app/disparos/novo${filtroDisparo.size ? `?${filtroDisparo}` : ""}`}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-verde-menta px-3 py-1 text-xs font-semibold text-azul-medico hover:bg-teal/15"
+                >
+                  <Send className="size-3.5" /> Disparar para {filtroDisparo.size ? "este filtro" : "todos"}
+                </Link>
               )}
             </header>
 

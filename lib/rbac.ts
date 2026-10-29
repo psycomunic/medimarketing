@@ -30,6 +30,7 @@ import {
   Landmark,
   Contact,
   ListTodo,
+  Send,
 } from "lucide-react";
 import type { Role } from "@/lib/supabase/types";
 
@@ -44,6 +45,7 @@ export type ModuloId =
   | "atendimento"
   | "marketing"
   | "retencao"
+  | "disparos"
   | "academy"
   | "indicadores"
   | "financeiro"
@@ -162,6 +164,16 @@ export const MODULOS: readonly Modulo[] = [
     grupo: "operacao",
     resumo:
       "Caixa de entrada única de WhatsApp, Instagram e Facebook, ligada ao CRM.",
+  },
+  {
+    id: "disparos",
+    label: "Disparos",
+    href: "/app/disparos",
+    icone: Send,
+    papeis: OPERACAO,
+    fase: 1,
+    grupo: "crescimento",
+    resumo: "Campanhas de WhatsApp e e-mail para grupos de pacientes, com ritmo seguro e resultado medido.",
   },
   {
     id: "retencao",

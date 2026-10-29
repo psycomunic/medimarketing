@@ -189,6 +189,48 @@ export type TarefaPaciente = {
   created_at: string;
 };
 
+export type CanalDisparo = "whatsapp" | "email";
+/** marketing: só quem aceitou; cuidado: retorno e aniversário, todos menos descadastrados. */
+export type FinalidadeDisparo = "marketing" | "cuidado";
+export type StatusDisparo = "agendado" | "enviando" | "concluido" | "cancelado";
+export type StatusDestinatario = "pendente" | "programado" | "enviado" | "falhou" | "cancelado" | "ignorado";
+
+/** Campanha de mensagem para um segmento de pacientes. */
+export type Disparo = {
+  id: string;
+  organization_id: string;
+  nome: string;
+  canal: CanalDisparo;
+  finalidade: FinalidadeDisparo;
+  assunto: string | null;
+  mensagem: string;
+  filtros: Record<string, string>;
+  segmento_nome: string | null;
+  status: StatusDisparo;
+  inicio: string;
+  total: number;
+  criado_por: string | null;
+  cancelado_em: string | null;
+  concluido_em: string | null;
+  created_at: string;
+};
+
+export type DisparoDestinatario = {
+  id: string;
+  disparo_id: string;
+  organization_id: string;
+  paciente_id: string;
+  nome: string;
+  destino: string;
+  token: string;
+  previsto_para: string;
+  status: StatusDestinatario;
+  referencia: string | null;
+  erro: string | null;
+  processado_em: string | null;
+  created_at: string;
+};
+
 /** Filtros da lista de pacientes guardados com um nome. */
 export type SegmentoPacientes = {
   id: string;
@@ -1021,6 +1063,27 @@ export interface Database {
           concluida_por?: string | null;
         },
         Partial<TarefaPaciente>
+      >;
+      disparos: Tabela<
+        Disparo,
+        Omit<Disparo, "id" | "created_at" | "status" | "cancelado_em" | "concluido_em"> & {
+          id?: string;
+          status?: StatusDisparo;
+          cancelado_em?: string | null;
+          concluido_em?: string | null;
+        },
+        Partial<Disparo>
+      >;
+      disparo_destinatarios: Tabela<
+        DisparoDestinatario,
+        Omit<DisparoDestinatario, "id" | "created_at" | "status" | "referencia" | "erro" | "processado_em"> & {
+          id?: string;
+          status?: StatusDestinatario;
+          referencia?: string | null;
+          erro?: string | null;
+          processado_em?: string | null;
+        },
+        Partial<DisparoDestinatario>
       >;
       segmentos_pacientes: Tabela<
         SegmentoPacientes,

@@ -1,4 +1,5 @@
 import "server-only";
+import { processarDisparos } from "@/lib/disparos";
 import { gerarMensalidades } from "@/lib/financeiro/rotina";
 
 import { createAdminClient, adminDisponivel } from "@/lib/supabase/admin";
@@ -52,6 +53,7 @@ export type RelatorioRotina = {
   resumos: number;
   alertasVespera: number;
   mensalidades: number;
+  disparos: number;
   fila: RelatorioFila;
 };
 
@@ -62,6 +64,7 @@ export async function rodarRotina(): Promise<RelatorioRotina> {
     resumos: 0,
     alertasVespera: 0,
     mensalidades: 0,
+    disparos: 0,
     fila: { enviados: 0, falhas: 0, ignorados: 0 },
   };
   if (!adminDisponivel()) return relatorio;
@@ -82,6 +85,8 @@ export async function rodarRotina(): Promise<RelatorioRotina> {
     ["resumos", () => resumosDoDia((orgs ?? []).map((o) => o.id))],
     ["alertasVespera", () => alertasDeVespera((orgs ?? []).map((o) => o.id))],
     ["mensalidades", gerarMensalidades],
+    // Campanhas: programa só o que vence nos próximos minutos
+    ["disparos", processarDisparos],
   ];
   for (const [nome, etapa] of etapas) {
     try {

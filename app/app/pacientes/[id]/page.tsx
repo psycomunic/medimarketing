@@ -74,7 +74,7 @@ export default async function FichaPacientePage({ params }: { params: { id: stri
   // Quem está usando sempre aparece, mesmo sendo da agência
   if (!equipe.some((u) => u.id === profile.id)) equipe.unshift({ id: profile.id, nome: profile.nome ?? "Eu" });
   const autores = Object.fromEntries(usuarios.map((u) => [u.id, u.nome ?? "Equipe"]));
-  const { paciente: p, consultas, receitas, avaliacoes, mensagens } = ficha;
+  const { paciente: p, consultas, receitas, avaliacoes, mensagens, campanhas } = ficha;
   const nomes = Object.fromEntries(profissionais.map((x) => [x.id, x.nome]));
   const anos = idade(p.nascimento);
   const ticket = p.consultas_realizadas ? p.total_gasto / p.consultas_realizadas : 0;
@@ -116,6 +116,12 @@ export default async function FichaPacientePage({ params }: { params: { id: stri
         titulo: `Follow-up feito: ${t.titulo}`,
         detalhe: [t.resultado && `“${t.resultado}”`, t.concluida_por && autores[t.concluida_por]].filter(Boolean).join(" · ") || null,
       })),
+    ...campanhas.map<Evento>((c) => ({
+      quando: c.quando,
+      tipo: "mensagem",
+      titulo: `Recebeu a campanha “${c.nome}”`,
+      detalhe: c.canal === "email" ? "E-mail" : "WhatsApp",
+    })),
     ...mensagens.map<Evento>((m) => ({
       quando: m.enviado_em ?? m.created_at,
       tipo: "mensagem",

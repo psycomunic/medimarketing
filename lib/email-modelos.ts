@@ -638,6 +638,30 @@ export function emailAgendaDoDia(
 }
 
 /** Consulta cancelada, para o paciente. Sem culpa e com o caminho de volta. */
+/**
+ * Campanha da clínica para pacientes (disparo). O texto é o da equipe,
+ * com quebras de linha preservadas; o rodapé traz o descadastro.
+ */
+export function emailDisparo(m: MarcaEmail, d: { assunto: string; texto: string; linkSair: string }): Modelo {
+  const paragrafos = esc(d.texto)
+    .split(/\n{2,}/)
+    .map((p) => `<p style="margin:0 0 14px;font-size:15px;color:${TEXTO};line-height:1.65;">${p.replace(/\n/g, "<br>")}</p>`)
+    .join("");
+  const corpo = `
+  <tr><td style="padding:24px 32px 8px;">${paragrafos}</td></tr>
+  <tr><td style="padding:0 32px 24px;">
+    <p style="margin:0;font-size:12px;color:${CINZA};line-height:1.6;">
+      Você recebeu este e-mail por ser paciente da ${esc(m.clinica)}.
+      <a href="${esc(d.linkSair)}" style="color:${CINZA};">Não quero mais receber</a>.
+    </p>
+  </td></tr>`;
+  return {
+    assunto: d.assunto,
+    html: layout(m, corpo),
+    texto: `${d.texto}\n\nNao quer mais receber? ${d.linkSair}`,
+  };
+}
+
 /** Pesquisa de satisfação (NPS) depois da consulta. */
 export function emailPacientePesquisa(m: MarcaEmail, d: { paciente: string; link: string }): Modelo {
   const corpo = `

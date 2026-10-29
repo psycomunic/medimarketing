@@ -2326,3 +2326,78 @@ create policy "segmentos_insert" on public.segmentos_pacientes for insert to aut
 drop policy if exists "segmentos_delete" on public.segmentos_pacientes;
 create policy "segmentos_delete" on public.segmentos_pacientes for delete to authenticated
   using (criado_por = auth.uid() or (organization_id = public.minha_org() and public.is_gestor()) or public.is_super_admin());
+
+-- ============================================================
+-- 2026-10-29 — Pacientes: disparos (Fase 3)
+-- Campanha de WhatsApp ou e-mail para um segmento de pacientes.
+-- Cada destinatário ganha um horário previsto (intervalo aleatório,
+-- horário comercial e limite por dia); a rotina de 10 em 10 minutos
+-- programa só o que vence a seguir, então cancelar para na hora.
+-- ============================================================
+create table if not exists public.disparos (
+  id                  uuid primary key default uuid_generate_v4(),
+  organization_id     uuid not null references public.organizations(id) on delete cascade,
+  nome                text not null check (length(trim(nome)) > 0),
+  canal               text not null check (canal in ('whatsapp', 'email')),
+  -- marketing: só quem aceitou; cuidado: retorno/aniversário, todos menos descadastrados
+  finalidade          text not null default 'marketing' check (finalidade in ('marketing', 'cuidado')),
+  assunto             text,
+  mensagem            text not null check (length(trim(mensagem)) > 0),
+  filtros             jsonb not null default '{}',
+  segmento_nome       text,
+  status              text not null default 'agendado'
+                        check (status in ('agendado', 'enviando', 'concluido', 'cancelado')),
+  inicio              timestamptz not null default now(),
+  total               integer not null default 0,
+  criado_por          uuid references public.profiles(id) on delete set null,
+  cancelado_em        timestamptz,
+  concluido_em        timestamptz,
+  created_at          timestamptz not null default now()
+);
+create index if not exists idx_disparos_org on public.disparos (organization_id, created_at desc);
+
+create table if not exists public.disparo_destinatarios (
+  id              uuid primary key default uuid_generate_v4(),
+  disparo_id      uuid not null references public.disparos(id) on delete cascade,
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  paciente_id     uuid not null references public.pacientes(id) on delete cascade,
+  nome            text not null,
+  destino         text not null,
+  -- Segredo do link "não quero mais receber"
+  token           text not null unique,
+  previsto_para   timestamptz not null,
+  status          text not null default 'pendente'
+                    check (status in ('pendente', 'programado', 'enviado', 'falhou', 'cancelado', 'ignorado')),
+  referencia      text,
+  erro            text,
+  processado_em   timestamptz,
+  created_at      timestamptz not null default now(),
+  unique (disparo_id, paciente_id)
+);
+create index if not exists idx_destinatarios_fila on public.disparo_destinatarios (status, previsto_para);
+create index if not exists idx_destinatarios_disparo on public.disparo_destinatarios (disparo_id);
+create index if not exists idx_destinatarios_paciente on public.disparo_destinatarios (paciente_id, created_at desc);
+
+alter table public.disparos enable row level security;
+alter table public.disparo_destinatarios enable row level security;
+
+-- Dono e atendimento criam e acompanham; o envio em si roda no servidor
+drop policy if exists "disparos_select" on public.disparos;
+create policy "disparos_select" on public.disparos for select to authenticated
+  using ((organization_id = public.minha_org() and public.is_operacional()) or public.is_super_admin());
+drop policy if exists "disparos_insert" on public.disparos;
+create policy "disparos_insert" on public.disparos for insert to authenticated
+  with check (organization_id = public.minha_org() and public.is_operacional());
+drop policy if exists "disparos_update" on public.disparos;
+create policy "disparos_update" on public.disparos for update to authenticated
+  using ((organization_id = public.minha_org() and public.is_operacional()) or public.is_super_admin());
+
+drop policy if exists "destinatarios_select" on public.disparo_destinatarios;
+create policy "destinatarios_select" on public.disparo_destinatarios for select to authenticated
+  using ((organization_id = public.minha_org() and public.is_operacional()) or public.is_super_admin());
+drop policy if exists "destinatarios_insert" on public.disparo_destinatarios;
+create policy "destinatarios_insert" on public.disparo_destinatarios for insert to authenticated
+  with check (organization_id = public.minha_org() and public.is_operacional());
+drop policy if exists "destinatarios_update" on public.disparo_destinatarios;
+create policy "destinatarios_update" on public.disparo_destinatarios for update to authenticated
+  using ((organization_id = public.minha_org() and public.is_operacional()) or public.is_super_admin());
