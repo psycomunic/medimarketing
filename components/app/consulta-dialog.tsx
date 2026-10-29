@@ -114,7 +114,7 @@ export function ConsultaDialog({
         </DialogHeader>
 
         {/* Dados em duas colunas */}
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
           <Bloco titulo="Paciente">
             <Item icon={User} label="Nome" valor={consulta.paciente_nome} />
             <Item
@@ -277,11 +277,11 @@ function Bloco({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-lg bg-branco-clinico p-4">
+    <div className="min-w-0 rounded-lg bg-branco-clinico p-4">
       <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-teal">
         {titulo}
       </p>
-      <div className="grid gap-2 text-sm">{children}</div>
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-2 text-sm">{children}</div>
     </div>
   );
 }
@@ -299,7 +299,7 @@ function Item({
     <div className="flex items-start gap-2">
       <Icon className="mt-0.5 size-4 shrink-0 text-teal" />
       <span className="w-20 shrink-0 text-cinza-suave">{label}</span>
-      <span className="min-w-0 flex-1 break-words font-medium text-cinza-texto">
+      <span className="min-w-0 flex-1 font-medium text-cinza-texto [overflow-wrap:anywhere]">
         {valor && valor.trim() ? valor : <span className="text-cinza-suave/60">—</span>}
       </span>
     </div>
