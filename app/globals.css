@@ -58,3 +58,19 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #b3d6d3;
 }
+
+/* Impressão e PDF: folha A4 branca, cores preservadas em todo o painel */
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm 12mm 14mm;
+  }
+  html,
+  body {
+    background: #fff !important;
+  }
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

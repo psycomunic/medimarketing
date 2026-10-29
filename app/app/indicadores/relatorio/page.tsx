@@ -1,5 +1,3 @@
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
 import { exigirModulo } from "@/lib/acesso";
 import { getIndicadores } from "@/lib/supabase/indicadores";
 import { getPlano } from "@/lib/supabase/evolucao";
@@ -21,25 +19,18 @@ export default async function RelatorioIndicadoresPage({
   const ultimo = meses[meses.length - 1]?.mes;
   const mes = /^\d{4}-\d{2}-01$/.test(searchParams.mes ?? "") ? searchParams.mes! : ultimo;
 
+  if (!mes) {
+    return <p className="mx-auto max-w-3xl px-5 py-10 text-cinza-suave">Ainda não há meses lançados.</p>;
+  }
   return (
-    <div className="mx-auto max-w-5xl px-5 py-8 md:px-8 md:py-10 print:p-0">
-      <Link
-        href="/app/indicadores"
-        className="inline-flex items-center gap-1.5 text-sm font-medium text-cinza-suave hover:text-azul-medico print:hidden"
-      >
-        <ArrowLeft className="size-4" /> Indicadores
-      </Link>
-      {mes ? (
-        <RelatorioMensal
-          clinica={organizacao?.nome ?? "Clínica"}
-          meses={meses}
-          plano={plano}
-          mes={mes}
-          hrefMes={(m) => `/app/indicadores/relatorio?mes=${m}`}
-        />
-      ) : (
-        <p className="mt-8 text-cinza-suave">Ainda não há meses lançados.</p>
-      )}
-    </div>
+    <RelatorioMensal
+      clinica={organizacao?.nome ?? "Clínica"}
+      logoUrl={organizacao?.logo_url ?? null}
+      meses={meses}
+      plano={plano}
+      mes={mes}
+      hrefMes={(m) => `/app/indicadores/relatorio?mes=${m}`}
+      voltar={{ href: "/app/indicadores", rotulo: "Indicadores" }}
+    />
   );
 }

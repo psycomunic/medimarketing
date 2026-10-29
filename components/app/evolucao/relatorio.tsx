@@ -2,8 +2,9 @@ import Link from "next/link";
 import { calcularKpis, formatarMultiplicador, formatarNumero, formatarPercentual, formatarReais, mesPorExtenso, rotuloMes, variacao } from "@/lib/indicadores";
 import { calcularEvolucao } from "@/lib/evolucao";
 import type { IndicadorMensal, PlanoCliente } from "@/lib/supabase/types";
-import { Logo } from "@/components/logo";
-import { BotaoImprimir } from "@/components/app/formularios/botao-imprimir";
+import { Documento, KpisDoc, NotaDoc, SecaoDoc, TabelaDoc } from "@/components/relatorio/documento";
+import { BarrasAgrupadas } from "@/components/graficos/graficos";
+import { COR } from "@/components/graficos/formato";
 import { PainelEvolucao } from "@/components/app/evolucao/painel-evolucao";
 import { cn } from "@/lib/utils";
 
@@ -21,24 +22,61 @@ const AUTOMATICOS = [
  */
 export function RelatorioMensal({
   clinica,
+  logoUrl = null,
   meses,
   plano,
   mes,
   hrefMes,
+  voltar,
 }: {
   clinica: string;
+  logoUrl?: string | null;
   meses: IndicadorMensal[];
   plano: PlanoCliente | null;
   /** "YYYY-MM-01" */
   mes: string;
   /** Monta o link de outro mês do seletor. */
   hrefMes: (mes: string) => string;
+  voltar: { href: string; rotulo: string };
 }) {
   const emOrdem = [...meses].sort((a, b) => a.mes.localeCompare(b.mes));
   const ate = emOrdem.filter((m) => m.mes <= mes);
   const atual = ate[ate.length - 1];
+
+  const seletor = (
+    <nav aria-label="Mês do relatório" className="flex max-w-full flex-wrap gap-1.5">
+      {emOrdem
+        .slice(-6)
+        .reverse()
+        .map((m) => (
+          <Link
+            key={m.mes}
+            href={hrefMes(m.mes)}
+            aria-current={m.mes === mes ? "page" : undefined}
+            className={cn(
+              "rounded-full px-3 py-1.5 text-xs font-semibold",
+              m.mes === mes ? "bg-azul-medico text-white" : "bg-white text-cinza-suave hover:text-azul-medico"
+            )}
+          >
+            {rotuloMes(m.mes)}
+          </Link>
+        ))}
+    </nav>
+  );
+
   if (!atual || atual.mes !== mes) {
-    return <p className="mt-8 text-cinza-suave">Não há números lançados para este mês.</p>;
+    return (
+      <Documento
+        titulo="Relatório mensal de resultados"
+        subtitulo={mesPorExtenso(mes)}
+        marca={{ nome: clinica, logoUrl }}
+        voltar={voltar}
+        nomeArquivo={`Relatorio mensal ${clinica}`}
+        acoes={seletor}
+      >
+        <p className="text-sm text-cinza-suave">Não há números lançados para este mês.</p>
+      </Documento>
+    );
   }
 
   const anterior = ate[ate.length - 2] ?? null;
@@ -59,86 +97,82 @@ export function RelatorioMensal({
 
   const comentario = atual.observacao && !AUTOMATICOS.includes(atual.observacao) ? atual.observacao : null;
   const estimados = atual.campos_estimados ?? [];
+  const doze = ate.slice(-12);
+  const tom = (a: number, b?: number, menor?: boolean): "bom" | "ruim" | "neutro" =>
+    !b ? "neutro" : (menor ? a <= b : a >= b) ? "bom" : "ruim";
+  const nota = (a: number, b?: number) => {
+    if (!b) return "sem mês anterior";
+    const v = variacao(a, b);
+    return `${v >= 0 ? "▲" : "▼"} ${formatarPercentual(Math.abs(v))} no mês`;
+  };
 
   return (
-    <article className="mt-6">
-      <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
-        <nav aria-label="Mês do relatório" className="flex flex-wrap gap-1.5">
-          {emOrdem
-            .slice(-12)
-            .reverse()
-            .map((m) => (
-              <Link
-                key={m.mes}
-                href={hrefMes(m.mes)}
-                aria-current={m.mes === mes ? "page" : undefined}
-                className={cn(
-                  "rounded-full px-3 py-1.5 text-xs font-semibold",
-                  m.mes === mes ? "bg-azul-medico text-white" : "bg-white text-cinza-suave hover:text-azul-medico"
-                )}
-              >
-                {rotuloMes(m.mes)}
-              </Link>
-            ))}
-        </nav>
-        <BotaoImprimir />
-      </div>
+    <Documento
+      titulo="Relatório mensal de resultados"
+      subtitulo={mesPorExtenso(mes)}
+      emitidoPara="Preparado pela equipe Medi Marketing"
+      marca={{ nome: clinica, logoUrl }}
+      voltar={voltar}
+      nomeArquivo={`Relatorio mensal ${clinica} ${mes.slice(0, 7)}`}
+      acoes={seletor}
+    >
+      <KpisDoc
+        itens={[
+          { rotulo: "Faturamento", valor: formatarReais(k.faturamento), nota: nota(k.faturamento, kAnt?.faturamento), tom: tom(k.faturamento, kAnt?.faturamento), destaque: true },
+          { rotulo: "Retorno (ROI)", valor: formatarMultiplicador(k.roi), nota: nota(k.roi, kAnt?.roi), tom: tom(k.roi, kAnt?.roi) },
+          { rotulo: "Leads", valor: formatarNumero(k.leads), nota: nota(k.leads, kAnt?.leads), tom: tom(k.leads, kAnt?.leads) },
+          { rotulo: "Consultas realizadas", valor: formatarNumero(k.comparecimentos), nota: nota(k.comparecimentos, kAnt?.comparecimentos), tom: tom(k.comparecimentos, kAnt?.comparecimentos) },
+        ]}
+      />
 
-      <header className="mt-6 rounded-lg border border-border bg-white p-6 shadow-soft print:border-0 print:p-0 print:shadow-none">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <Logo href="/" altura={28} />
-          <span className="text-xs font-semibold uppercase tracking-[0.14em] text-teal">Relatório mensal</span>
-        </div>
-        <h1 className="mt-5 text-2xl md:text-3xl">{mesPorExtenso(mes)}</h1>
-        <p className="mt-1 text-cinza-suave">{clinica}</p>
-      </header>
-
-      <section className="mt-6 overflow-hidden rounded-lg border border-border bg-white shadow-soft print:break-inside-avoid">
-        <h2 className="border-b border-border px-6 py-4 text-lg font-semibold text-azul-medico">O mês em números</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[34rem] text-sm">
-            <thead>
-              <tr className="text-left text-xs uppercase tracking-wide text-cinza-suave">
-                <th className="px-6 py-3 font-semibold">Indicador</th>
-                <th className="px-4 py-3 text-right font-semibold">{rotuloMes(mes)}</th>
-                <th className="px-4 py-3 text-right font-semibold">
-                  {anterior ? `vs ${rotuloMes(anterior.mes)}` : "Mês anterior"}
-                </th>
-                <th className="px-6 py-3 text-right font-semibold">vs marco zero</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {linhas.map((l) => (
-                <tr key={l.rotulo}>
-                  <td className="px-6 py-3 text-cinza-texto">{l.rotulo}</td>
-                  <td className="px-4 py-3 text-right font-semibold text-azul-medico">{l.f(l.atual)}</td>
-                  <td className="px-4 py-3 text-right">
-                    <Delta atual={l.atual} referencia={l.ant} menorMelhor={l.menorMelhor} />
-                  </td>
-                  <td className="px-6 py-3 text-right">
-                    <Delta atual={l.atual} referencia={l.base} menorMelhor={l.menorMelhor} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <p className="border-t border-border px-6 py-3 text-sm text-cinza-suave">
+      <SecaoDoc titulo="O mês em números" descricao="Comparado com o mês anterior e com o marco zero (antes do acompanhamento).">
+        <TabelaDoc
+          colunas={[
+            { titulo: "Indicador" },
+            { titulo: rotuloMes(mes), alinhar: "dir" },
+            { titulo: anterior ? `vs ${rotuloMes(anterior.mes)}` : "Mês anterior", alinhar: "dir" },
+            { titulo: "vs marco zero", alinhar: "dir" },
+          ]}
+          linhas={linhas.map((l) => [
+            l.rotulo,
+            <strong key="v" className="text-azul-medico">
+              {l.f(l.atual)}
+            </strong>,
+            <Delta key="a" atual={l.atual} referencia={l.ant} menorMelhor={l.menorMelhor} />,
+            <Delta key="b" atual={l.atual} referencia={l.base} menorMelhor={l.menorMelhor} />,
+          ])}
+        />
+        <p className="mt-2 text-xs text-cinza-suave">
           De cada 10 leads, {(k.taxaLeadPaciente / 10).toFixed(1).replace(".", ",")} viraram consulta realizada
           {kAnt && ` (no mês anterior, ${(kAnt.taxaLeadPaciente / 10).toFixed(1).replace(".", ",")})`}.
           {estimados.length > 0 && " Alguns números deste mês foram informados como estimativa."}
         </p>
-      </section>
+      </SecaoDoc>
 
       {comentario && (
-        <section className="mt-6 rounded-lg border border-teal/30 bg-verde-menta/50 p-6 print:break-inside-avoid">
-          <h2 className="text-base font-semibold text-azul-medico">Leitura da MediMarketing</h2>
-          <p className="mt-2 whitespace-pre-wrap leading-relaxed text-cinza-texto">{comentario}</p>
-        </section>
+        <NotaDoc titulo="Leitura da Medi Marketing">
+          <p className="whitespace-pre-wrap">{comentario}</p>
+        </NotaDoc>
       )}
 
-      <PainelEvolucao meses={ate} plano={plano} />
-    </article>
+      {doze.length > 1 && (
+        <SecaoDoc titulo="Investimento e faturamento" descricao={`Últimos ${doze.length} meses.`}>
+          <BarrasAgrupadas
+            categorias={doze.map((m) => rotuloMes(m.mes))}
+            barras={[
+              { nome: "Investimento", cor: COR.despesa, valores: doze.map((m) => Number(m.investimento)) },
+              { nome: "Faturamento", cor: COR.receita, valores: doze.map((m) => Number(m.faturamento)) },
+            ]}
+            destaque={doze.length - 1}
+            altura={220}
+          />
+        </SecaoDoc>
+      )}
+
+      <div className="doc-bloco">
+        <PainelEvolucao meses={ate} plano={plano} />
+      </div>
+    </Documento>
   );
 }
 

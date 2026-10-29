@@ -535,3 +535,21 @@ export async function reabrirRepasse(id: string): Promise<ActionResult> {
   revalidar();
   return { ok: true };
 }
+
+export type PagamentoDaConsulta = {
+  lancamento: import("@/lib/supabase/types").Lancamento | null;
+  /** Falso para o médico: ele vê a agenda, não o caixa. */
+  podeRegistrar: boolean;
+};
+
+/** Situação do pagamento de uma consulta, para a ficha na agenda. */
+export async function lerPagamentoConsulta(consultaId: string): Promise<PagamentoDaConsulta | null> {
+  const ctx = await contexto();
+  if (ctx.estado !== "ok") return null;
+  const podeRegistrar = OPERACIONAL.includes(ctx.profile.role);
+  if (!podeRegistrar || !adminDisponivel()) return { lancamento: null, podeRegistrar: false };
+  const admin = createAdminClient();
+  const { data } = await admin.from("lancamentos").select("*").eq("consulta_id", consultaId).maybeSingle();
+  if (data && ctx.profile.role !== "super_admin" && data.organization_id !== ctx.profile.organization_id) return null;
+  return { lancamento: (data as import("@/lib/supabase/types").Lancamento | null) ?? null, podeRegistrar };
+}

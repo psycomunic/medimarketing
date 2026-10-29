@@ -1,6 +1,4 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
 import { exigirModulo } from "@/lib/acesso";
 import { getCliente, getIndicadores } from "@/lib/supabase/indicadores";
 import { getPlano } from "@/lib/supabase/evolucao";
@@ -23,25 +21,18 @@ export default async function RelatorioClientePage({
   const ultimo = meses[meses.length - 1]?.mes;
   const mes = /^\d{4}-\d{2}-01$/.test(searchParams.mes ?? "") ? searchParams.mes! : ultimo;
 
+  if (!mes) {
+    return <p className="mx-auto max-w-3xl px-5 py-10 text-cinza-suave">Ainda não há meses lançados para esta clínica.</p>;
+  }
   return (
-    <div className="mx-auto max-w-5xl px-5 py-8 md:px-8 md:py-10 print:p-0">
-      <Link
-        href={`/app/clinicas/${cliente.id}`}
-        className="inline-flex items-center gap-1.5 text-sm font-medium text-cinza-suave hover:text-azul-medico print:hidden"
-      >
-        <ArrowLeft className="size-4" /> {cliente.nome}
-      </Link>
-      {mes ? (
-        <RelatorioMensal
-          clinica={cliente.nome}
-          meses={meses}
-          plano={plano}
-          mes={mes}
-          hrefMes={(m) => `/app/clinicas/${cliente.id}/relatorio?mes=${m}`}
-        />
-      ) : (
-        <p className="mt-8 text-cinza-suave">Ainda não há meses lançados para esta clínica.</p>
-      )}
-    </div>
+    <RelatorioMensal
+      clinica={cliente.nome}
+      logoUrl={cliente.logo_url ?? null}
+      meses={meses}
+      plano={plano}
+      mes={mes}
+      hrefMes={(m) => `/app/clinicas/${cliente.id}/relatorio?mes=${m}`}
+      voltar={{ href: `/app/clinicas/${cliente.id}`, rotulo: cliente.nome }}
+    />
   );
 }

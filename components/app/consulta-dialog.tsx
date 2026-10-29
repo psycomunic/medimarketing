@@ -40,6 +40,7 @@ import {
 } from "@/lib/agenda";
 import { atualizarStatus, salvarObservacao } from "@/lib/actions/consultas";
 import { AnexosManager } from "@/components/app/anexos-manager";
+import { PagamentoConsulta } from "@/components/app/financeiro/pagamento-consulta";
 import {
   BlocoConfirmacao,
   type ConfirmacaoDaConsulta,
@@ -176,6 +177,14 @@ export function ConsultaDialog({
           telefone={consulta.paciente_telefone}
           envioAutomatico={envioAutomatico}
           semClinica={!consulta.organization_id}
+          demo={demo}
+        />
+
+        {/* Pagamento: some para o médico e no modo demonstração */}
+        <PagamentoConsulta
+          consultaId={consulta.id}
+          valor={consulta.valor != null ? Number(consulta.valor) : null}
+          convenio={consulta.convenio}
           demo={demo}
         />
 

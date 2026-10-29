@@ -10,17 +10,20 @@ import { PreferenciasAviso } from "@/components/app/avisos/preferencias";
 import { getPreferencia } from "@/lib/supabase/envios";
 import { envioAutomatico } from "@/lib/envio";
 import { createClient } from "@/lib/supabase/server";
+import { getMeusRepasses } from "@/lib/supabase/financeiro-dados";
+import { MeusRepasses } from "@/components/app/financeiro/listas-simples";
 import { supabaseConfigurado } from "@/lib/supabase/queries";
 
 export const metadata = { title: "Meu perfil" };
 
 export default async function PerfilPage() {
   const { profile, organizacao, role } = await exigirSessao();
-  const [demo, whatsapp, preferencia, email] = await Promise.all([
+  const [demo, whatsapp, preferencia, email, repasses] = await Promise.all([
     emModoDemo(),
     listarConexoesMerge(),
     getPreferencia(profile.id),
     emailDaConta(),
+    role === "medico" ? getMeusRepasses(profile.id) : Promise.resolve([]),
   ]);
 
   const modulos = modulosDoPapel(role);
@@ -125,6 +128,8 @@ export default async function PerfilPage() {
           />
         </div>
       )}
+
+      {role === "medico" && <MeusRepasses repasses={repasses} />}
 
       <FormSenha demo={demo} />
 
