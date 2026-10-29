@@ -43,7 +43,7 @@ export function Sidebar({
             assinatura no rodapé. Sem clínica (super admin), o contrário. */}
         {organizacao ? (
           logoUrl ? (
-            // Com logo, ela é a estrela: grande, e o nome logo abaixo
+            // Com logo, ela já diz quem é: o nome fica só no texto alternativo
             <Link href="/app" className="block" aria-label={organizacao}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -51,9 +51,6 @@ export function Sidebar({
                 alt={organizacao}
                 className="h-9 w-auto max-w-[160px] object-contain object-left"
               />
-              <span className="mt-1.5 block truncate text-xs font-semibold text-azul-medico">
-                {organizacao}
-              </span>
             </Link>
           ) : (
             <MarcaClinica nome={organizacao} logoUrl={null} href="/app" />
