@@ -1952,3 +1952,59 @@ create policy "faturas_select" on public.faturas for select to authenticated
 drop policy if exists "faturas_admin" on public.faturas;
 create policy "faturas_admin" on public.faturas for all to authenticated
   using (public.is_super_admin()) with check (public.is_super_admin());
+
+
+-- ---------------------------------------------------------------------
+-- 2026-10-29 — Histórico de caixa (fechamentos importados)
+--
+-- Para clínicas que chegam com o financeiro de outro sistema ou
+-- planilha: o fechamento de cada mês (entradas, saídas e saldo) e a
+-- composição do período (receitas por fonte, saídas por categoria).
+-- Fica separado dos lançamentos do dia a dia de propósito: regime de
+-- caixa inclui distribuição de lucros, empréstimos e investimentos,
+-- que não são despesa da clínica e distorceriam o resultado (DRE).
+-- Os dados de cada clínica entram por fora deste arquivo.
+-- ---------------------------------------------------------------------
+create table if not exists public.fechamentos_financeiros (
+  id                  uuid primary key default gen_random_uuid(),
+  organization_id     uuid not null references public.organizations(id) on delete cascade,
+  mes                 date not null,
+  entradas            numeric(14,2),
+  saidas              numeric(14,2),
+  saldo_final         numeric(14,2),
+  receita_operacional numeric(14,2),
+  observacao          text,
+  origem              text not null default 'importado',
+  created_at          timestamptz not null default now(),
+  unique (organization_id, mes)
+);
+
+create table if not exists public.composicoes_financeiras (
+  id              uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  inicio          date not null,
+  fim             date not null,
+  tipo            text not null check (tipo in ('receita', 'saida')),
+  item            text not null,
+  valor           numeric(14,2) not null,
+  percentual      numeric(6,2),
+  natureza        text not null default 'operacional'
+                    check (natureza in ('convenio', 'particular', 'outras', 'operacional', 'socios', 'financeiro', 'investimento')),
+  estimado        boolean not null default false,
+  observacao      text,
+  ordem           smallint not null default 0,
+  unique (organization_id, inicio, fim, tipo, item)
+);
+
+alter table public.fechamentos_financeiros enable row level security;
+alter table public.composicoes_financeiras enable row level security;
+
+drop policy if exists "fechamentos_all" on public.fechamentos_financeiros;
+create policy "fechamentos_all" on public.fechamentos_financeiros for all to authenticated
+  using ((organization_id = public.minha_org() and public.is_gestor()) or public.is_super_admin())
+  with check ((organization_id = public.minha_org() and public.is_gestor()) or public.is_super_admin());
+
+drop policy if exists "composicoes_all" on public.composicoes_financeiras;
+create policy "composicoes_all" on public.composicoes_financeiras for all to authenticated
+  using ((organization_id = public.minha_org() and public.is_gestor()) or public.is_super_admin())
+  with check ((organization_id = public.minha_org() and public.is_gestor()) or public.is_super_admin());

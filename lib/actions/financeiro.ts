@@ -553,3 +553,55 @@ export async function lerPagamentoConsulta(consultaId: string): Promise<Pagament
   if (data && ctx.profile.role !== "super_admin" && data.organization_id !== ctx.profile.organization_id) return null;
   return { lancamento: (data as import("@/lib/supabase/types").Lancamento | null) ?? null, podeRegistrar };
 }
+
+/* --------------------------- Histórico de caixa --------------------------- */
+
+const fechamentoSchema = z.object({
+  organizationId: z.string().optional(),
+  mes: z.string().regex(/^\d{4}-\d{2}$/, "Mês inválido."),
+  entradas: z.coerce.number().min(0).max(100_000_000).nullable(),
+  saidas: z.coerce.number().min(0).max(100_000_000).nullable(),
+  saldoFinal: z.coerce.number().min(-100_000_000).max(100_000_000).nullable(),
+  receitaOperacional: z.coerce.number().min(0).max(100_000_000).nullable(),
+  observacao: z.string().trim().max(300).optional().or(z.literal("")),
+});
+
+export type FechamentoInput = z.input<typeof fechamentoSchema>;
+
+/** Lança ou corrige o fechamento de caixa de um mês. */
+export async function salvarFechamento(input: FechamentoInput): Promise<ActionResult> {
+  const p = fechamentoSchema.safeParse(input);
+  if (!p.success) return { ok: false, erro: p.error.errors[0]?.message ?? "Dados inválidos." };
+  const ctx = await contexto(GESTAO);
+  if (ctx.estado !== "ok") return bloqueio(ctx);
+  const d = p.data;
+  const orgId = organizacaoAlvo(ctx.profile, d.organizationId);
+  if (!orgId) return { ok: false, erro: "Clínica inválida." };
+  const { error } = await ctx.supabase.from("fechamentos_financeiros").upsert(
+    {
+      organization_id: orgId,
+      mes: `${d.mes}-01`,
+      entradas: d.entradas,
+      saidas: d.saidas,
+      saldo_final: d.saldoFinal,
+      receita_operacional: d.receitaOperacional,
+      observacao: d.observacao || null,
+      origem: "manual",
+    },
+    { onConflict: "organization_id,mes" }
+  );
+  if (error) return erroBanco(error, "Não foi possível salvar o fechamento.");
+  revalidar();
+  revalidatePath("/app/clinicas", "layout");
+  return { ok: true };
+}
+
+export async function excluirFechamento(id: string): Promise<ActionResult> {
+  const ctx = await contexto(GESTAO);
+  if (ctx.estado !== "ok") return bloqueio(ctx);
+  const { error } = await ctx.supabase.from("fechamentos_financeiros").delete().eq("id", id);
+  if (error) return erroBanco(error, "Não foi possível excluir.");
+  revalidar();
+  revalidatePath("/app/clinicas", "layout");
+  return { ok: true };
+}

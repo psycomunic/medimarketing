@@ -519,8 +519,11 @@ export function Cascata({ etapas, altura = 260 }: { etapas: Etapa[]; altura?: nu
                   strokeDasharray="2 3"
                 />
               )}
-              <rect x={x} y={topo} width={larg} height={h} rx={4} fill={cor} />
-              {(b.tipo === "total" || b.valor !== 0) && (
+              <rect x={x} y={topo} width={larg} height={h} rx={4} fill={cor}>
+                <title>{`${b.nome}: ${b.tipo === "menos" ? "−" : b.tipo === "mais" ? "+" : ""}${reais(Math.abs(b.tipo === "total" ? b.ate : b.valor))}`}</title>
+              </rect>
+              {/* Estreito demais: só os totais levam número; o resto aparece ao passar o mouse */}
+              {(b.tipo === "total" || (b.valor !== 0 && banda >= 52)) && (
                 <text x={x + larg / 2} y={topo - 6} textAnchor="middle" fontSize={banda < 70 ? 10 : 11} fontWeight={600} fill={COR.texto}>
                   {b.tipo === "menos" ? "−" : b.tipo === "mais" ? "+" : ""}
                   {reaisCurto(Math.abs(b.tipo === "total" ? b.ate : b.valor))}

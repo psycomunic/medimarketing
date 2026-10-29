@@ -10,6 +10,7 @@ const ABAS = [
   { href: "/app/financeiro/receitas", rotulo: "Receitas" },
   { href: "/app/financeiro/despesas", rotulo: "Despesas" },
   { href: "/app/financeiro/caixa", rotulo: "Fluxo de caixa" },
+  { href: "/app/financeiro/historico", rotulo: "Histórico de caixa", semMes: true },
   { href: "/app/financeiro/convenios", rotulo: "Convênios" },
   { href: "/app/financeiro/repasses", rotulo: "Repasses" },
   { href: "/app/financeiro/resultado", rotulo: "Resultado (DRE)" },

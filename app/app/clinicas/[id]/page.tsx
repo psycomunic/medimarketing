@@ -73,13 +73,20 @@ export default async function ClientePage({ params }: { params: { id: string } }
             </p>
           </div>
         </div>
-        {meses.length > 0 && (
+        <div className="flex flex-wrap gap-2">
           <Button asChild variant="outline" size="sm">
-            <Link href={`/app/clinicas/${cliente.id}/relatorio`}>
-              <FileText /> Relatório do mês
+            <Link href={`/app/clinicas/${cliente.id}/historico`}>
+              <FileText /> Histórico de caixa
             </Link>
           </Button>
-        )}
+          {meses.length > 0 && (
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/app/clinicas/${cliente.id}/relatorio`}>
+                <FileText /> Relatório do mês
+              </Link>
+            </Button>
+          )}
+        </div>
       </header>
 
       <section className="mt-6 flex flex-col gap-3 rounded-lg border border-border bg-white p-5 shadow-soft sm:flex-row sm:items-center sm:justify-between">

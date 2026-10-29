@@ -6,6 +6,8 @@
  */
 import { DEMO_ORG_ID, DEMO_ORGANIZACOES } from "@/lib/demo";
 import type {
+  ComposicaoFinanceira,
+  FechamentoFinanceiro,
   ConfigFinanceira,
   Contrato,
   ContratoEvento,
@@ -405,4 +407,62 @@ export function demoCustosAgencia(): CustoAgencia[] {
     }
   }
   return lista;
+}
+
+/* ======================== HISTÓRICO DE CAIXA ======================== */
+
+/** Fechamentos fictícios de nove meses, para a demonstração. */
+export function demoHistorico(): { fechamentos: FechamentoFinanceiro[]; composicoes: ComposicaoFinanceira[] } {
+  const ano = new Date().getFullYear();
+  const entradas = [61200, 64800, 70350, 72900, 60100, 76400, 73800, 75200, 71900];
+  const saidas = [57900, 68100, 71200, 66800, 67300, 74100, 70900, 68400, 72800];
+  let saldo = 31500;
+  const fechamentos: FechamentoFinanceiro[] = [
+    { id: "dh-0", organization_id: DEMO_ORG_ID, mes: `${ano - 1}-12-01`, entradas: null, saidas: null, saldo_final: saldo, receita_operacional: null, observacao: "Saldo inicial", origem: "importado", created_at: "" },
+  ];
+  entradas.forEach((e, i) => {
+    saldo = Math.round((saldo + e - saidas[i]) * 100) / 100;
+    fechamentos.push({
+      id: `dh-${i + 1}`,
+      organization_id: DEMO_ORG_ID,
+      mes: `${ano}-${String(i + 1).padStart(2, "0")}-01`,
+      entradas: e,
+      saidas: saidas[i],
+      saldo_final: saldo,
+      receita_operacional: e - 2000,
+      observacao: null,
+      origem: "importado",
+      created_at: "",
+    });
+  });
+  const comp = (tipo: "receita" | "saida", item: string, valor: number, natureza: ComposicaoFinanceira["natureza"], k: number): ComposicaoFinanceira => ({
+    id: `dc-${tipo}-${k}`,
+    organization_id: DEMO_ORG_ID,
+    inicio: `${ano}-01-01`,
+    fim: `${ano}-09-30`,
+    tipo,
+    item,
+    valor,
+    percentual: null,
+    natureza,
+    estimado: false,
+    observacao: null,
+    ordem: k,
+  });
+  return {
+    fechamentos,
+    composicoes: [
+      comp("receita", "Convênio principal", 178400, "convenio", 0),
+      comp("receita", "Consultas particulares", 152300, "particular", 1),
+      comp("receita", "Procedimentos estéticos", 101900, "particular", 2),
+      comp("receita", "Outros convênios", 52600, "convenio", 3),
+      comp("receita", "Outras receitas", 22450, "outras", 4),
+      comp("saida", "Salários", 168200, "operacional", 0),
+      comp("saida", "Distribuição de lucros", 121000, "socios", 1),
+      comp("saida", "Administrativo", 92600, "operacional", 2),
+      comp("saida", "Empréstimos", 61300, "financeiro", 3),
+      comp("saida", "Investimentos", 48900, "investimento", 4),
+      comp("saida", "Comercial", 25500, "operacional", 5),
+    ],
+  };
 }

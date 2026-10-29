@@ -477,6 +477,47 @@ export type ConfigFinanceira = {
   atualizado_em: string;
 };
 
+/** Fechamento de caixa de um mês, importado de outro sistema ou planilha. */
+export type FechamentoFinanceiro = {
+  id: string;
+  organization_id: string;
+  mes: string;
+  entradas: number | null;
+  saidas: number | null;
+  saldo_final: number | null;
+  /** Receita dos atendimentos, sem entradas não operacionais. */
+  receita_operacional: number | null;
+  observacao: string | null;
+  origem: string;
+  created_at: string;
+};
+
+export type NaturezaComposicao =
+  | "convenio"
+  | "particular"
+  | "outras"
+  | "operacional"
+  | "socios"
+  | "financeiro"
+  | "investimento";
+
+/** Receitas por fonte ou saídas por categoria, somadas num período. */
+export type ComposicaoFinanceira = {
+  id: string;
+  organization_id: string;
+  inicio: string;
+  fim: string;
+  tipo: "receita" | "saida";
+  item: string;
+  valor: number;
+  percentual: number | null;
+  natureza: NaturezaComposicao;
+  /** Valor calculado a partir do percentual informado. */
+  estimado: boolean;
+  observacao: string | null;
+  ordem: number;
+};
+
 /* ------------------------------------------------------------------ */
 /* Financeiro da agência                                               */
 /* ------------------------------------------------------------------ */
@@ -1030,6 +1071,16 @@ export interface Database {
         Fatura,
         Pick<Fatura, "organization_id" | "competencia" | "valor" | "vencimento"> & Partial<Fatura>,
         Partial<Fatura>
+      >;
+      fechamentos_financeiros: Tabela<
+        FechamentoFinanceiro,
+        Pick<FechamentoFinanceiro, "organization_id" | "mes"> & Partial<FechamentoFinanceiro>,
+        Partial<FechamentoFinanceiro>
+      >;
+      composicoes_financeiras: Tabela<
+        ComposicaoFinanceira,
+        Pick<ComposicaoFinanceira, "organization_id" | "inicio" | "fim" | "tipo" | "item" | "valor"> & Partial<ComposicaoFinanceira>,
+        Partial<ComposicaoFinanceira>
       >;
       custos_agencia: Tabela<
         CustoAgencia,

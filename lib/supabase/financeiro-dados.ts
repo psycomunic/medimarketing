@@ -12,9 +12,12 @@ import {
   demoReceitas,
   demoRegrasRepasse,
   demoRepassesFechados,
+  demoHistorico,
 } from "@/lib/demo-financeiro";
 import { CONFIG_PADRAO } from "@/lib/financeiro/calculos";
 import type {
+  ComposicaoFinanceira,
+  FechamentoFinanceiro,
   ConfigFinanceira,
   Contrato,
   ContratoEvento,
@@ -229,4 +232,23 @@ export async function getMinhasFaturas(orgId: string | null): Promise<Fatura[]> 
     .order("vencimento", { ascending: false })
     .limit(24);
   return (data ?? []) as Fatura[];
+}
+
+/* ========================= HISTÓRICO DE CAIXA ========================= */
+
+/** Fechamentos importados e a composição do período de uma clínica. */
+export async function getHistorico(
+  orgId: string | null
+): Promise<{ fechamentos: FechamentoFinanceiro[]; composicoes: ComposicaoFinanceira[] }> {
+  if (await emModoDemo()) return demoHistorico();
+  if (!orgId) return { fechamentos: [], composicoes: [] };
+  const supabase = await createClient();
+  const [f, c] = await Promise.all([
+    supabase.from("fechamentos_financeiros").select("*").eq("organization_id", orgId).order("mes"),
+    supabase.from("composicoes_financeiras").select("*").eq("organization_id", orgId).order("ordem"),
+  ]);
+  return {
+    fechamentos: (f.data ?? []) as FechamentoFinanceiro[],
+    composicoes: (c.data ?? []) as ComposicaoFinanceira[],
+  };
 }
