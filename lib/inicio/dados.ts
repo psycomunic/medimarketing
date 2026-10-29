@@ -15,6 +15,7 @@ import {
 } from "@/lib/inicio/relacionamento";
 import { demoLeads } from "@/lib/demo";
 import { resumoNps, type ResumoNps } from "@/lib/avaliacoes";
+import { contarTarefas } from "@/lib/supabase/followup";
 import { getPainel, type PendenciaPainel } from "@/lib/supabase/painel";
 import { getIndicadores, getClientes } from "@/lib/supabase/indicadores";
 import { getPlano } from "@/lib/supabase/evolucao";
@@ -343,6 +344,27 @@ export async function dadosClinica(
       { chave: "consulta", titulo: "Marcar a primeira consulta", detalhe: "A agenda dispara confirmação e financeiro.", href: "/app/agenda?novo=1", feito: temConsulta },
     ];
   }
+
+  // Follow-ups: o médico vê os dele; dono e atendimento, os da clínica
+  const followups = await contarTarefas({ minhas: role === "medico" });
+  if (followups?.atrasadas)
+    pendencias.unshift({
+      chave: "followups-atrasados",
+      titulo: `${followups.atrasadas} follow-up${followups.atrasadas > 1 ? "s" : ""} atrasado${followups.atrasadas > 1 ? "s" : ""}`,
+      detalhe: "Pacientes esperando o contato combinado.",
+      href: "/app/followups?aba=atrasadas",
+      quantidade: followups.atrasadas,
+      urgente: true,
+    });
+  if (followups?.hoje)
+    pendencias.push({
+      chave: "followups-hoje",
+      titulo: `${followups.hoje} follow-up${followups.hoje > 1 ? "s" : ""} para hoje`,
+      detalhe: "Ligações e mensagens marcadas para hoje.",
+      href: "/app/followups?aba=hoje",
+      quantidade: followups.hoje,
+      urgente: false,
+    });
 
   const repasses = role === "medico" ? await getMeusRepasses(profile.id) : [];
 

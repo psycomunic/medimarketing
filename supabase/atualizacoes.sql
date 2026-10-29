@@ -2224,3 +2224,105 @@ begin
     update public.consultas set paciente_nome = paciente_nome where id = r.id;
   end loop;
 end $$;
+
+-- ============================================================
+-- 2026-10-29 — Pacientes: follow-up (Fase 2)
+-- Anotações na ficha, tarefas com data e responsável, e segmentos
+-- salvos (filtros da lista de pacientes com nome).
+-- ============================================================
+
+-- Quem enxerga a ficha enxerga as anotações e tarefas dela
+create or replace function public.pode_ver_paciente(p_id uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from pacientes pa
+    where pa.id = p_id and (
+      public.is_super_admin()
+      or (pa.organization_id = public.minha_org() and public.is_operacional())
+      or exists (select 1 from consultas c where c.paciente_id = pa.id and c.medico_id = auth.uid())
+    )
+  );
+$$;
+
+create table if not exists public.paciente_notas (
+  id              uuid primary key default uuid_generate_v4(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  paciente_id     uuid not null references public.pacientes(id) on delete cascade,
+  autor_id        uuid references public.profiles(id) on delete set null,
+  texto           text not null check (length(trim(texto)) > 0),
+  fixada          boolean not null default false,
+  created_at      timestamptz not null default now()
+);
+create index if not exists idx_notas_paciente on public.paciente_notas (paciente_id, created_at desc);
+
+create table if not exists public.paciente_tarefas (
+  id              uuid primary key default uuid_generate_v4(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  paciente_id     uuid not null references public.pacientes(id) on delete cascade,
+  titulo          text not null check (length(trim(titulo)) > 0),
+  tipo            text not null default 'whatsapp'
+                    check (tipo in ('ligar', 'whatsapp', 'orcamento', 'retorno', 'outro')),
+  vencimento      date not null,
+  responsavel_id  uuid references public.profiles(id) on delete set null,
+  status          text not null default 'aberta' check (status in ('aberta', 'feita', 'cancelada')),
+  resultado       text,
+  concluida_em    timestamptz,
+  concluida_por   uuid references public.profiles(id) on delete set null,
+  criado_por      uuid references public.profiles(id) on delete set null,
+  created_at      timestamptz not null default now()
+);
+create index if not exists idx_tarefas_org on public.paciente_tarefas (organization_id, status, vencimento);
+create index if not exists idx_tarefas_paciente on public.paciente_tarefas (paciente_id);
+create index if not exists idx_tarefas_responsavel on public.paciente_tarefas (responsavel_id, status, vencimento);
+
+create table if not exists public.segmentos_pacientes (
+  id              uuid primary key default uuid_generate_v4(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  nome            text not null check (length(trim(nome)) > 0),
+  filtros         jsonb not null default '{}',
+  criado_por      uuid references public.profiles(id) on delete set null,
+  created_at      timestamptz not null default now()
+);
+create index if not exists idx_segmentos_org on public.segmentos_pacientes (organization_id);
+
+alter table public.paciente_notas enable row level security;
+alter table public.paciente_tarefas enable row level security;
+alter table public.segmentos_pacientes enable row level security;
+
+drop policy if exists "notas_select" on public.paciente_notas;
+create policy "notas_select" on public.paciente_notas for select to authenticated
+  using (public.pode_ver_paciente(paciente_id));
+drop policy if exists "notas_insert" on public.paciente_notas;
+create policy "notas_insert" on public.paciente_notas for insert to authenticated
+  with check (organization_id = public.minha_org() and public.pode_ver_paciente(paciente_id));
+drop policy if exists "notas_update" on public.paciente_notas;
+create policy "notas_update" on public.paciente_notas for update to authenticated
+  using (public.pode_ver_paciente(paciente_id));
+-- Apaga quem escreveu, ou o dono
+drop policy if exists "notas_delete" on public.paciente_notas;
+create policy "notas_delete" on public.paciente_notas for delete to authenticated
+  using (autor_id = auth.uid() or (organization_id = public.minha_org() and public.is_gestor()) or public.is_super_admin());
+
+-- A tarefa aparece para quem vê o paciente e, sempre, para o responsável
+drop policy if exists "tarefas_select" on public.paciente_tarefas;
+create policy "tarefas_select" on public.paciente_tarefas for select to authenticated
+  using (responsavel_id = auth.uid() or public.pode_ver_paciente(paciente_id));
+drop policy if exists "tarefas_insert" on public.paciente_tarefas;
+create policy "tarefas_insert" on public.paciente_tarefas for insert to authenticated
+  with check (organization_id = public.minha_org() and public.pode_ver_paciente(paciente_id));
+drop policy if exists "tarefas_update" on public.paciente_tarefas;
+create policy "tarefas_update" on public.paciente_tarefas for update to authenticated
+  using (responsavel_id = auth.uid() or public.pode_ver_paciente(paciente_id));
+drop policy if exists "tarefas_delete" on public.paciente_tarefas;
+create policy "tarefas_delete" on public.paciente_tarefas for delete to authenticated
+  using (criado_por = auth.uid() or (organization_id = public.minha_org() and public.is_gestor()) or public.is_super_admin());
+
+drop policy if exists "segmentos_select" on public.segmentos_pacientes;
+create policy "segmentos_select" on public.segmentos_pacientes for select to authenticated
+  using (organization_id = public.minha_org() or public.is_super_admin());
+drop policy if exists "segmentos_insert" on public.segmentos_pacientes;
+create policy "segmentos_insert" on public.segmentos_pacientes for insert to authenticated
+  with check (organization_id = public.minha_org());
+drop policy if exists "segmentos_delete" on public.segmentos_pacientes;
+create policy "segmentos_delete" on public.segmentos_pacientes for delete to authenticated
+  using (criado_por = auth.uid() or (organization_id = public.minha_org() and public.is_gestor()) or public.is_super_admin());

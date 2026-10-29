@@ -9,7 +9,9 @@ import {
   Mail,
   MessageCircle,
   MessageSquareHeart,
+  NotebookPen,
   Receipt,
+  ListTodo,
   ShieldCheck,
   ShieldOff,
   Stethoscope,
@@ -19,6 +21,9 @@ import {
 import { exigirModulo } from "@/lib/acesso";
 import { getFichaPaciente } from "@/lib/supabase/pacientes";
 import { getProfissionais } from "@/lib/supabase/financeiro-dados";
+import { getFollowupDoPaciente } from "@/lib/supabase/followup";
+import { getUsuarios } from "@/lib/supabase/usuarios";
+import { Anotacoes, TarefasDoPaciente } from "@/components/app/pacientes/followup";
 import { rotuloStatus, rotuloTipo } from "@/lib/agenda";
 import { nomeOrigem } from "@/lib/rotulos";
 import { rotuloEvento } from "@/lib/comunicacao/fila";
@@ -36,26 +41,39 @@ export const metadata = { title: "Ficha do paciente" };
 
 type Evento = {
   quando: string;
-  tipo: "consulta" | "pagamento" | "avaliacao" | "mensagem";
+  tipo: "consulta" | "pagamento" | "avaliacao" | "mensagem" | "nota" | "tarefa";
   titulo: string;
   detalhe: string | null;
   extra?: React.ReactNode;
 };
 
-const ICONE = { consulta: Stethoscope, pagamento: Coins, avaliacao: MessageSquareHeart, mensagem: MessageCircle };
+const ICONE = { consulta: Stethoscope, pagamento: Coins, avaliacao: MessageSquareHeart, mensagem: MessageCircle, nota: NotebookPen, tarefa: ListTodo };
 const TOM = {
   consulta: "bg-[#E8F0FC] text-[#1D4ED8]",
   pagamento: "bg-[#E6F4F1] text-[#0F766E]",
   avaliacao: "bg-[#FDF2F8] text-[#BE185D]",
   mensagem: "bg-[#F1F5F9] text-[#475569]",
+  nota: "bg-[#FEF6E0] text-[#A16207]",
+  tarefa: "bg-[#EFEAFD] text-[#6D28D9]",
 };
 const SEXO: Record<string, string> = { feminino: "Feminino", masculino: "Masculino", outro: "Outro" };
 const CANAL: Record<string, string> = { presencial: "na recepção", whatsapp: "pelo WhatsApp", formulario: "por formulário", email: "por e-mail" };
 
 export default async function FichaPacientePage({ params }: { params: { id: string } }) {
-  const { organizacao } = await exigirModulo("pacientes");
-  const [ficha, profissionais] = await Promise.all([getFichaPaciente(params.id), getProfissionais(organizacao?.id ?? null)]);
+  const { organizacao, profile, role } = await exigirModulo("pacientes");
+  const [ficha, profissionais, followup, usuarios] = await Promise.all([
+    getFichaPaciente(params.id),
+    getProfissionais(organizacao?.id ?? null),
+    getFollowupDoPaciente(params.id),
+    getUsuarios({ organizationId: organizacao?.id ?? null, ehSuperAdmin: role === "super_admin" }),
+  ]);
   if (!ficha) notFound();
+  const equipe = usuarios
+    .filter((u) => u.ativo && u.role !== "super_admin" && (!ficha.paciente.organization_id || u.organization_id === ficha.paciente.organization_id))
+    .map((u) => ({ id: u.id, nome: u.nome ?? "Equipe" }));
+  // Quem está usando sempre aparece, mesmo sendo da agência
+  if (!equipe.some((u) => u.id === profile.id)) equipe.unshift({ id: profile.id, nome: profile.nome ?? "Eu" });
+  const autores = Object.fromEntries(usuarios.map((u) => [u.id, u.nome ?? "Equipe"]));
   const { paciente: p, consultas, receitas, avaliacoes, mensagens } = ficha;
   const nomes = Object.fromEntries(profissionais.map((x) => [x.id, x.nome]));
   const anos = idade(p.nascimento);
@@ -84,6 +102,20 @@ export default async function FichaPacientePage({ params }: { params: { id: stri
       titulo: `Avaliou o atendimento com nota ${a.nota}`,
       detalhe: a.comentario ? `“${a.comentario}”` : null,
     })),
+    ...followup.notas.map<Evento>((n) => ({
+      quando: n.created_at,
+      tipo: "nota",
+      titulo: `Anotação de ${(n.autor_id && autores[n.autor_id]) || "Equipe"}`,
+      detalhe: n.texto.length > 160 ? `${n.texto.slice(0, 160)}…` : n.texto,
+    })),
+    ...followup.tarefas
+      .filter((t) => t.status === "feita" && t.concluida_em)
+      .map<Evento>((t) => ({
+        quando: t.concluida_em!,
+        tipo: "tarefa",
+        titulo: `Follow-up feito: ${t.titulo}`,
+        detalhe: [t.resultado && `“${t.resultado}”`, t.concluida_por && autores[t.concluida_por]].filter(Boolean).join(" · ") || null,
+      })),
     ...mensagens.map<Evento>((m) => ({
       quando: m.enviado_em ?? m.created_at,
       tipo: "mensagem",
@@ -181,8 +213,29 @@ export default async function FichaPacientePage({ params }: { params: { id: stri
         />
       </div>
 
+      {followup.instalado ? (
+        <div className="grid gap-5 lg:grid-cols-2">
+          <Painel titulo="Follow-up" descricao="O que a equipe combinou de fazer com este paciente.">
+            <TarefasDoPaciente
+              pacienteId={p.id}
+              tarefas={followup.tarefas}
+              equipe={equipe}
+              usuarioId={profile.id}
+              whatsapp={p.telefone ? linkWhatsApp(p.telefone, `Olá, ${p.nome.split(" ")[0]}! Aqui é da ${organizacao?.nome ?? "clínica"}.`) : null}
+            />
+          </Painel>
+          <Painel titulo="Anotações" descricao="Só a equipe da clínica vê.">
+            <Anotacoes pacienteId={p.id} notas={followup.notas} autores={autores} />
+          </Painel>
+        </div>
+      ) : (
+        <p className="rounded-xl border border-border bg-white px-5 py-4 text-sm text-cinza-suave shadow-soft">
+          Follow-ups e anotações aparecem aqui depois que o SQL &quot;Pacientes: follow-up (Fase 2)&quot; for executado no Supabase.
+        </p>
+      )}
+
       <div className="grid gap-5 lg:grid-cols-3">
-        <Painel className="lg:col-span-2" titulo="Linha do tempo" descricao="Consultas, pagamentos, mensagens e avaliações.">
+        <Painel className="lg:col-span-2" titulo="Linha do tempo" descricao="Consultas, pagamentos, mensagens, avaliações, anotações e follow-ups.">
           {eventos.length ? (
             <ol className="relative grid gap-4 before:absolute before:bottom-2 before:left-[17px] before:top-2 before:w-px before:bg-border">
               {eventos.map((e, i) => {

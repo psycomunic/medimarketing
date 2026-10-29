@@ -159,6 +159,46 @@ export type Paciente = {
   updated_at: string;
 };
 
+export type NotaPaciente = {
+  id: string;
+  organization_id: string;
+  paciente_id: string;
+  autor_id: string | null;
+  texto: string;
+  fixada: boolean;
+  created_at: string;
+};
+
+export type TipoTarefa = "ligar" | "whatsapp" | "orcamento" | "retorno" | "outro";
+export type StatusTarefa = "aberta" | "feita" | "cancelada";
+
+/** Follow-up com data e responsável, sempre ligado a um paciente. */
+export type TarefaPaciente = {
+  id: string;
+  organization_id: string;
+  paciente_id: string;
+  titulo: string;
+  tipo: TipoTarefa;
+  vencimento: string; // "YYYY-MM-DD"
+  responsavel_id: string | null;
+  status: StatusTarefa;
+  resultado: string | null;
+  concluida_em: string | null;
+  concluida_por: string | null;
+  criado_por: string | null;
+  created_at: string;
+};
+
+/** Filtros da lista de pacientes guardados com um nome. */
+export type SegmentoPacientes = {
+  id: string;
+  organization_id: string;
+  nome: string;
+  filtros: Record<string, string>;
+  criado_por: string | null;
+  created_at: string;
+};
+
 /** Ficha com o resumo calculado a partir das consultas e receitas. */
 export type PacienteResumo = Paciente & {
   mes_nascimento: number | null;
@@ -965,6 +1005,27 @@ export interface Database {
         Consulta,
         Omit<Consulta, "id" | "created_at"> & { id?: string },
         Partial<Consulta>
+      >;
+      paciente_notas: Tabela<
+        NotaPaciente,
+        Omit<NotaPaciente, "id" | "created_at" | "fixada"> & { id?: string; fixada?: boolean },
+        Partial<NotaPaciente>
+      >;
+      paciente_tarefas: Tabela<
+        TarefaPaciente,
+        Omit<TarefaPaciente, "id" | "created_at" | "status" | "resultado" | "concluida_em" | "concluida_por"> & {
+          id?: string;
+          status?: StatusTarefa;
+          resultado?: string | null;
+          concluida_em?: string | null;
+          concluida_por?: string | null;
+        },
+        Partial<TarefaPaciente>
+      >;
+      segmentos_pacientes: Tabela<
+        SegmentoPacientes,
+        Omit<SegmentoPacientes, "id" | "created_at"> & { id?: string },
+        Partial<SegmentoPacientes>
       >;
       pacientes: Tabela<
         Paciente,

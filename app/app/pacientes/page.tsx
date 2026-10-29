@@ -3,6 +3,7 @@ import { CalendarClock, ChevronLeft, ChevronRight, Contact, Copy, Download, Mail
 import { exigirModulo } from "@/lib/acesso";
 import { getNumerosPacientes, getPacientes, POR_PAGINA, type FiltrosPacientes, type Ordem, type Situacao } from "@/lib/supabase/pacientes";
 import { getProfissionais } from "@/lib/supabase/financeiro-dados";
+import { getSegmentos } from "@/lib/supabase/followup";
 import { Indicador } from "@/components/app/financeiro/ui";
 import { FiltrosPacientes as Filtros } from "@/components/app/pacientes/filtros";
 import { PacienteDialog } from "@/components/app/pacientes/paciente-dialog";
@@ -25,10 +26,11 @@ export default async function PacientesPage({ searchParams }: { searchParams: Bu
     ordem: searchParams.ordem as Ordem | undefined,
     pagina: Number(searchParams.pagina) || 1,
   };
-  const [dados, numeros, profissionais] = await Promise.all([
+  const [dados, numeros, profissionais, segmentos] = await Promise.all([
     getPacientes(filtros),
     getNumerosPacientes(),
     getProfissionais(organizacao?.id ?? null),
+    getSegmentos(),
   ]);
   const nomes = Object.fromEntries(profissionais.map((p) => [p.id, p.nome]));
   const pagina = filtros.pagina ?? 1;
@@ -99,7 +101,13 @@ export default async function PacientesPage({ searchParams }: { searchParams: Bu
             </div>
           )}
 
-          <Filtros convenios={dados.convenios} tags={dados.tags} profissionais={profissionais.map((p) => ({ id: p.id, nome: p.nome }))} />
+          <Filtros
+            convenios={dados.convenios}
+            tags={dados.tags}
+            profissionais={profissionais.map((p) => ({ id: p.id, nome: p.nome }))}
+            segmentos={segmentos}
+            organizationId={organizacao?.id}
+          />
 
           <section className="overflow-hidden rounded-xl border border-border bg-white shadow-soft">
             <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-3 text-sm text-cinza-suave">

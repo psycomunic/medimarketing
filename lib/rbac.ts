@@ -29,6 +29,7 @@ import {
   type LucideIcon,
   Landmark,
   Contact,
+  ListTodo,
 } from "lucide-react";
 import type { Role } from "@/lib/supabase/types";
 
@@ -36,6 +37,7 @@ export type ModuloId =
   | "dashboard"
   | "agenda"
   | "pacientes"
+  | "followups"
   | "confirmacoes"
   | "disponibilidade"
   | "crm"
@@ -107,6 +109,16 @@ export const MODULOS: readonly Modulo[] = [
     fase: 1,
     grupo: "operacao",
     resumo: "Ficha única de cada paciente, com histórico, gastos e consentimento para mensagens.",
+  },
+  {
+    id: "followups",
+    label: "Follow-ups",
+    href: "/app/followups",
+    icone: ListTodo,
+    papeis: TODOS,
+    fase: 1,
+    grupo: "operacao",
+    resumo: "Ligações, mensagens e retornos combinados com cada paciente, com data e responsável.",
   },
   {
     id: "confirmacoes",

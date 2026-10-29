@@ -18,7 +18,22 @@ export const POR_PAGINA = 25;
 /** Sem consulta realizada há mais que isso e nada marcado: "sem retorno". */
 export const MESES_SEM_RETORNO = 6;
 
-export type Situacao = "ativos" | "sem-retorno" | "novos" | "aniversariantes" | "arquivados" | "todos";
+export type Situacao =
+  | "ativos"
+  | "sem-retorno"
+  | "novos"
+  | "aniversariantes"
+  | "arquivados"
+  | "todos"
+  // Segmentos prontos
+  | "primeira-sem-retorno"
+  | "faltaram"
+  | "promotores"
+  | "detratores"
+  | "valiosos";
+
+/** Primeira consulta há mais que isso, sem voltar: o paciente não "pegou". */
+const DIAS_PRIMEIRA_SEM_RETORNO = 60;
 export type Ordem = "recentes" | "nome" | "gasto" | "ultima";
 
 export type FiltrosPacientes = {
@@ -57,6 +72,36 @@ const inicioDoMes = () => {
   const d = new Date();
   return new Date(d.getFullYear(), d.getMonth(), 1);
 };
+const diasAtras = (n: number) => new Date(Date.now() - n * 86400_000);
+
+/**
+ * Pacientes cuja última nota no NPS os coloca no grupo. As notas ficam
+ * nas avaliações, ligadas à consulta; sem a tabela, ninguém entra.
+ */
+async function pacientesPorNota(grupo: "promotores" | "detratores"): Promise<string[]> {
+  const supabase = await createClient();
+  const { data: notas, error } = await supabase
+    .from("avaliacoes")
+    .select("consulta_id,nota,respondido_em")
+    .not("nota", "is", null)
+    .order("respondido_em", { ascending: false })
+    .limit(5000);
+  if (error || !notas?.length) return [];
+  const paciente = new Map<string, string>();
+  const ids = notas.map((n) => n.consulta_id);
+  for (let i = 0; i < ids.length; i += 500) {
+    const { data } = await supabase.from("consultas").select("id,paciente_id").in("id", ids.slice(i, i + 500));
+    for (const c of data ?? []) if (c.paciente_id) paciente.set(c.id, c.paciente_id);
+  }
+  // Vale a nota mais recente de cada paciente
+  const ultima = new Map<string, number>();
+  for (const n of notas) {
+    const p = paciente.get(n.consulta_id);
+    if (p && !ultima.has(p)) ultima.set(p, n.nota as number);
+  }
+  return [...ultima.entries()].filter(([, nota]) => (grupo === "promotores" ? nota >= 9 : nota <= 6)).map(([id]) => id);
+}
+
 /** Tira o que quebraria o filtro `or` do PostgREST. */
 const limparBusca = (t: string) => t.replace(/[,()*%\\]/g, " ").trim();
 
@@ -73,6 +118,15 @@ export async function getPacientes(f: FiltrosPacientes): Promise<ListaPacientes>
   if (situacao === "sem-retorno") q = q.lt("ultima_consulta", corteSemRetorno().toISOString()).is("proxima_consulta", null);
   if (situacao === "novos") q = q.gte("created_at", inicioDoMes().toISOString());
   if (situacao === "aniversariantes") q = q.eq("mes_nascimento", new Date().getMonth() + 1);
+  if (situacao === "primeira-sem-retorno")
+    q = q.eq("consultas_realizadas", 1).is("proxima_consulta", null).lt("ultima_consulta", diasAtras(DIAS_PRIMEIRA_SEM_RETORNO).toISOString());
+  if (situacao === "faltaram") q = q.gt("faltas", 0).is("proxima_consulta", null);
+  if (situacao === "valiosos") q = q.gt("total_gasto", 0);
+  if (situacao === "promotores" || situacao === "detratores") {
+    const ids = await pacientesPorNota(situacao);
+    // Sem ninguém no grupo, um id que não existe devolve a lista vazia
+    q = q.in("id", ids.length ? ids.slice(0, 1000) : ["00000000-0000-0000-0000-000000000000"]);
+  }
 
   const busca = limparBusca(f.busca ?? "");
   if (busca) {
@@ -85,7 +139,7 @@ export async function getPacientes(f: FiltrosPacientes): Promise<ListaPacientes>
   if (f.profissional) q = q.eq("profissional_principal", f.profissional);
   if (f.tag) q = q.contains("tags", [f.tag]);
 
-  const ordem = f.ordem ?? "recentes";
+  const ordem = f.ordem ?? (situacao === "valiosos" ? "gasto" : "recentes");
   if (ordem === "nome") q = q.order("nome", { ascending: true });
   else if (ordem === "gasto") q = q.order("total_gasto", { ascending: false });
   else if (ordem === "ultima") q = q.order("ultima_consulta", { ascending: false, nullsFirst: false });
@@ -344,7 +398,7 @@ async function consultasDemo(): Promise<Consulta[]> {
 }
 
 /** Fichas montadas a partir das consultas fictícias, como a migração faria. */
-async function pacientesDemo(): Promise<PacienteResumo[]> {
+export async function pacientesDemo(): Promise<PacienteResumo[]> {
   const consultas = await consultasDemo();
   const agora = new Date();
   const mapa = new Map<string, Consulta[]>();
@@ -407,6 +461,16 @@ function filtrarEmMemoria(todos: PacienteResumo[], f: FiltrosPacientes): ListaPa
     if (situacao === "sem-retorno" && !(p.ultima_consulta && p.ultima_consulta < corte && !p.proxima_consulta)) return false;
     if (situacao === "novos" && p.created_at < inicioDoMes().toISOString()) return false;
     if (situacao === "aniversariantes" && p.mes_nascimento !== new Date().getMonth() + 1) return false;
+    if (
+      situacao === "primeira-sem-retorno" &&
+      !(p.consultas_realizadas === 1 && !p.proxima_consulta && (p.ultima_consulta ?? "") < diasAtras(DIAS_PRIMEIRA_SEM_RETORNO).toISOString())
+    )
+      return false;
+    if (situacao === "faltaram" && !(p.faltas > 0 && !p.proxima_consulta)) return false;
+    if (situacao === "valiosos" && !(p.total_gasto > 0)) return false;
+    // Na demonstração não há respostas de NPS ligadas às fichas: uma divisão fixa e plausível
+    if (situacao === "promotores" && !(p.consultas_realizadas >= 3)) return false;
+    if (situacao === "detratores" && !(p.faltas > 0)) return false;
     if (busca && !semAcento(p.nome).includes(busca) && !(digitos.length >= 4 && (p.telefone ?? "").replace(/\D/g, "").includes(digitos)))
       return false;
     if (f.convenio && p.convenio !== f.convenio) return false;
@@ -414,7 +478,7 @@ function filtrarEmMemoria(todos: PacienteResumo[], f: FiltrosPacientes): ListaPa
     if (f.tag && !p.tags.includes(f.tag)) return false;
     return true;
   });
-  const ordem = f.ordem ?? "recentes";
+  const ordem = f.ordem ?? (situacao === "valiosos" ? "gasto" : "recentes");
   lista = lista.sort((a, b) =>
     ordem === "nome"
       ? a.nome.localeCompare(b.nome, "pt-BR")
