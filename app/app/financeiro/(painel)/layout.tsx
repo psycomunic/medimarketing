@@ -34,7 +34,7 @@ export default async function FinanceiroLayout({ children }: { children: React.R
         </div>
       </header>
       <Suspense fallback={<div className="mt-6 h-[104px] rounded-xl border border-border bg-white" />}>
-        <NavFinanceiro abas={ABAS} base="/app/financeiro" relatorioHref="/app/financeiro/relatorio" />
+        <NavFinanceiro abas={ABAS} base="/app/financeiro" relatorioHref="/app/financeiro/relatorio" exportarHref="/app/financeiro/exportar" />
       </Suspense>
       <div className="mt-6">
         {!instalado && <AvisoInstalacao />}

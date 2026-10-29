@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ChevronLeft, ChevronRight, FileDown } from "lucide-react";
+import { ChevronLeft, ChevronRight, FileDown, Sheet } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
@@ -27,10 +27,13 @@ export function NavFinanceiro({
   abas,
   base,
   relatorioHref,
+  exportarHref,
 }: {
   abas: AbaNav[];
   base: string;
   relatorioHref?: string;
+  /** Planilha (CSV) do mês, para o contador. */
+  exportarHref?: string;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -77,6 +80,16 @@ export function NavFinanceiro({
             </button>
           )}
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+        {exportarHref && (
+          <a
+            href={comMes(exportarHref)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-white px-3 py-2 text-sm font-medium text-azul-medico transition-colors hover:border-teal hover:text-teal"
+            title="Receitas e despesas do mês em planilha"
+          >
+            <Sheet className="size-4" /> Planilha
+          </a>
+        )}
         {relatorioHref && (
           <Link
             href={comMes(relatorioHref)}
@@ -85,6 +98,7 @@ export function NavFinanceiro({
             <FileDown className="size-4" /> Relatório em PDF
           </Link>
         )}
+        </div>
       </div>
       <nav className="flex gap-1 overflow-x-auto px-2 py-1.5 [scrollbar-width:none]" aria-label="Seções do financeiro">
         {abas.map((t) => {

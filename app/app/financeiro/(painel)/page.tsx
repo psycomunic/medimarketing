@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { exigirModulo } from "@/lib/acesso";
 import { getPlano } from "@/lib/supabase/evolucao";
+import { getIndicadores } from "@/lib/supabase/indicadores";
 import {
   getConfigFinanceira,
   getContasAbertas,
@@ -63,7 +64,7 @@ export default async function VisaoGeralFinanceiro({ searchParams }: { searchPar
   const { ate } = limites(mes);
   const de12 = `${meses[0]}-01`;
 
-  const [receitas, despesas, config, recebiveis, contas, regras, plano] = await Promise.all([
+  const [receitas, despesas, config, recebiveis, contas, regras, plano, indicadores] = await Promise.all([
     getReceitas(orgId, de12, ate),
     getDespesas(orgId, de12, ate),
     getConfigFinanceira(orgId),
@@ -71,6 +72,7 @@ export default async function VisaoGeralFinanceiro({ searchParams }: { searchPar
     getContasAbertas(orgId),
     getRegrasRepasse(orgId),
     getPlano(orgId),
+    getIndicadores(orgId, 12),
   ]);
 
   const doMes = (m: string) => ({
@@ -129,6 +131,13 @@ export default async function VisaoGeralFinanceiro({ searchParams }: { searchPar
       texto: `Glosa de ${pct(glosaMedia, 1)} nos convênios, acima da reserva de ${pct(Number(config?.reserva_glosa ?? 7))}`,
       href: "/app/financeiro/convenios",
     });
+
+  const marketing = meses.slice(-6).map((m) => {
+    const i = indicadores.find((x) => x.mes.startsWith(m));
+    return { mes: m, investimento: Number(i?.investimento ?? 0), faturamento: Number(i?.faturamento ?? 0), pacientes: Number(i?.comparecimentos ?? 0) };
+  });
+  const mkt = marketing[marketing.length - 1];
+  const temMarketing = marketing.some((x) => x.investimento > 0);
 
   const formas = porForma(atual.r);
   const categorias = porCategoria(atual.d);
@@ -357,6 +366,49 @@ export default async function VisaoGeralFinanceiro({ searchParams }: { searchPar
           </div>
         </Painel>
       </div>
+      {temMarketing && (
+        <Painel
+          titulo="Retorno do marketing"
+          descricao="Investimento em anúncios contra o faturamento do mês, pelos indicadores acompanhados com a Medi Marketing."
+          acao={
+            <Link href="/app/indicadores" className="inline-flex items-center gap-1 text-sm font-medium text-teal hover:underline">
+              Indicadores <ArrowRight className="size-4" />
+            </Link>
+          }
+        >
+          <div className="grid gap-5 lg:grid-cols-3">
+            <dl className="grid grid-cols-2 gap-3 lg:grid-cols-1">
+              <div className="rounded-lg bg-branco-clinico px-4 py-3">
+                <dt className="text-xs text-cinza-suave">Investido em anúncios</dt>
+                <dd className="font-heading text-lg font-bold tabular-nums text-azul-medico">{reais(mkt.investimento)}</dd>
+              </div>
+              <div className="rounded-lg bg-branco-clinico px-4 py-3">
+                <dt className="text-xs text-cinza-suave">Retorno (faturamento ÷ investimento)</dt>
+                <dd className="font-heading text-lg font-bold tabular-nums text-azul-medico">
+                  {mkt.investimento ? `${(mkt.faturamento / mkt.investimento).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}x` : "—"}
+                </dd>
+              </div>
+              <div className="col-span-2 rounded-lg bg-branco-clinico px-4 py-3 lg:col-span-1">
+                <dt className="text-xs text-cinza-suave">Custo por consulta realizada</dt>
+                <dd className="font-heading text-lg font-bold tabular-nums text-azul-medico">
+                  {mkt.pacientes ? reais(mkt.investimento / mkt.pacientes, true) : "—"}
+                </dd>
+              </div>
+            </dl>
+            <div className="min-w-0 lg:col-span-2">
+              <BarrasAgrupadas
+                categorias={marketing.map((x) => mesCurto(x.mes))}
+                barras={[
+                  { nome: "Investimento", cor: COR.despesa, valores: marketing.map((x) => x.investimento) },
+                  { nome: "Faturamento", cor: COR.receita, valores: marketing.map((x) => x.faturamento) },
+                ]}
+                destaque={marketing.length - 1}
+                altura={220}
+              />
+            </div>
+          </div>
+        </Painel>
+      )}
     </div>
   );
 }

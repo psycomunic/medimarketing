@@ -480,7 +480,7 @@ export function Cascata({ etapas, altura = 260 }: { etapas: Etapa[]; altura?: nu
   const vMax = marcas[marcas.length - 1];
   const W = largura;
   const TOPO_C = 22;
-  const RODAPE_C = 40;
+  const RODAPE_C = 48;
   const H = altura - TOPO_C - RODAPE_C;
   const util = W - EIXO_Y;
   const banda = util / etapas.length;
@@ -527,14 +527,21 @@ export function Cascata({ etapas, altura = 260 }: { etapas: Etapa[]; altura?: nu
                 </text>
               )}
               {quebra && palavras.length > 1 ? (
-                <text x={x + larg / 2} y={altura - 22} textAnchor="middle" fontSize={10.5} fill={COR.eixo}>
+                <text x={x + larg / 2} y={altura - 26} textAnchor="middle" fontSize={10.5} fill={COR.eixo}>
                   <tspan x={x + larg / 2}>{palavras.slice(0, meio).join(" ")}</tspan>
                   <tspan x={x + larg / 2} dy={13}>
                     {palavras.slice(meio).join(" ")}
                   </tspan>
                 </text>
               ) : (
-                <text x={x + larg / 2} y={altura - 16} textAnchor="middle" fontSize={banda < 70 ? 10 : 11} fill={COR.eixo}>
+                // Muito estreito: rótulos alternam de altura para não se tocarem
+                <text
+                  x={x + larg / 2}
+                  y={altura - (banda < 64 && i % 2 === 1 ? 10 : 24)}
+                  textAnchor="middle"
+                  fontSize={banda < 70 ? 10 : 11}
+                  fill={COR.eixo}
+                >
                   {b.nome}
                 </text>
               )}

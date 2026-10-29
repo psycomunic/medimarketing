@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CalendarClock, Check, MoreHorizontal, Pencil, Plus, Search, Stethoscope, Trash2, Wallet } from "lucide-react";
+import { CalendarClock, Check, FileText, MoreHorizontal, Pencil, Plus, Search, Stethoscope, Trash2, Wallet } from "lucide-react";
 import type { FormaPagamento, Lancamento, PrecoProcedimento } from "@/lib/supabase/types";
 import { excluirReceita, registrarRecebimento, salvarReceita } from "@/lib/actions/financeiro";
 import { bruto, dataDeEntrada, liquido } from "@/lib/financeiro/calculos";
@@ -490,6 +490,14 @@ export function ListaReceitas({
                       <BotaoMenu icone={Pencil} onClick={() => { setMenu(null); setEditar(l); }}>
                         Editar
                       </BotaoMenu>
+                      {l.status === "recebido" && bruto(l) > 0 && (
+                        <a
+                          href={`/app/financeiro/recibo/${l.id}`}
+                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-cinza-texto hover:bg-branco-clinico"
+                        >
+                          <FileText className="size-4 shrink-0" /> Recibo em PDF
+                        </a>
+                      )}
                       <BotaoMenu icone={Trash2} perigo onClick={() => { setMenu(null); if (confirm("Cancelar esta receita? Ela sai de todos os cálculos.")) executar(() => excluirReceita(l.id)); }}>
                         Cancelar receita
                       </BotaoMenu>
