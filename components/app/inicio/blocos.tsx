@@ -4,6 +4,7 @@ import {
   ArrowRight,
   CalendarDays,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
   Circle,
   Clock,
@@ -270,22 +271,30 @@ export function PrimeirosPassos({ passos }: { passos: PassoChecklist[] }) {
   const feitos = passos.filter((p) => p.feito).length;
   if (!passos.length || feitos === passos.length) return null;
   const pct = Math.round((feitos / passos.length) * 100);
+  const proximo = passos.find((p) => !p.feito);
   return (
-    <section className="overflow-hidden rounded-xl border border-teal/40 bg-white shadow-soft">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-verde-menta/40 px-5 py-4">
-        <div>
+    // Começa recolhido: uma linha com o progresso; a lista abre no clique
+    <details className="group overflow-hidden rounded-xl border border-teal/40 bg-white shadow-soft">
+      <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-x-4 gap-y-2 bg-verde-menta/40 px-5 py-3 transition-colors hover:bg-verde-menta/60 group-open:border-b group-open:border-border [&::-webkit-details-marker]:hidden">
+        <div className="min-w-0">
           <h2 className="font-heading text-base font-semibold text-azul-medico">Primeiros passos da clínica</h2>
           <p className="mt-0.5 text-sm text-cinza-suave">
-            {feitos} de {passos.length} prontos. Com tudo pronto, o painel trabalha sozinho por vocês.
+            {feitos} de {passos.length} prontos
+            <span className="group-open:hidden">{proximo ? ` · próximo: ${proximo.titulo.toLowerCase()}` : ""}</span>
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="h-2 w-40 overflow-hidden rounded-full bg-[var(--g-trilho)]">
+          <div className="h-2 w-24 overflow-hidden rounded-full bg-[var(--g-trilho)] sm:w-40">
             <div className="h-full rounded-full bg-teal transition-all" style={{ width: `${pct}%` }} />
           </div>
           <span className="font-heading text-sm font-bold tabular-nums text-teal">{pct}%</span>
+          <span className="inline-flex items-center gap-1 text-xs font-semibold text-azul-medico">
+            <span className="group-open:hidden">Ver</span>
+            <span className="hidden group-open:inline">Recolher</span>
+            <ChevronDown className="size-4 transition-transform group-open:rotate-180" />
+          </span>
         </div>
-      </div>
+      </summary>
       <ul className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-px bg-border">
         {passos.map((p) => (
           <li key={p.chave} className="bg-white">
@@ -299,7 +308,7 @@ export function PrimeirosPassos({ passos }: { passos: PassoChecklist[] }) {
           </li>
         ))}
       </ul>
-    </section>
+    </details>
   );
 }
 
