@@ -461,68 +461,6 @@ export const diferenciais = [
 ] as const;
 
 /* ------------------------------------------------------------------ */
-/* Planos                                                              */
-/*                                                                     */
-/* Os valores acompanham os padrões da proposta comercial (ver         */
-/* components/app/admin/propostas-painel.tsx). Mexeu aqui, confira lá. */
-/* ------------------------------------------------------------------ */
-export const planos = [
-  {
-    id: "essencial",
-    nome: "Essencial",
-    resumo: "Para organizar a casa e começar a atrair paciente.",
-    preco: "R$ 1.497",
-    periodo: "/mês",
-    destaque: false,
-    itens: [
-      "Plataforma: agenda + CRM básico",
-      "Marketing: Google Ads e Meta Ads",
-      "Landing page de captação",
-      "Relatórios mensais de resultado",
-      "Suporte por WhatsApp",
-    ],
-    naoInclui: ["Central de atendimento", "Réguas de retenção", "Academy"],
-    cta: "Começar pelo Essencial",
-  },
-  {
-    id: "performance",
-    nome: "Performance",
-    resumo: "O método completo: aquisição, atendimento e retenção.",
-    preco: "R$ 1.997",
-    periodo: "/mês",
-    destaque: true,
-    itens: [
-      "Tudo do Essencial",
-      "Central de atendimento omnichannel",
-      "Réguas de retenção e reativação",
-      "Academy liberada para a equipe",
-      "Reunião mensal de resultado",
-      "Scripts comerciais por especialidade",
-    ],
-    naoInclui: ["Recepção remota / SDR dedicado"],
-    cta: "Quero o método completo",
-  },
-  {
-    id: "full",
-    nome: "Full / Parceria",
-    resumo: "Para quem quer escalar com time e inteligência dedicados.",
-    preco: "Sob consulta",
-    periodo: "",
-    destaque: false,
-    itens: [
-      "Tudo do Performance",
-      "Estruturação comercial da clínica",
-      "Recepção remota / SDR dedicado",
-      "Mentoria com o time de gestão",
-      "BI avançado e metas por período",
-      "Acompanhamento semanal",
-    ],
-    naoInclui: [],
-    cta: "Falar sobre parceria",
-  },
-] as const;
-
-/* ------------------------------------------------------------------ */
 /* Depoimentos                                                         */
 /* ------------------------------------------------------------------ */
 export const depoimentos = [
