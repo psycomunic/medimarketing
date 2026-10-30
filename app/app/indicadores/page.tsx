@@ -31,6 +31,17 @@ import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Indicadores" };
 
+/** Quais meses lançados olhar. Os cartões e o funil ficam no último deles. */
+const PERIODOS = [
+  { chave: "3m", rotulo: "3 meses" },
+  { chave: "6m", rotulo: "6 meses" },
+  { chave: "12m", rotulo: "12 meses" },
+  { chave: "24m", rotulo: "24 meses" },
+  { chave: "ano", rotulo: "Este ano" },
+  { chave: "ano-passado", rotulo: "Ano passado" },
+] as const;
+type PeriodoIndicadores = (typeof PERIODOS)[number]["chave"];
+
 /** Seta de variação contra o mês anterior. */
 function Variacao({ valor, inverter }: { valor: number; inverter?: boolean }) {
   if (!valor || Math.abs(valor) < 0.5) {
@@ -56,7 +67,7 @@ function Variacao({ valor, inverter }: { valor: number; inverter?: boolean }) {
   );
 }
 
-export default async function IndicadoresPage() {
+export default async function IndicadoresPage({ searchParams }: { searchParams: { periodo?: string } }) {
   const { organizacao, role } = await exigirModulo("indicadores");
   // 36 meses para o marco zero continuar no gráfico depois de um ano;
   // os cartões e gráficos de sempre olham só os 12 últimos
@@ -64,7 +75,17 @@ export default async function IndicadoresPage() {
     getIndicadores(organizacao?.id ?? null, 36),
     getPlano(organizacao?.id ?? null),
   ]);
-  const meses = historico.slice(-12);
+  const periodo: PeriodoIndicadores = PERIODOS.find((p) => p.chave === searchParams.periodo)?.chave ?? "12m";
+  const ano = new Date().getFullYear();
+  const escolhidos =
+    periodo === "ano"
+      ? historico.filter((m) => m.mes.startsWith(String(ano)))
+      : periodo === "ano-passado"
+        ? historico.filter((m) => m.mes.startsWith(String(ano - 1)))
+        : historico.slice(-Number(periodo.replace("m", "")));
+  // Sem nada lançado no período escolhido, mostra os 12 últimos e avisa
+  const semDados = escolhidos.length === 0;
+  const meses = semDados ? historico.slice(-12) : escolhidos;
 
   const podeLancar = role === "gestor" || role === "super_admin";
 
@@ -218,10 +239,34 @@ export default async function IndicadoresPage() {
             Relatório do mês
           </Link>
           {podeLancar && organizacao && (
-            <FormLancamento organizationId={organizacao.id} historico={meses} />
+            <FormLancamento organizationId={organizacao.id} historico={historico.slice(-12)} />
           )}
         </div>
       </header>
+
+      <div className="mt-6 flex flex-wrap items-center gap-3">
+        <nav aria-label="Período" className="flex max-w-full overflow-x-auto rounded-full border border-border bg-white p-1 shadow-soft [scrollbar-width:none]">
+          {PERIODOS.map((p) => (
+            <Link
+              key={p.chave}
+              href={p.chave === "12m" ? "/app/indicadores" : `/app/indicadores?periodo=${p.chave}`}
+              scroll={false}
+              aria-current={p.chave === periodo ? "page" : undefined}
+              className={cn(
+                "shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold transition-colors sm:text-sm",
+                p.chave === periodo ? "bg-azul-medico text-white" : "text-cinza-suave hover:text-azul-medico"
+              )}
+            >
+              {p.rotulo}
+            </Link>
+          ))}
+        </nav>
+        <p className="text-xs text-cinza-suave">
+          {semDados
+            ? "Nenhum mês lançado nesse período: mostrando os 12 últimos."
+            : `${meses.length} ${meses.length === 1 ? "mês lançado" : "meses lançados"} · os cartões e o funil mostram ${mesPorExtenso(ultimo.mes)}.`}
+        </p>
+      </div>
 
       <PainelEvolucao meses={historico} plano={plano} />
 

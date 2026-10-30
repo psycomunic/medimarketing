@@ -14,6 +14,8 @@ export type FiltrosAgenda = {
   status: StatusConsulta | "";
   tipo: TipoConsulta | "";
   convenio: string;
+  /** Nome do serviço; "__sem" = consultas sem serviço. */
+  servico: string;
   busca: string;
 };
 
@@ -23,6 +25,7 @@ export const FILTROS_VAZIOS: FiltrosAgenda = {
   status: "",
   tipo: "",
   convenio: "",
+  servico: "",
   busca: "",
 };
 
@@ -40,6 +43,7 @@ export function aplicarFiltros<
     convenio: string | null;
     paciente_nome: string;
     paciente_telefone: string | null;
+    servico_nome?: string | null;
   },
 >(consultas: T[], f: FiltrosAgenda): T[] {
   const busca = f.busca.trim().toLowerCase();
@@ -50,6 +54,7 @@ export function aplicarFiltros<
     if (f.status && c.status !== f.status) return false;
     if (f.tipo && c.tipo !== f.tipo) return false;
     if (f.convenio && c.convenio !== f.convenio) return false;
+    if (f.servico && (f.servico === "__sem" ? !!c.servico_nome : c.servico_nome !== f.servico)) return false;
     if (busca) {
       const alvo = `${c.paciente_nome} ${c.paciente_telefone ?? ""}`.toLowerCase();
       if (!alvo.includes(busca)) return false;
@@ -72,12 +77,15 @@ export function AgendaFiltros({
   opcoes,
   total,
   visiveis,
+  servicos = [],
 }: {
   filtros: FiltrosAgenda;
   onChange: (f: FiltrosAgenda) => void;
   opcoes: OpcoesAgenda;
   total: number;
   visiveis: number;
+  /** Serviços da clínica (tabela de preços e os já usados na agenda). */
+  servicos?: string[];
 }) {
   const ativos = contarFiltrosAtivos(filtros);
   const multiClinica = opcoes.clinicas.length > 1;
@@ -132,7 +140,7 @@ export function AgendaFiltros({
       <div
         className={cn(
           "mt-3 grid gap-3 sm:grid-cols-2",
-          multiClinica ? "lg:grid-cols-5" : "lg:grid-cols-4"
+          ["lg:grid-cols-4", "lg:grid-cols-5", "lg:grid-cols-6"][(multiClinica ? 1 : 0) + (servicos.length ? 1 : 0)]
         )}
       >
         {multiClinica && (
@@ -202,6 +210,25 @@ export function AgendaFiltros({
             ))}
           </Select>
         </Campo>
+
+        {servicos.length > 0 && (
+          <Campo label="Serviço">
+            <Select
+              value={filtros.servico}
+              onChange={(e) => set("servico", e.target.value)}
+              className="h-10"
+              aria-label="Filtrar por serviço"
+            >
+              <option value="">Todos</option>
+              {servicos.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+              <option value="__sem">Sem serviço</option>
+            </Select>
+          </Campo>
+        )}
 
         <Campo label="Convênio">
           <Select

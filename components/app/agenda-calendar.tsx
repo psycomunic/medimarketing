@@ -113,6 +113,14 @@ export function AgendaCalendar({
 
   // Quem enxerga mais de uma clínica precisa ver de qual é cada consulta
   const multiClinica = opcoes.clinicas.length > 1;
+  // Serviços da tabela e os que já aparecem nas consultas carregadas
+  const nomesServicos = useMemo(
+    () =>
+      [...new Set([...servicos.map((p) => p.procedimento.trim()), ...consultasIniciais.map((c) => c.servico_nome?.trim() ?? "")].filter(Boolean))].sort((a, b) =>
+        a.localeCompare(b, "pt-BR")
+      ),
+    [servicos, consultasIniciais]
+  );
 
   // Agrupa consultas por dia (yyyy-MM-dd)
   const porDia = useMemo(() => {
@@ -235,6 +243,7 @@ export function AgendaCalendar({
           opcoes={opcoes}
           total={consultasIniciais.length}
           visiveis={consultas.length}
+          servicos={nomesServicos}
         />
       </div>
 
