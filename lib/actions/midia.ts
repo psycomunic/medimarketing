@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { bloqueio, contexto, GESTAO, organizacaoAlvo, type ActionResult } from "@/lib/actions/contexto";
+import { sincronizarConta } from "@/lib/marketing/sincronizar";
 
 const MSG_SQL = "O painel de mídia ainda não foi ativado. Rode o SQL do Marketing no Supabase.";
 
@@ -97,4 +98,42 @@ export async function salvarOrcamentoMidia(input: z.input<typeof orcamentoSchema
   if (error) return { ok: false, erro: "Não foi possível salvar o orçamento." };
   revalidatePath("/app/marketing");
   return { ok: true };
+}
+
+/* ------------------------------ Contas da BM (super admin) ------------------------------ */
+
+const vincularSchema = z.object({
+  plataforma: z.enum(["meta", "google"]),
+  contaId: z.string().min(3).max(60),
+  nome: z.string().trim().min(1).max(200),
+  organizationId: z.string().uuid().nullable(),
+});
+
+/** Liga (ou desliga) uma conta de anúncio da BM à clínica dona dela. */
+export async function vincularContaAnuncio(input: z.input<typeof vincularSchema>): Promise<ActionResult> {
+  const p = vincularSchema.safeParse(input);
+  if (!p.success) return { ok: false, erro: "Dados inválidos." };
+  const ctx = await contexto(["super_admin"]);
+  if (ctx.estado !== "ok") return bloqueio(ctx);
+  const d = p.data;
+  const { error } = await ctx.supabase.from("contas_anuncio").upsert(
+    { plataforma: d.plataforma, conta_id: d.contaId, nome: d.nome, organization_id: d.organizationId, ativo: !!d.organizationId },
+    { onConflict: "plataforma,conta_id" }
+  );
+  if (error && /does not exist|schema cache/i.test(error.message)) return { ok: false, erro: "Rode antes o SQL da conexão de mídia (Fase 2)." };
+  if (error) return { ok: false, erro: "Não foi possível salvar a ligação." };
+  revalidatePath("/app/admin/anuncios");
+  return { ok: true };
+}
+
+/** Busca agora os números de uma conta (90 dias na primeira vez; 30 depois). */
+export async function sincronizarContaAgora(plataforma: "meta" | "google", contaId: string): Promise<{ ok: true; linhas: number } | { ok: false; erro: string }> {
+  const ctx = await contexto(["super_admin"]);
+  if (ctx.estado !== "ok") return bloqueio(ctx) as { ok: false; erro: string };
+  const { data: conta } = await ctx.supabase.from("contas_anuncio").select("*").eq("plataforma", plataforma).eq("conta_id", contaId).maybeSingle();
+  if (!conta) return { ok: false, erro: "Ligue a conta a uma clínica antes de sincronizar." };
+  const r = await sincronizarConta(conta, conta.ultima_sincronizacao ? 30 : 90);
+  revalidatePath("/app/admin/anuncios");
+  revalidatePath("/app/marketing");
+  return r;
 }

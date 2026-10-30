@@ -103,10 +103,11 @@ export default async function MarketingPage({ searchParams }: { searchParams: Re
 
       <p className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-border bg-white px-4 py-3 text-sm text-cinza-suave">
         <Plug className="size-4 shrink-0 text-teal" />
-        {p.ultimaData
-          ? `Dados até ${rotuloDia(p.ultimaData)}/${p.ultimaData.slice(0, 4)}, pelos relatórios importados.`
-          : "Por enquanto os números chegam pelo relatório exportado do Meta e do Google."}{" "}
-        A conexão direta pela BM e pelo MCC da Medi Marketing vem na próxima etapa.
+        {p.metaConectado
+          ? `Meta Ads conectado pela BM da Medi Marketing: atualiza sozinho a cada 6 horas${p.metaAtualizado ? ` (última vez ${new Date(p.metaAtualizado).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" })})` : ""}. Google Ads pelo relatório importado.`
+          : p.ultimaData
+            ? `Dados até ${rotuloDia(p.ultimaData)}/${p.ultimaData.slice(0, 4)}, pelos relatórios importados. A conexão direta é feita pela equipe Medi Marketing.`
+            : "Os números chegam pelo relatório exportado do Meta e do Google, ou pela conexão direta feita pela equipe Medi Marketing."}
       </p>
 
       <div className="flex flex-wrap items-center gap-2">

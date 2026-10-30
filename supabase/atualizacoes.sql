@@ -2573,3 +2573,30 @@ drop policy if exists "orcamentos_midia_gestor" on public.orcamentos_midia;
 create policy "orcamentos_midia_gestor" on public.orcamentos_midia for all to authenticated
   using ((organization_id = public.minha_org() and public.is_gestor()) or public.is_super_admin())
   with check ((organization_id = public.minha_org() and public.is_gestor()) or public.is_super_admin());
+
+-- =====================================================================
+-- Marketing (Fase 2): contas de anúncio da BM principal da Medi,
+-- ligadas à clínica dona de cada uma. Só a equipe Medi liga e desliga;
+-- o dono da clínica só enxerga as contas dele.
+-- =====================================================================
+create table if not exists public.contas_anuncio (
+  id                   uuid primary key default uuid_generate_v4(),
+  plataforma           text not null check (plataforma in ('meta', 'google')),
+  conta_id             text not null,
+  nome                 text not null,
+  organization_id      uuid references public.organizations(id) on delete set null,
+  ativo                boolean not null default true,
+  ultima_sincronizacao timestamptz,
+  ultimo_erro          text,
+  created_at           timestamptz not null default now(),
+  unique (plataforma, conta_id)
+);
+create index if not exists idx_contas_anuncio_org on public.contas_anuncio (organization_id);
+
+alter table public.contas_anuncio enable row level security;
+drop policy if exists "contas_anuncio_admin" on public.contas_anuncio;
+create policy "contas_anuncio_admin" on public.contas_anuncio for all to authenticated
+  using (public.is_super_admin()) with check (public.is_super_admin());
+drop policy if exists "contas_anuncio_clinica" on public.contas_anuncio;
+create policy "contas_anuncio_clinica" on public.contas_anuncio for select to authenticated
+  using (organization_id = public.minha_org() and public.is_gestor());

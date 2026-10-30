@@ -57,6 +57,7 @@ export type ModuloId =
   | "admin-usuarios"
   | "admin-academy"
   | "admin-comentarios"
+  | "admin-anuncios"
   | "configuracoes"
   | "perfil";
 
@@ -301,6 +302,16 @@ export const MODULOS: readonly Modulo[] = [
     fase: 1,
     grupo: "admin",
     resumo: "Criar trilhas, cadastrar aulas e publicar os vídeos.",
+  },
+  {
+    id: "admin-anuncios",
+    label: "Contas de anúncio",
+    href: "/app/admin/anuncios",
+    icone: Megaphone,
+    papeis: ["super_admin"],
+    fase: 1,
+    grupo: "admin",
+    resumo: "Ligar as contas de anúncio da BM da Medi a cada clínica.",
   },
   {
     id: "admin-comentarios",

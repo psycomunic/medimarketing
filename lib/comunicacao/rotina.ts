@@ -1,4 +1,5 @@
 import "server-only";
+import { sincronizarMidia } from "@/lib/marketing/sincronizar";
 import { processarDisparos } from "@/lib/disparos";
 import { gerarMensalidades } from "@/lib/financeiro/rotina";
 
@@ -54,6 +55,8 @@ export type RelatorioRotina = {
   alertasVespera: number;
   mensalidades: number;
   disparos: number;
+  /** Linhas (campanha × dia) trazidas do Meta Ads. */
+  midia: number;
   fila: RelatorioFila;
 };
 
@@ -65,6 +68,7 @@ export async function rodarRotina(): Promise<RelatorioRotina> {
     alertasVespera: 0,
     mensalidades: 0,
     disparos: 0,
+    midia: 0,
     fila: { enviados: 0, falhas: 0, ignorados: 0 },
   };
   if (!adminDisponivel()) return relatorio;
@@ -87,6 +91,8 @@ export async function rodarRotina(): Promise<RelatorioRotina> {
     ["mensalidades", gerarMensalidades],
     // Campanhas: programa só o que vence nos próximos minutos
     ["disparos", processarDisparos],
+    // Mídia: números das contas de anúncio ligadas às clínicas
+    ["midia", sincronizarMidia],
   ];
   for (const [nome, etapa] of etapas) {
     try {

@@ -83,6 +83,9 @@ export type PainelMidia = {
     linhas: { plataforma: Plataforma; orcado: number; gasto: number; projecao: number }[];
   };
   alertas: Alerta[];
+  /** Conta do Meta ligada à clínica pela BM da Medi (dados chegam sozinhos). */
+  metaConectado: boolean;
+  metaAtualizado: string | null;
 };
 
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -149,6 +152,16 @@ async function getOrcamento(orgId: string | null, mes: string): Promise<Record<P
   return vazio;
 }
 
+/** A clínica tem conta do Meta ligada pela BM da Medi? */
+async function getConexaoMeta(orgId: string | null): Promise<{ conectado: boolean; atualizado: string | null }> {
+  if (await emModoDemo()) return { conectado: true, atualizado: new Date(Date.now() - 2 * 3600_000).toISOString() };
+  if (!orgId) return { conectado: false, atualizado: null };
+  const supabase = await createClient();
+  const { data } = await supabase.from("contas_anuncio").select("ultima_sincronizacao").eq("organization_id", orgId).eq("plataforma", "meta").eq("ativo", true);
+  const datas = (data ?? []).map((c) => c.ultima_sincronizacao).filter((x): x is string => !!x).sort();
+  return { conectado: !!data?.length, atualizado: datas[datas.length - 1] ?? null };
+}
+
 /** Pacientes e leads que vieram dos anúncios, para seguir até o faturamento. */
 async function getOrigens(orgId: string | null, desde: string) {
   const todas = [...ORIGENS.meta, ...ORIGENS.google];
@@ -188,7 +201,12 @@ export async function montarPainelMidia(orgId: string | null, filtro: Filtro, pl
 
   const de = [antA, inicioMes, somarDias(hoje, -14)].sort()[0];
   const ate = [b, fimMes].sort()[1];
-  const [todas, orcado, origens] = await Promise.all([getAnuncios(orgId, de, ate), getOrcamento(orgId, mes), getOrigens(orgId, a)]);
+  const [todas, orcado, origens, conexao] = await Promise.all([
+    getAnuncios(orgId, de, ate),
+    getOrcamento(orgId, mes),
+    getOrigens(orgId, a),
+    getConexaoMeta(orgId),
+  ]);
   const linhasTodas = plataforma ? todas.filter((l) => l.plataforma === plataforma) : todas;
   const doPeriodo = linhasTodas.filter((l) => l.data >= a && l.data <= b);
   const ultimaData = todas.reduce<string | null>((m, l) => (!m || l.data > m ? l.data : m), null);
@@ -354,5 +372,7 @@ export async function montarPainelMidia(orgId: string | null, filtro: Filtro, pl
     atribuicao: { ...atrib, total },
     orcamento,
     alertas,
+    metaConectado: conexao.conectado,
+    metaAtualizado: conexao.atualizado,
   };
 }

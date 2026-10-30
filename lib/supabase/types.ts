@@ -236,6 +236,19 @@ export type DisparoDestinatario = {
 };
 
 /** Filtros da lista de pacientes guardados com um nome. */
+/** Conta de anúncio da BM/MCC da Medi, ligada à clínica dona dela. */
+export type ContaAnuncio = {
+  id: string;
+  plataforma: "meta" | "google";
+  conta_id: string;
+  nome: string;
+  organization_id: string | null;
+  ativo: boolean;
+  ultima_sincronizacao: string | null;
+  ultimo_erro: string | null;
+  created_at: string;
+};
+
 /** Números de uma campanha num dia (planilha importada ou, depois, a API). */
 export type AnuncioDiario = {
   id: string;
@@ -1155,6 +1168,16 @@ export interface Database {
           processado_em?: string | null;
         },
         Partial<DisparoDestinatario>
+      >;
+      contas_anuncio: Tabela<
+        ContaAnuncio,
+        Omit<ContaAnuncio, "id" | "created_at" | "ultima_sincronizacao" | "ultimo_erro" | "ativo"> & {
+          id?: string;
+          ativo?: boolean;
+          ultima_sincronizacao?: string | null;
+          ultimo_erro?: string | null;
+        },
+        Partial<ContaAnuncio>
       >;
       anuncios_diarios: Tabela<
         AnuncioDiario,
