@@ -8,6 +8,8 @@ import { financeiroInstalado } from "@/lib/supabase/financeiro-dados";
 const ABAS = [
   { href: "/app/financeiro", rotulo: "Visão geral" },
   { href: "/app/financeiro/receitas", rotulo: "Receitas" },
+  // Tem filtro próprio de período (atalhos, datas e profissional)
+  { href: "/app/financeiro/servicos", rotulo: "Serviços", semMes: true },
   { href: "/app/financeiro/despesas", rotulo: "Despesas" },
   { href: "/app/financeiro/caixa", rotulo: "Fluxo de caixa" },
   { href: "/app/financeiro/historico", rotulo: "Histórico de caixa", semMes: true },

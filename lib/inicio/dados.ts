@@ -55,6 +55,7 @@ import {
   type Indicadores,
   type Risco,
 } from "@/lib/financeiro/agencia";
+import { analisarServicos, SEM_SERVICO } from "@/lib/financeiro/servicos-analise";
 import type { Consulta, Contrato, IndicadorMensal, Organization, PlanoCliente, Profile, Repasse, Role } from "@/lib/supabase/types";
 
 /**
@@ -102,6 +103,8 @@ export type DadosClinica = {
   repasses: Repasse[];
   /** Números do painel principal do dono (só gestor). */
   painel: PainelNumeros | null;
+  /** Serviços do recorte do painel: os que mais faturam e os mais procurados (só gestor). */
+  servicos: { faturam: { nome: string; valor: number; detalhe: string }[]; procurados: { nome: string; valor: number; detalhe: string }[] } | null;
   /** Ações de relacionamento com pacientes (só gestor). */
   relacionamento: Relacionamento | null;
 };
@@ -217,6 +220,7 @@ export async function dadosClinica(
 
   let financeiro: DadosClinica["financeiro"] = null;
   let painelNumeros: PainelNumeros | null = null;
+  let servicos: DadosClinica["servicos"] = null;
   let relacionamento: Relacionamento | null = null;
   let checklist: PassoChecklist[] = [];
   const pendencias = [...painel.pendencias];
@@ -289,6 +293,32 @@ export async function dadosClinica(
       bloqueios: prof ? bloqueios.filter((b) => b.medico_id === prof) : bloqueios,
       receitasAnoPassado: doProf(receitasAnoPassado),
     });
+    // Serviços no mesmo recorte do painel (só com a tabela de preços preenchida)
+    if (intervalo && precos.length) {
+      const sv = analisarServicos({
+        precos,
+        consultas: doProf(minhas),
+        receitas: doProf(receitas),
+        ini: intervalo.ini,
+        fim: intervalo.fim,
+        antIni: intervalo.antIni,
+        agora,
+        nomesProfissionais: {},
+      });
+      const reais0 = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+      const comServico = sv.linhas.filter((l) => l.chave !== SEM_SERVICO);
+      servicos = {
+        faturam: comServico
+          .filter((l) => l.faturamento > 0)
+          .slice(0, 5)
+          .map((l) => ({ nome: l.nome, valor: l.faturamento, detalhe: `${Math.round(l.participacao)}% do total` })),
+        procurados: [...comServico]
+          .filter((l) => l.marcadas > 0)
+          .sort((x, y) => y.marcadas - x.marcadas)
+          .slice(0, 5)
+          .map((l) => ({ nome: l.nome, valor: l.marcadas, detalhe: l.faturamento ? reais0(l.faturamento) : "sem receita" })),
+      };
+    }
     relacionamento = {
       vagas: horariosVagos(agora, minhas, disponibilidade, bloqueios),
       aniversariantes: aniversariantes(agora, historico),
@@ -378,7 +408,7 @@ export async function dadosClinica(
 
   const repasses = role === "medico" ? await getMeusRepasses(profile.id) : [];
 
-  return { pendencias, hoje, proximos, semana, indicadores, plano, consultasMes, financeiro, checklist, repasses, painel: painelNumeros, relacionamento };
+  return { pendencias, hoje, proximos, semana, indicadores, plano, consultasMes, financeiro, checklist, repasses, painel: painelNumeros, servicos, relacionamento };
 }
 
 async function existeConsulta(orgId: string): Promise<boolean> {

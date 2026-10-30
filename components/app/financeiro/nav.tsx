@@ -44,10 +44,14 @@ export function NavFinanceiro({
   const comMes = (href: string) => `${href}?mes=${mes}`;
   const ir = (n: number) => router.push(`${pathname}?mes=${deslocar(mes, n)}`);
   const ehAtual = mes === mesAtual();
+  const ativa = (t: AbaNav) => (t.href === base ? pathname === base : pathname.startsWith(t.href));
+  // Aba que não usa o mês (tem filtro próprio ou mostra tudo): o seletor some
+  const semMes = abas.find(ativa)?.semMes ?? false;
 
   return (
     <div className="mt-6 rounded-xl border border-border bg-white shadow-soft print:hidden">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-3 py-2.5 sm:px-4">
+      {/* Abas sem mês têm filtro e planilha próprios: a barra do mês some */}
+      <div className={cn("flex flex-wrap items-center justify-between gap-3 border-b border-border px-3 py-2.5 sm:px-4", semMes && "hidden")}>
         <div className="flex items-center gap-2">
           <div className="flex overflow-hidden rounded-lg border border-border">
             <button
@@ -102,7 +106,7 @@ export function NavFinanceiro({
       </div>
       <nav className="flex gap-1 overflow-x-auto px-2 py-1.5 [scrollbar-width:none]" aria-label="Seções do financeiro">
         {abas.map((t) => {
-          const ativo = t.href === base ? pathname === base : pathname.startsWith(t.href);
+          const ativo = ativa(t);
           return (
             <Link
               key={t.href}

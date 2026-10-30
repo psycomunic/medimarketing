@@ -1,4 +1,6 @@
+import Link from "next/link";
 import {
+  ArrowRight,
   Banknote,
   CalendarCheck2,
   CalendarClock,
@@ -19,10 +21,22 @@ import type { DadosClinica } from "@/lib/inicio/dados";
 import { calcularEvolucao } from "@/lib/evolucao";
 import { mesLongo } from "@/lib/financeiro/calculos";
 import { rotuloPapel } from "@/lib/rbac";
-import { Medidor } from "@/components/graficos/graficos";
-import { pct, reais } from "@/components/graficos/formato";
+import { Medidor, Ranking } from "@/components/graficos/graficos";
+import { SERIES, pct, reais } from "@/components/graficos/formato";
 import { Indicador, Painel } from "@/components/app/financeiro/ui";
 import { PainelDeNumeros } from "./painel-numeros";
+import type { Filtro } from "@/lib/inicio/painel";
+
+/** O mesmo filtro do painel, para abrir a aba Serviços no mesmo recorte. */
+function linkFiltro(f?: Filtro): string {
+  if (!f) return "";
+  const p = new URLSearchParams();
+  if (f.periodo !== "mes") p.set("periodo", f.periodo);
+  if (f.de) p.set("de", f.de);
+  if (f.ate) p.set("ate", f.ate);
+  if (f.profissional) p.set("profissional", f.profissional);
+  return p.size ? `?${p}` : "";
+}
 import { RelacionamentoPacientes } from "./relacionamento";
 import { AgendaHoje, Cabecalho, FunilComercial, PedeAtencao, PrimeirosPassos, ProximosPacientes, RecadoMedi } from "./blocos";
 
@@ -76,6 +90,32 @@ export function InicioGestor({ profile, org, dados, nomes }: { profile: Profile;
           <Indicador icone={HandCoins} rotulo="Recebido hoje" valor={reais(f?.recebidoHoje ?? 0)} nota="Pagamentos registrados" />
           <Indicador icone={Landmark} rotulo="Saldo em caixa" valor={reais(f?.saldoCaixa ?? 0)} nota="Informado no financeiro" destaque />
         </div>
+      )}
+
+      {dados.servicos && (
+        <Painel
+          titulo="Serviços do período"
+          descricao={`Os que mais faturam e os mais procurados ${dados.painel?.recorte.quando ?? "neste mês"}.`}
+          acao={
+            <Link
+              href={`/app/financeiro/servicos${linkFiltro(dados.painel?.recorte.filtro)}`}
+              className="inline-flex items-center gap-1 text-sm font-medium text-teal hover:underline"
+            >
+              Ver todos <ArrowRight className="size-4" />
+            </Link>
+          }
+        >
+          <div className="grid gap-6 md:grid-cols-2">
+            <div className="min-w-0">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-cinza-suave">Mais faturam</p>
+              <Ranking itens={dados.servicos.faturam} />
+            </div>
+            <div className="min-w-0">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-cinza-suave">Mais procurados</p>
+              <Ranking itens={dados.servicos.procurados} formato="numero" cor={SERIES[1]} />
+            </div>
+          </div>
+        </Painel>
       )}
 
       <div className="grid gap-5 lg:grid-cols-5">
