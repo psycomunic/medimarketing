@@ -2407,3 +2407,13 @@ create policy "destinatarios_update" on public.disparo_destinatarios for update 
 -- =====================================================================
 alter table public.tabela_precos add column if not exists valor_max numeric(12,2);
 alter table public.tabela_precos add column if not exists duracao_max smallint;
+
+-- =====================================================================
+-- Serviços na consulta (Fase 1): o serviço da Tabela de preços fica
+-- gravado na consulta e na receita que ela gera
+-- =====================================================================
+alter table public.consultas add column if not exists servico_id uuid references public.tabela_precos(id) on delete set null;
+alter table public.consultas add column if not exists servico_nome text;
+alter table public.lancamentos add column if not exists servico_id uuid references public.tabela_precos(id) on delete set null;
+create index if not exists idx_consultas_servico on public.consultas (organization_id, servico_id, data_hora);
+create index if not exists idx_lancamentos_servico on public.lancamentos (organization_id, servico_id, data_competencia);

@@ -7,7 +7,7 @@ import { programarPesquisa, suspenderPesquisa } from "@/lib/avaliacoes";
 import { createAdminClient, adminDisponivel } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { emModoDemo } from "@/lib/supabase/queries";
-import type { StatusConsulta, TipoConsulta } from "@/lib/supabase/types";
+import type { Consulta, StatusConsulta, TipoConsulta } from "@/lib/supabase/types";
 
 export type ActionResult = { ok: true } | { ok: false; erro: string };
 
@@ -124,6 +124,8 @@ export async function criarConsulta(input: {
   motivo?: string;
   observacao?: string;
   valor?: number;
+  /** Linha da Tabela de preços escolhida como serviço. */
+  servico_id?: string;
   /** Profissional que vai atender. Sem isso, é quem está criando. */
   medico_id?: string;
   /** Clínica da consulta. Obrigatória para quem não pertence a nenhuma. */
@@ -198,9 +200,19 @@ export async function criarConsulta(input: {
     };
   }
 
-  const { data: criada, error } = await supabase
-    .from("consultas")
-    .insert({
+  // O serviço vem da tabela da própria clínica; o nome fica gravado na consulta
+  let servico: { servico_id: string; servico_nome: string } | null = null;
+  if (input.servico_id) {
+    const { data: s } = await supabase
+      .from("tabela_precos")
+      .select("id,procedimento,organization_id")
+      .eq("id", input.servico_id)
+      .maybeSingle();
+    if (!s || s.organization_id !== organizationId) return { ok: false, erro: "Serviço não encontrado na tabela da clínica." };
+    servico = { servico_id: s.id, servico_nome: s.procedimento };
+  }
+
+  const registro = {
       organization_id: organizationId,
       medico_id: medicoId,
       criado_por: userId,
@@ -212,13 +224,20 @@ export async function criarConsulta(input: {
       data_hora: input.data_hora,
       duracao_min: input.duracao_min ?? 30,
       tipo: input.tipo,
-      status: "pendente",
+      status: "pendente" as StatusConsulta,
       motivo: input.motivo || null,
       observacao: input.observacao || null,
       valor: input.valor ?? null,
-    })
+  };
+  let { data: criada, error } = await supabase
+    .from("consultas")
+    .insert({ ...registro, ...servico })
     .select("id")
     .single();
+  // Banco sem as colunas de serviço ainda: marca sem ele, que é melhor que não marcar
+  if (error && servico && /servico_/.test(error.message)) {
+    ({ data: criada, error } = await supabase.from("consultas").insert(registro).select("id").single());
+  }
 
   if (error || !criada) return { ok: false, erro: "Não foi possível criar a consulta." };
 
@@ -234,4 +253,44 @@ export async function criarConsulta(input: {
   revalidatePath("/app/agenda");
   revalidatePath("/app");
   return { ok: true, id: criada.id };
+}
+
+/**
+ * Troca o serviço de uma consulta marcada. Com preço fixo na tabela, o
+ * valor acompanha; com faixa, fica o que veio (ou o informado). A receita
+ * prevista da consulta é refeita junto.
+ */
+export async function trocarServico(
+  id: string,
+  servicoId: string | null,
+  valor?: number | null,
+): Promise<ActionResult> {
+  if (await emModoDemo()) return { ok: false, erro: MSG_DEMO };
+  const { supabase, userId } = await getUserId();
+  if (!userId) return { ok: false, erro: "Sessão expirada." };
+
+  const { data: c } = await supabase.from("consultas").select("id,organization_id").eq("id", id).maybeSingle();
+  if (!c) return { ok: false, erro: "Consulta não encontrada." };
+
+  let mudar: Partial<Consulta> = { servico_id: null, servico_nome: null };
+  if (servicoId) {
+    const { data: s } = await supabase
+      .from("tabela_precos")
+      .select("id,procedimento,organization_id,duracao_min")
+      .eq("id", servicoId)
+      .maybeSingle();
+    if (!s || s.organization_id !== c.organization_id) return { ok: false, erro: "Serviço não encontrado na tabela da clínica." };
+    mudar = { servico_id: s.id, servico_nome: s.procedimento };
+  }
+  if (valor !== undefined) mudar.valor = valor;
+
+  const { error } = await supabase.from("consultas").update(mudar).eq("id", id);
+  if (error && /servico_/.test(error.message))
+    return { ok: false, erro: "Para guardar o serviço da consulta, rode antes o SQL dos serviços (Fase 1)." };
+  if (error) return { ok: false, erro: "Não foi possível trocar o serviço." };
+
+  await sincronizarReceita(id);
+  revalidatePath("/app/agenda");
+  revalidatePath("/app");
+  return { ok: true };
 }

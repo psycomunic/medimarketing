@@ -26,7 +26,8 @@ export async function sincronizarReceita(consultaId: string): Promise<void> {
     const admin = createAdminClient();
     const { data: c } = await admin
       .from("consultas")
-      .select("id,organization_id,medico_id,paciente_nome,tipo,valor,convenio,data_hora,status,motivo")
+      // "*": as colunas de serviço só existem depois do SQL
+      .select("*")
       .eq("id", consultaId)
       .maybeSingle();
     if (!c?.organization_id) return;
@@ -52,14 +53,30 @@ export async function sincronizarReceita(consultaId: string): Promise<void> {
     // Sem valor e sem convênio, não há o que cobrar (ex.: retorno)
     if (!existente && valor <= 0 && !convenio) return;
 
+    // Com serviço, a receita leva o nome, a categoria e o custo direto da tabela
+    const servico = c.servico_id
+      ? (await admin.from("tabela_precos").select("procedimento,categoria,custo").eq("id", c.servico_id).maybeSingle()).data
+      : null;
+    const nomeServico: string | null = c.servico_nome?.trim() || servico?.procedimento || null;
+    const procedimento = nomeServico
+      ? c.motivo?.trim()
+        ? `${nomeServico} · ${c.motivo.trim()}`
+        : nomeServico
+      : c.motivo?.trim()
+        ? `${rotuloTipo[c.tipo as TipoConsulta]} · ${c.motivo.trim()}`
+        : rotuloTipo[c.tipo as TipoConsulta];
+
     const forma: FormaPagamento = convenio ? "convenio" : "pix";
     const base = {
       organization_id: c.organization_id,
       consulta_id: c.id,
       medico_id: c.medico_id,
       paciente_nome: c.paciente_nome,
-      procedimento: c.motivo?.trim() ? `${rotuloTipo[c.tipo as TipoConsulta]} · ${c.motivo.trim()}`.slice(0, 120) : rotuloTipo[c.tipo as TipoConsulta],
-      categoria: "Consultas",
+      procedimento: procedimento.slice(0, 120),
+      categoria: servico?.categoria?.trim() || "Consultas",
+      // Só quando a consulta já tem a coluna: banco sem o SQL segue como antes
+      ...("servico_id" in c && { servico_id: c.servico_id ?? null }),
+      ...(servico && { custo: Number(servico.custo) || 0 }),
       valor,
       convenio,
       data_competencia: competencia,
@@ -76,8 +93,8 @@ export async function sincronizarReceita(consultaId: string): Promise<void> {
         .eq("id", existente.id);
     } else {
       await admin.from("lancamentos").insert({
-        ...base,
         custo: 0,
+        ...base,
         forma_pagamento: forma,
         status: "previsto",
         data_recebimento: null,

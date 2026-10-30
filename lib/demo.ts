@@ -320,6 +320,13 @@ function daquiA(minutos: number): string {
   return d.toISOString();
 }
 
+/** Serviço da demonstração por tipo de consulta: id e nome da tabela de preços demo. */
+const SERVICO_DEMO: Record<string, [string, string]> = {
+  primeira: ["dpreco-0", "Consulta dermatológica"],
+  retorno: ["dpreco-1", "Retorno"],
+  teleconsulta: ["dpreco-2", "Teleconsulta"],
+};
+
 /** Consultas fictícias distribuídas ao longo da semana atual. */
 export function demoConsultas(): Consulta[] {
   const base = (parcial: Partial<Consulta> & Pick<Consulta, "id" | "paciente_nome" | "data_hora" | "tipo" | "status">): Consulta => ({
@@ -335,6 +342,9 @@ export function demoConsultas(): Consulta[] {
     motivo: null,
     observacao: null,
     valor: null,
+    // Serviço da tabela de preços de demonstração, pelo tipo da consulta (só na clínica demo)
+    ...((parcial.organization_id ?? DEMO_ORG_ID) === DEMO_ORG_ID &&
+      SERVICO_DEMO[parcial.tipo] && { servico_id: SERVICO_DEMO[parcial.tipo][0], servico_nome: SERVICO_DEMO[parcial.tipo][1] }),
     ...parcial,
   });
 

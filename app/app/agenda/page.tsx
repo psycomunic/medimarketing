@@ -5,6 +5,7 @@ import { getClinicasDisponiveis, getUsuarios } from "@/lib/supabase/usuarios";
 import { getConfirmacoesDaAgenda } from "@/lib/supabase/confirmacoes";
 import { whatsappConfigurado } from "@/lib/envio";
 import { getPacientesBasicos } from "@/lib/supabase/pacientes";
+import { getPrecos } from "@/lib/supabase/financeiro-dados";
 
 export const metadata = { title: "Agenda" };
 
@@ -22,7 +23,7 @@ export default async function AgendaPage() {
   const inicio = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
   const fim = new Date(hoje.getFullYear(), hoje.getMonth() + 3, 0, 23, 59, 59);
 
-  const [{ consultas, opcoes }, equipe, clinicas, demo, disponibilidade, bloqueios, pacientes] = await Promise.all([
+  const [{ consultas, opcoes }, equipe, clinicas, demo, disponibilidade, bloqueios, pacientes, servicos] = await Promise.all([
     getAgenda(inicio.toISOString(), fim.toISOString()),
     getUsuarios(escopo),
     getClinicasDisponiveis(escopo),
@@ -30,6 +31,8 @@ export default async function AgendaPage() {
     getDisponibilidade(),
     getBloqueios(),
     getPacientesBasicos(),
+    // Serviços da tabela de preços (sem o financeiro instalado, a lista vem vazia)
+    getPrecos(organizacao?.id ?? null).catch(() => []),
   ]);
 
   // Estado da confirmação de cada consulta, para a ficha já abrir com ele
@@ -70,6 +73,7 @@ export default async function AgendaPage() {
             : null
         }
         demo={demo}
+        servicos={servicos}
       />
     </div>
   );

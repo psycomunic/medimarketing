@@ -125,6 +125,10 @@ export type Consulta = {
   motivo: string | null; // queixa / motivo da consulta
   observacao: string | null;
   valor: number | null; // valor da consulta (R$)
+  /** Serviço da Tabela de preços (nulo em "outro serviço" ou até o SQL rodar). */
+  servico_id?: string | null;
+  /** Nome do serviço na hora da marcação: o histórico não muda se a tabela mudar. */
+  servico_nome?: string | null;
   /** Ficha do paciente (nulo até o SQL do banco de pacientes rodar). */
   paciente_id?: string | null;
   criado_por: string | null;
@@ -513,6 +517,8 @@ export type Lancamento = {
   created_at: string;
   /* Campos do financeiro completo (opcionais até o SQL rodar) */
   medico_id?: string | null;
+  /** Serviço da Tabela de preços, quando a receita veio de uma consulta com serviço. */
+  servico_id?: string | null;
   convenio?: string | null;
   desconto?: number;
   /** Taxa da maquininha ou do boleto, já em reais. */

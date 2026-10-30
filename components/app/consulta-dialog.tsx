@@ -22,8 +22,11 @@ import {
   Contact,
   Loader2,
   Save,
+  Tag,
 } from "lucide-react";
-import type { Consulta, StatusConsulta } from "@/lib/supabase/types";
+import type { Consulta, PrecoProcedimento, StatusConsulta } from "@/lib/supabase/types";
+import { catalogoServicos, porCategoria, precoDoServico } from "@/lib/servicos";
+import { temFaixa } from "@/lib/financeiro/precos";
 import {
   Dialog,
   DialogContent,
@@ -43,7 +46,7 @@ import {
   calcularIdade,
   formatarValor,
 } from "@/lib/agenda";
-import { atualizarStatus, salvarObservacao } from "@/lib/actions/consultas";
+import { atualizarStatus, salvarObservacao, trocarServico } from "@/lib/actions/consultas";
 import { AnexosManager } from "@/components/app/anexos-manager";
 import { PagamentoConsulta } from "@/components/app/financeiro/pagamento-consulta";
 import {
@@ -56,9 +59,12 @@ export function ConsultaDialog({
   confirmacao,
   envioAutomatico = false,
   demo = false,
+  servicos = [],
   onOpenChange,
 }: {
   consulta: Consulta | null;
+  /** Tabela de preços, para trocar o serviço da consulta. */
+  servicos?: PrecoProcedimento[];
   /** Estado da confirmação desta consulta, se já existir uma. */
   confirmacao?: ConfirmacaoDaConsulta | null;
   envioAutomatico?: boolean;
@@ -173,6 +179,7 @@ export function ConsultaDialog({
               label="Duração"
               valor={consulta.duracao_min ? `${consulta.duracao_min} min` : null}
             />
+            <ServicoDaConsulta key={consulta.id} consulta={consulta} servicos={servicos} demo={demo} />
             <Item icon={CalendarCheck} label="Tipo" valor={rotuloTipo[consulta.tipo]} />
             <Item icon={Stethoscope} label="Motivo" valor={consulta.motivo} />
             <Item icon={DollarSign} label="Valor" valor={formatarValor(consulta.valor)} />
@@ -335,6 +342,72 @@ function Bloco({
         {titulo}
       </p>
       <div className="grid grid-cols-[minmax(0,1fr)] gap-2 text-sm">{children}</div>
+    </div>
+  );
+}
+
+/** Serviço da consulta, com troca rápida (o valor acompanha quando a tabela tem preço fixo). */
+function ServicoDaConsulta({ consulta, servicos, demo }: { consulta: Consulta; servicos: PrecoProcedimento[]; demo: boolean }) {
+  const router = useRouter();
+  const [trocando, setTrocando] = useState(false);
+  // A ficha aberta não recarrega sozinha: mostra o nome novo na hora
+  const [nome, setNome] = useState(consulta.servico_nome ?? null);
+  const [erro, setErro] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  const catalogo = catalogoServicos(servicos.filter((p) => p.organization_id === consulta.organization_id));
+  const podeTrocar = catalogo.length > 0 && consulta.status !== "realizada" && !demo;
+
+  function trocar(id: string) {
+    setErro(null);
+    const s = catalogo.find((x) => x.id === id) ?? null;
+    const p = s ? precoDoServico(s, consulta.convenio) : null;
+    const valor = p && !temFaixa(p) && Number(p.valor) ? Number(p.valor) : undefined;
+    startTransition(async () => {
+      const r = await trocarServico(consulta.id, s?.id ?? null, valor);
+      if (!r.ok) return setErro(r.erro);
+      setNome(s?.nome ?? null);
+      setTrocando(false);
+      router.refresh();
+    });
+  }
+
+  return (
+    <div className="flex items-start gap-2">
+      <Tag className="mt-0.5 size-4 shrink-0 text-teal" />
+      <span className="w-20 shrink-0 text-cinza-suave">Serviço</span>
+      <div className="min-w-0 flex-1">
+        {trocando ? (
+          <select
+            autoFocus
+            disabled={pending}
+            defaultValue={catalogo.find((x) => x.nome === nome)?.id ?? ""}
+            onChange={(e) => trocar(e.target.value)}
+            className="h-9 w-full rounded-md border border-input bg-white px-2 text-sm text-cinza-texto"
+          >
+            <option value="">Outro serviço (fora da tabela)</option>
+            {porCategoria(catalogo).map(([categoria, lista]) => (
+              <optgroup key={categoria} label={categoria}>
+                {lista.map((x) => (
+                  <option key={x.id} value={x.id}>
+                    {x.nome}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        ) : (
+          <span className="font-medium text-cinza-texto [overflow-wrap:anywhere]">
+            {nome || <span className="text-cinza-suave/60">—</span>}
+            {podeTrocar && (
+              <button type="button" onClick={() => setTrocando(true)} className="ml-2 text-xs font-semibold text-teal hover:underline">
+                {nome ? "Trocar" : "Escolher"}
+              </button>
+            )}
+          </span>
+        )}
+        {pending && <Loader2 className="mt-1 size-3.5 animate-spin text-cinza-suave" />}
+        {erro && <p className="mt-1 text-xs text-coral">{erro}</p>}
+      </div>
     </div>
   );
 }

@@ -1,5 +1,7 @@
 "use client";
 
+import type { PrecoProcedimento } from "@/lib/supabase/types";
+
 import type { PacienteBasico } from "@/lib/supabase/pacientes";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -76,6 +78,7 @@ export function AgendaCalendar({
   bloqueios = [],
   lembrete = null,
   demo = false,
+  servicos = [],
 }: {
   consultasIniciais: ConsultaComContexto[];
   /** Banco de pacientes: entra na busca da Nova consulta. */
@@ -92,6 +95,8 @@ export function AgendaCalendar({
   bloqueios?: Bloqueio[];
   lembrete?: { ativo: boolean; diasUteis: number; hora: number } | null;
   demo?: boolean;
+  /** Tabela de preços: os serviços para escolher na consulta. */
+  servicos?: PrecoProcedimento[];
 }) {
   // Abre sempre no dia de hoje: é a pergunta de quem entra na agenda
   const [visao, setVisao] = useState<Visao>("dia");
@@ -394,6 +399,7 @@ export function AgendaCalendar({
         confirmacao={selecionada ? confirmacoes[selecionada.id] ?? null : null}
         envioAutomatico={envioAutomatico}
         demo={demo}
+        servicos={servicos}
         onOpenChange={(o) => !o && setSelecionada(null)}
       />
       <BotaoFlutuante acoes={[{ rotulo: "Nova consulta", icone: CalendarPlus, evento: "fab:nova-consulta" }]} />
@@ -408,6 +414,7 @@ export function AgendaCalendar({
         conveniosUsados={opcoes.convenios}
         consultas={consultasIniciais}
         pacientesBanco={pacientes}
+        servicos={servicos}
         disponibilidade={disponibilidade}
         bloqueios={bloqueios}
         envioAutomatico={envioAutomatico}
@@ -864,7 +871,7 @@ function WeekView({
                                 </span>
                                 {altura >= 70 && (
                                   <span className="mt-0.5 truncate text-[10px] text-cinza-suave">
-                                    {[rotuloTipo[c.tipo], c.medico_nome].filter(Boolean).join(" · ")}
+                                    {[c.servico_nome || rotuloTipo[c.tipo], c.medico_nome].filter(Boolean).join(" · ")}
                                   </span>
                                 )}
                               </>
@@ -1060,7 +1067,7 @@ function DayView({
                         )}
                         <span className="flex items-center gap-1">
                           <Stethoscope className="size-3.5 text-teal" />
-                          {rotuloTipo[c.tipo]}
+                          {c.servico_nome ? `${c.servico_nome} · ${rotuloTipo[c.tipo]}` : rotuloTipo[c.tipo]}
                         </span>
                         {c.convenio && (
                           <span className="flex items-center gap-1">

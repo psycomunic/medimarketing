@@ -25,7 +25,7 @@ import {
   UserPlus,
   Video,
 } from "lucide-react";
-import type { Bloqueio, Disponibilidade, TipoConsulta } from "@/lib/supabase/types";
+import type { Bloqueio, Disponibilidade, PrecoProcedimento, TipoConsulta } from "@/lib/supabase/types";
 import type { ConsultaComContexto } from "@/lib/supabase/queries";
 import {
   Dialog,
@@ -43,6 +43,8 @@ import { criarConsulta } from "@/lib/actions/consultas";
 import { salvarAnexo } from "@/lib/actions/anexos";
 import { calcularDisparo } from "@/lib/lembretes";
 import { cn } from "@/lib/utils";
+import { catalogoServicos, porCategoria, precoDoServico, resumoPreco } from "@/lib/servicos";
+import { temFaixa, textoDuracao, textoValor } from "@/lib/financeiro/precos";
 
 // Convênios mais comuns no Brasil. O que não estiver aqui entra por
 // "Outro convênio", e passa a aparecer na lista da clínica depois.
@@ -85,6 +87,8 @@ const CONVENIOS = [
   "Fusex",
 ];
 const OUTRO = "__outro";
+/** Atendimento fora da Tabela de preços. */
+const OUTRO_SERVICO = "__outro_servico";
 
 const DURACOES = [15, 20, 30, 40, 45, 60, 90];
 
@@ -187,6 +191,7 @@ export function NovaConsultaDialog({
   bloqueios = [],
   envioAutomatico = false,
   lembrete = null,
+  servicos = [],
 }: {
   aberto: boolean;
   data: Date | null;
@@ -214,6 +219,8 @@ export function NovaConsultaDialog({
   lembrete?: { ativo: boolean; diasUteis: number; hora: number } | null;
   /** Avisa a data criada, para a agenda ir até ela. */
   onCriada?: (quando: Date) => void;
+  /** Tabela de preços: os serviços que a clínica oferece. */
+  servicos?: PrecoProcedimento[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -234,6 +241,9 @@ export function NovaConsultaDialog({
   const [tipo, setTipo] = useState<TipoConsulta>("primeira");
   const [motivo, setMotivo] = useState("");
   const [valor, setValor] = useState("");
+  const [servicoId, setServicoId] = useState("");
+  // Valor digitado à mão não é sobrescrito pela tabela
+  const [valorManual, setValorManual] = useState(false);
   const [observacao, setObservacao] = useState("");
   const [avisarPaciente, setAvisarPaciente] = useState(true);
   const [arquivos, setArquivos] = useState<File[]>([]);
@@ -255,6 +265,34 @@ export function NovaConsultaDialog({
   );
   const precisaEscolherClinica = clinicas.length > 1;
   const medico = profissionais.find((p) => p.id === medicoId) ?? null;
+
+  // Serviços da tabela de preços da clínica escolhida
+  const catalogo = useMemo(
+    () => catalogoServicos(servicos.filter((p) => !clinicaId || p.organization_id === clinicaId)),
+    [servicos, clinicaId]
+  );
+  const servico = catalogo.find((x) => x.id === servicoId) ?? null;
+  const precoServico = servico ? precoDoServico(servico, convenio) : null;
+
+  /** Preenche duração e valor pela tabela (o valor só se ninguém digitou). */
+  function aplicarPreco(p: PrecoProcedimento | null, manual = valorManual) {
+    if (!p) return;
+    if (p.duracao_min) setDuracao(p.duracao_min);
+    if (!manual) setValor(temFaixa(p) || !Number(p.valor) ? "" : Number(p.valor).toLocaleString("pt-BR", { minimumFractionDigits: 2 }));
+  }
+
+  function escolherServico(id: string) {
+    setServicoId(id);
+    setValorManual(false);
+    const s = catalogo.find((x) => x.id === id);
+    if (s) aplicarPreco(precoDoServico(s, convenio), false);
+  }
+
+  // Trocou o convênio: o preço do serviço pode ser outro
+  useEffect(() => {
+    if (precoServico) aplicarPreco(precoServico);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [convenio]);
 
   // Com um profissional só, ele já vem escolhido
   useEffect(() => {
@@ -282,6 +320,8 @@ export function NovaConsultaDialog({
     setTipo("primeira");
     setMotivo("");
     setValor("");
+    setServicoId("");
+    setValorManual(false);
     setObservacao("");
     setAvisarPaciente(true);
     setArquivos([]);
@@ -370,7 +410,7 @@ export function NovaConsultaDialog({
     setConvenioOutro(false);
     // Ficha sem consulta (cadastrada ou importada): é a primeira vez
     setTipo(p.consultas > 0 ? "retorno" : "primeira");
-    if (!valor && p.valor) setValor(String(p.valor).replace(".", ","));
+    if (!valor && p.valor && !servicoId) setValor(String(p.valor).replace(".", ","));
     setBuscando(false);
   }
 
@@ -517,6 +557,10 @@ export function NovaConsultaDialog({
       setErro("Escolha a data e o horário.");
       return;
     }
+    if (catalogo.length > 0 && !servicoId) {
+      setErro("Escolha o serviço da consulta (ou \"Outro serviço\").");
+      return;
+    }
     if (valorNum !== undefined && !Number.isFinite(valorNum)) {
       setErro("O valor precisa ser um número, como 350,00.");
       return;
@@ -537,6 +581,7 @@ export function NovaConsultaDialog({
         motivo,
         observacao,
         valor: valorNum,
+        servico_id: servico?.id,
         medico_id: medicoId || undefined,
         organization_id: clinicaId || undefined,
         avisar_paciente: avisarPaciente,
@@ -690,6 +735,51 @@ export function NovaConsultaDialog({
                       );
                     })}
                   </div>
+                </div>
+
+                <div className="mt-4 grid gap-1.5">
+                  <Label htmlFor="servico">
+                    Serviço {catalogo.length > 0 && <span className="text-coral">*</span>}
+                  </Label>
+                  {catalogo.length > 0 ? (
+                    <>
+                      <select id="servico" className={selectClass} value={servicoId} onChange={(e) => escolherServico(e.target.value)}>
+                        <option value="">Selecione o serviço…</option>
+                        {porCategoria(catalogo).map(([categoria, lista]) => (
+                          <optgroup key={categoria} label={categoria}>
+                            {lista.map((x) => {
+                              const r = resumoPreco(precoDoServico(x, convenio));
+                              return (
+                                <option key={x.id} value={x.id}>
+                                  {x.nome}
+                                  {r ? ` — ${r}` : ""}
+                                </option>
+                              );
+                            })}
+                          </optgroup>
+                        ))}
+                        <option value={OUTRO_SERVICO}>Outro serviço (fora da tabela)</option>
+                      </select>
+                      {precoServico && (
+                        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-cinza-suave">
+                          <span className="rounded-full bg-verde-menta px-2 py-0.5 font-semibold text-azul-medico">
+                            {Number(precoServico.valor) || temFaixa(precoServico) ? textoValor(precoServico) : "Sem cobrança"}
+                          </span>
+                          {textoDuracao(precoServico) && <span>{textoDuracao(precoServico)}</span>}
+                          {precoServico.convenio && <span>Preço do {precoServico.convenio}.</span>}
+                          {temFaixa(precoServico) && <span>Informe o valor cobrado em Detalhes.</span>}
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <p className="rounded-md border border-dashed border-border px-3 py-2.5 text-xs text-cinza-suave">
+                      Nenhum serviço cadastrado ainda.{" "}
+                      <a href="/app/financeiro/configuracoes" className="font-medium text-teal hover:underline">
+                        Cadastre os serviços na Tabela de preços
+                      </a>{" "}
+                      para escolher aqui e ver quanto cada um rende.
+                    </p>
+                  )}
                 </div>
               </Secao>
 
@@ -902,7 +992,7 @@ export function NovaConsultaDialog({
                       onChange={(e) => setDuracao(Number(e.target.value))}
                       className={selectClass}
                     >
-                      {DURACOES.map((d) => (
+                      {[...new Set([...DURACOES, duracao])].sort((x, y) => x - y).map((d) => (
                         <option key={d} value={d}>
                           {d} min
                         </option>
@@ -989,8 +1079,11 @@ export function NovaConsultaDialog({
                         id="valor"
                         inputMode="decimal"
                         value={valor}
-                        onChange={(e) => setValor(e.target.value.replace(/[^\d.,]/g, ""))}
-                        placeholder={convenio === "Particular" ? "0,00" : "Pelo convênio"}
+                        onChange={(e) => {
+                          setValor(e.target.value.replace(/[^\d.,]/g, ""));
+                          setValorManual(true);
+                        }}
+                        placeholder={precoServico && temFaixa(precoServico) ? textoValor(precoServico).replace(/R\$\s?/g, "") : convenio === "Particular" ? "0,00" : "Pelo convênio"}
                         className="pl-10"
                       />
                     </div>
@@ -1117,6 +1210,7 @@ export function NovaConsultaDialog({
                     <div className="min-w-0">
                       <dt className="sr-only">Médico</dt>
                       <dd className="truncate font-medium text-azul-medico">{medico?.nome ?? "Escolha o médico"}</dd>
+                      {servico && <dd className="truncate text-xs font-medium text-cinza-texto">{servico.nome}</dd>}
                       <dd className="flex items-center gap-1 text-xs text-cinza-suave">
                         <TipoIcone className="size-3" /> {rotuloTipo[tipo]} · {duracao} min
                       </dd>
