@@ -4,6 +4,7 @@ import { podeAcessar } from "@/lib/rbac";
 import { getDespesas, getProfissionais, getReceitas } from "@/lib/supabase/financeiro-dados";
 import { bruto, liquido, rotuloCategoria } from "@/lib/financeiro/calculos";
 import { rotuloFormaPagamento, rotuloStatusLancamento } from "@/lib/rotulos";
+import { periodoFinanceiro } from "@/lib/financeiro/periodo";
 
 /**
  * Planilha do mês para o contador: receitas e despesas num CSV que abre
@@ -15,10 +16,10 @@ export async function GET(req: Request) {
     return NextResponse.json({ erro: "Sem acesso." }, { status: 403 });
   }
   const url = new URL(req.url);
-  const mes = /^\d{4}-\d{2}$/.test(url.searchParams.get("mes") ?? "") ? url.searchParams.get("mes")! : new Date().toISOString().slice(0, 7);
-  const [a, m] = mes.split("-").map(Number);
-  const de = `${mes}-01`;
-  const ate = `${mes}-${String(new Date(a, m, 0).getDate()).padStart(2, "0")}`;
+  // Mês (?mes=) ou intervalo (?de=&ate=), o mesmo da tela
+  const periodo = periodoFinanceiro(url.searchParams);
+  const { de, ate } = periodo;
+  const mes = periodo.ehMes ? periodo.mes : `${de}_a_${ate}`;
   const orgId = organizacao?.id ?? null;
   const [receitas, despesas, profissionais] = await Promise.all([getReceitas(orgId, de, ate), getDespesas(orgId, de, ate), getProfissionais(orgId)]);
   const nomes = Object.fromEntries(profissionais.map((p) => [p.id, p.nome]));

@@ -11,10 +11,12 @@ const ABAS = [
   // Tem filtro próprio de período (atalhos, datas e profissional)
   { href: "/app/financeiro/servicos", rotulo: "Serviços", semMes: true },
   { href: "/app/financeiro/despesas", rotulo: "Despesas" },
-  { href: "/app/financeiro/caixa", rotulo: "Fluxo de caixa" },
+  // Projeção para a frente, com horizonte próprio (30 a 180 dias)
+  { href: "/app/financeiro/caixa", rotulo: "Fluxo de caixa", semMes: true },
   { href: "/app/financeiro/historico", rotulo: "Histórico de caixa", semMes: true },
   { href: "/app/financeiro/convenios", rotulo: "Convênios" },
-  { href: "/app/financeiro/repasses", rotulo: "Repasses" },
+  // Repasse fecha mês a mês
+  { href: "/app/financeiro/repasses", rotulo: "Repasses", soMes: true },
   { href: "/app/financeiro/resultado", rotulo: "Resultado (DRE)" },
   { href: "/app/financeiro/configuracoes", rotulo: "Preços e taxas" },
 ];
@@ -37,7 +39,7 @@ export default async function FinanceiroLayout({ children }: { children: React.R
         </div>
       </header>
       <Suspense fallback={<div className="mt-6 h-[104px] rounded-xl border border-border bg-white" />}>
-        <NavFinanceiro abas={ABAS} base="/app/financeiro" relatorioHref="/app/financeiro/relatorio" exportarHref="/app/financeiro/exportar" />
+        <NavFinanceiro abas={ABAS} base="/app/financeiro" relatorioHref="/app/financeiro/relatorio" exportarHref="/app/financeiro/exportar" intervalos />
       </Suspense>
       <div className="mt-6">
         {!instalado && <AvisoInstalacao />}

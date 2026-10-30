@@ -42,7 +42,8 @@ import {
 } from "@/lib/financeiro/calculos";
 import { BarrasAgrupadas, LinhaArea, Medidor, Ranking, Rosca } from "@/components/graficos/graficos";
 import { COR, SERIES, pct, reais } from "@/components/graficos/formato";
-import { Indicador, Painel, Situacao, limites, mesDaUrl } from "@/components/app/financeiro/ui";
+import { Indicador, Painel, Situacao, limites } from "@/components/app/financeiro/ui";
+import { anteriorCompleto, noPeriodo, periodoFinanceiro } from "@/lib/financeiro/periodo";
 import { rotuloFormaPagamento } from "@/lib/rotulos";
 import { FabLancamentos } from "@/components/app/botoes-flutuantes";
 
@@ -57,13 +58,19 @@ const COR_FORMA: Record<string, string> = {
   boleto: SERIES[5],
 };
 
-export default async function VisaoGeralFinanceiro({ searchParams }: { searchParams: { mes?: string } }) {
+export default async function VisaoGeralFinanceiro({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
   const { organizacao } = await exigirModulo("financeiro");
   const orgId = organizacao?.id ?? null;
-  const mes = mesDaUrl(searchParams.mes);
+  const p = periodoFinanceiro(searchParams);
+  const mes = p.mes;
   const meses = ultimosMeses(mes, 12);
   const { ate } = limites(mes);
-  const de12 = `${meses[0]}-01`;
+  // 12 meses de série e, se o período pedir, a comparação mais antiga
+  const de12 = p.anterior.de < `${meses[0]}-01` ? p.anterior.de : `${meses[0]}-01`;
+  const doPer = p.ehMes ? "do mês" : "do período";
+  const noPer = p.ehMes ? "no mês" : "no período";
+  // Metas são mensais: no período de meses inteiros, somam
+  const fatorMeta = p.mesesInteiros ? p.meses.length : null;
 
   const [receitas, despesas, config, recebiveis, contas, regras, plano, indicadores] = await Promise.all([
     getReceitas(orgId, de12, ate),
@@ -76,12 +83,14 @@ export default async function VisaoGeralFinanceiro({ searchParams }: { searchPar
     getIndicadores(orgId, 12),
   ]);
 
-  const doMes = (m: string) => ({
-    r: receitas.filter((l) => l.data_competencia.startsWith(m)),
-    d: despesas.filter((x) => x.vencimento.startsWith(m)),
+  const entre = (q: { de: string; ate: string }) => ({
+    r: noPeriodo(receitas, (l) => l.data_competencia, q),
+    d: noPeriodo(despesas, (x) => x.vencimento, q),
   });
-  const atual = doMes(mes);
-  const ant = doMes(mesAnterior(mes));
+  const atual = entre(p);
+  const ant = entre(p.anterior);
+  // Sem histórico desde o começo do período anterior, a variação some
+  const comparar = (a: number, b: number) => (anteriorCompleto(receitas, (l) => l.data_competencia, p.anterior) ? variacao(a, b) : null);
   const repasse = calcularRepasses(atual.r, regras).reduce((s, x) => s + x.valor, 0);
   const r = resumoMes(atual.r, atual.d, config, repasse);
   const ra = resumoMes(ant.r, ant.d, config, calcularRepasses(ant.r, regras).reduce((s, x) => s + x.valor, 0));
@@ -148,13 +157,13 @@ export default async function VisaoGeralFinanceiro({ searchParams }: { searchPar
 
   return (
     <div className="grid gap-5">
-      {/* Indicadores do mês */}
+      {/* Indicadores do período */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Indicador
           icone={Banknote}
-          rotulo="Faturamento do mês"
+          rotulo={`Faturamento ${doPer}`}
           valor={reais(r.receitaBruta)}
-          variacao={variacao(r.receitaBruta, ra.receitaBruta)}
+          variacao={comparar(r.receitaBruta, ra.receitaBruta)}
           nota={`${r.atendimentos} atendimentos · ticket ${reais(r.ticketMedio)}`}
           serie={serie.map((p) => p.receita)}
           cor={COR.receita}
@@ -163,14 +172,14 @@ export default async function VisaoGeralFinanceiro({ searchParams }: { searchPar
           icone={Wallet}
           rotulo="Já recebido"
           valor={reais(r.recebido)}
-          variacao={variacao(r.recebido, ra.recebido)}
+          variacao={comparar(r.recebido, ra.recebido)}
           nota={`${reais(r.aReceber + r.atrasado)} ainda a receber`}
         />
         <Indicador
           icone={Receipt}
-          rotulo="Saídas do mês"
+          rotulo={`Saídas ${doPer}`}
           valor={reais(r.despesas + r.custosDiretos + r.taxas + r.impostos + r.repasse)}
-          variacao={variacao(
+          variacao={comparar(
             r.despesas + r.custosDiretos + r.taxas + r.impostos + r.repasse,
             ra.despesas + ra.custosDiretos + ra.taxas + ra.impostos + ra.repasse
           )}
@@ -181,9 +190,9 @@ export default async function VisaoGeralFinanceiro({ searchParams }: { searchPar
         />
         <Indicador
           icone={TrendingUp}
-          rotulo="Lucro do mês"
+          rotulo={`Lucro ${doPer}`}
           valor={reais(r.lucro)}
-          variacao={variacao(r.lucro, ra.lucro)}
+          variacao={comparar(r.lucro, ra.lucro)}
           nota={`Margem de ${pct(r.margem, 1)}`}
           serie={serie.map((p) => p.lucro)}
           destaque
@@ -210,15 +219,17 @@ export default async function VisaoGeralFinanceiro({ searchParams }: { searchPar
         </Painel>
 
         <div className="grid content-start gap-5">
-          <Painel titulo="Metas do mês">
+          <Painel titulo={p.ehMes ? "Metas do mês" : "Metas do período"} descricao={fatorMeta && fatorMeta > 1 ? `Meta mensal × ${fatorMeta} meses.` : undefined}>
             <div className="grid gap-5">
-              {metaFat ? (
-                <Medidor rotulo="Faturamento" valor={r.receitaBruta} meta={metaFat} />
+              {!fatorMeta ? (
+                <p className="text-sm text-cinza-suave">As metas são mensais: escolha um mês, trimestre ou ano para compará-las.</p>
+              ) : metaFat ? (
+                <Medidor rotulo="Faturamento" valor={r.receitaBruta} meta={metaFat * fatorMeta} />
               ) : (
                 <p className="text-sm text-cinza-suave">Meta de faturamento ainda não definida no plano da clínica.</p>
               )}
-              {metaLucro ? (
-                <Medidor rotulo="Lucro" valor={Math.max(r.lucro, 0)} meta={metaLucro} />
+              {!fatorMeta ? null : metaLucro ? (
+                <Medidor rotulo="Lucro" valor={Math.max(r.lucro, 0)} meta={metaLucro * fatorMeta} />
               ) : (
                 <p className="text-sm text-cinza-suave">
                   Defina a meta de lucro em{" "}
@@ -243,7 +254,7 @@ export default async function VisaoGeralFinanceiro({ searchParams }: { searchPar
                 <div className="min-w-0 text-sm">
                   <p className="font-heading text-lg font-bold text-azul-medico">{reais(pe.receitaNecessaria)}</p>
                   <p className="text-cinza-suave">
-                    de faturamento paga as despesas do mês
+                    de faturamento paga as despesas {doPer}
                     {pe.consultas ? ` (≈ ${pe.consultas} atendimentos)` : ""}.
                   </p>
                   <p className="mt-2">
@@ -325,19 +336,19 @@ export default async function VisaoGeralFinanceiro({ searchParams }: { searchPar
 
       {/* Composição */}
       <div className="grid gap-5 lg:grid-cols-2">
-        <Painel titulo="Como os pacientes pagaram" descricao="Receita do mês por forma de pagamento.">
+        <Painel titulo="Como os pacientes pagaram" descricao={`Receita ${doPer} por forma de pagamento.`}>
           <Rosca
             itens={formas.map((f) => ({ nome: rotuloFormaPagamento[f.forma], valor: f.valor, cor: COR_FORMA[f.forma] }))}
-            centro={{ valor: reais(r.receitaBruta), rotulo: "no mês" }}
+            centro={{ valor: reais(r.receitaBruta), rotulo: noPer }}
           />
         </Painel>
-        <Painel titulo="Para onde foi o dinheiro" descricao="Despesas do mês por categoria.">
+        <Painel titulo="Para onde foi o dinheiro" descricao={`Despesas ${doPer} por categoria.`}>
           <Rosca itens={categorias.map((c) => ({ nome: c.nome, valor: c.valor }))} centro={{ valor: reais(r.despesas), rotulo: "em despesas" }} />
         </Painel>
       </div>
 
       <div className="grid gap-5 lg:grid-cols-3">
-        <Painel className="lg:col-span-2" titulo="Procedimentos que mais faturam" descricao="No mês, com a quantidade realizada.">
+        <Painel className="lg:col-span-2" titulo="Procedimentos que mais faturam" descricao={`${p.ehMes ? "No mês" : "No período"}, com a quantidade realizada.`}>
           <Ranking itens={procedimentos.map((p) => ({ nome: p.nome, valor: p.valor, detalhe: `${p.quantidade}×` }))} />
         </Painel>
         <Painel titulo="Particular x convênio">
@@ -362,7 +373,7 @@ export default async function VisaoGeralFinanceiro({ searchParams }: { searchPar
             </dl>
             <div className="flex items-center gap-2 rounded-lg bg-branco-clinico px-3 py-2.5 text-xs text-cinza-suave">
               <HandCoins className="size-4 shrink-0 text-teal" />
-              Taxas de cartão no mês: <strong className="text-cinza-texto">{reais(r.taxas)}</strong>
+              Taxas de cartão {noPer}: <strong className="text-cinza-texto">{reais(r.taxas)}</strong>
             </div>
           </div>
         </Painel>

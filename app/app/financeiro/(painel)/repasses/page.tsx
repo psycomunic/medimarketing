@@ -5,15 +5,17 @@ import { getProfissionais, getReceitas, getRegrasRepasse, getRepasses } from "@/
 import { bruto, calcularRepasses, mesCurto, ultimosMeses, validos } from "@/lib/financeiro/calculos";
 import { BarrasAgrupadas } from "@/components/graficos/graficos";
 import { SERIES, pct, reais } from "@/components/graficos/formato";
-import { Indicador, Painel, limites, mesDaUrl } from "@/components/app/financeiro/ui";
+import { Indicador, Painel, limites } from "@/components/app/financeiro/ui";
+import { periodoFinanceiro } from "@/lib/financeiro/periodo";
 import { TabelaRepasses, type LinhaRepasseTela } from "@/components/app/financeiro/repasses-ui";
 
 export const metadata = { title: "Repasses · Financeiro" };
 
-export default async function RepassesPage({ searchParams }: { searchParams: { mes?: string } }) {
+export default async function RepassesPage({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
   const { organizacao } = await exigirModulo("financeiro");
   const orgId = organizacao?.id ?? null;
-  const mes = mesDaUrl(searchParams.mes);
+  // Repasse fecha por mês: num intervalo, vale o último mês dele
+  const mes = periodoFinanceiro(searchParams).mes;
   const meses = ultimosMeses(mes, 6);
   const { ate } = limites(mes);
   const [receitas, regras, fechados, profissionais, demo] = await Promise.all([

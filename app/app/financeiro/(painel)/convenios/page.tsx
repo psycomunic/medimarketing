@@ -5,22 +5,26 @@ import { getConfigFinanceira, getReceitas } from "@/lib/supabase/financeiro-dado
 import { mesCurto, porConvenio, ultimosMeses, validos } from "@/lib/financeiro/calculos";
 import { BarrasAgrupadas, Ranking } from "@/components/graficos/graficos";
 import { COR, SERIES, pct, reais } from "@/components/graficos/formato";
-import { Indicador, Painel, Situacao, Vazio, limites, mesDaUrl } from "@/components/app/financeiro/ui";
+import { Indicador, Painel, Situacao, Vazio, limites } from "@/components/app/financeiro/ui";
+import { noPeriodo, periodoFinanceiro } from "@/lib/financeiro/periodo";
 import { PendentesConvenio } from "@/components/app/financeiro/convenios-ui";
 
 export const metadata = { title: "Convênios · Financeiro" };
 
-export default async function ConveniosPage({ searchParams }: { searchParams: { mes?: string } }) {
+export default async function ConveniosPage({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
   const { organizacao } = await exigirModulo("financeiro");
   const orgId = organizacao?.id ?? null;
-  const mes = mesDaUrl(searchParams.mes);
+  const p = periodoFinanceiro(searchParams);
+  const mes = p.mes;
   const meses = ultimosMeses(mes, 6);
   const { ate } = limites(mes);
-  const [receitas, config, demo] = await Promise.all([getReceitas(orgId, `${meses[0]}-01`, ate), getConfigFinanceira(orgId), emModoDemo()]);
+  const desde = p.de < `${meses[0]}-01` ? p.de : `${meses[0]}-01`;
+  const [receitas, config, demo] = await Promise.all([getReceitas(orgId, desde, ate), getConfigFinanceira(orgId), emModoDemo()]);
+  const noPer = p.ehMes ? "no mês" : "no período";
 
   const conv = validos(receitas).filter((l) => l.forma_pagamento === "convenio");
-  const doMes = porConvenio(conv.filter((l) => l.data_competencia.startsWith(mes)));
-  const seisMeses = porConvenio(conv);
+  const doMes = porConvenio(noPeriodo(conv, (l) => l.data_competencia, p));
+  const seisMeses = porConvenio(conv.filter((l) => l.data_competencia >= `${meses[0]}-01`));
   const reserva = Number(config?.reserva_glosa ?? 7);
   const soma = (k: "faturado" | "glosado" | "recebido" | "pendente") => doMes.reduce((s, c) => s + c[k], 0);
   const taxaGlosa = soma("faturado") ? (soma("glosado") / soma("faturado")) * 100 : 0;
@@ -39,7 +43,7 @@ export default async function ConveniosPage({ searchParams }: { searchParams: { 
   return (
     <div className="grid gap-5">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Indicador icone={HandCoins} rotulo="Faturado aos convênios" valor={reais(soma("faturado"))} nota={`${doMes.reduce((s, c) => s + c.atendimentos, 0)} atendimentos no mês`} />
+        <Indicador icone={HandCoins} rotulo="Faturado aos convênios" valor={reais(soma("faturado"))} nota={`${doMes.reduce((s, c) => s + c.atendimentos, 0)} atendimentos ${noPer}`} />
         <Indicador icone={ShieldCheck} rotulo="Recebido" valor={reais(soma("recebido"))} nota={`${reais(soma("pendente"))} pendente`} />
         <Indicador
           icone={FileWarning}
@@ -59,7 +63,7 @@ export default async function ConveniosPage({ searchParams }: { searchParams: { 
               { nome: "Faturado", cor: SERIES[2], valores: meses.map((m) => porConvenio(conv.filter((l) => l.data_competencia.startsWith(m))).reduce((s, c) => s + c.faturado, 0)) },
               { nome: "Glosado", cor: COR.critico, valores: meses.map((m) => porConvenio(conv.filter((l) => l.data_competencia.startsWith(m))).reduce((s, c) => s + c.glosado, 0)) },
             ]}
-            destaque={meses.length - 1}
+            destaque={p.ehMes ? meses.length - 1 : undefined}
             altura={250}
           />
         </Painel>
@@ -68,7 +72,7 @@ export default async function ConveniosPage({ searchParams }: { searchParams: { 
         </Painel>
       </div>
 
-      <Painel titulo="Convênios no mês" corpo="p-0">
+      <Painel titulo={`Convênios ${noPer}`} corpo="p-0">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[720px] text-sm">
             <thead>
@@ -101,7 +105,7 @@ export default async function ConveniosPage({ searchParams }: { searchParams: { 
               {!doMes.length && (
                 <tr>
                   <td colSpan={8} className="px-5 py-8 text-center text-cinza-suave">
-                    Nenhum atendimento por convênio neste mês.
+                    Nenhum atendimento por convênio {noPer}.
                   </td>
                 </tr>
               )}

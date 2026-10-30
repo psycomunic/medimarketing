@@ -2,26 +2,31 @@ import { AlertTriangle, CalendarCheck2, CircleDollarSign, Receipt } from "lucide
 import { exigirModulo } from "@/lib/acesso";
 import { emModoDemo } from "@/lib/supabase/queries";
 import { getDespesas } from "@/lib/supabase/financeiro-dados";
-import { hojeIso, mesAnterior, mesCurto, porCategoria, ultimosMeses, variacao } from "@/lib/financeiro/calculos";
+import { hojeIso, mesCurto, porCategoria, ultimosMeses, variacao } from "@/lib/financeiro/calculos";
 import { BarrasAgrupadas, Ranking } from "@/components/graficos/graficos";
 import { SERIES, reais } from "@/components/graficos/formato";
-import { Indicador, Painel, limites, mesDaUrl } from "@/components/app/financeiro/ui";
+import { Indicador, Painel, limites } from "@/components/app/financeiro/ui";
+import { anteriorCompleto, noPeriodo, periodoFinanceiro } from "@/lib/financeiro/periodo";
 import { ListaDespesas } from "@/components/app/financeiro/despesas-ui";
 import { FabNovaDespesa } from "@/components/app/botoes-flutuantes";
 
 export const metadata = { title: "Despesas · Financeiro" };
 
-export default async function DespesasPage({ searchParams }: { searchParams: { mes?: string } }) {
+export default async function DespesasPage({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
   const { organizacao } = await exigirModulo("financeiro");
   const orgId = organizacao?.id ?? null;
-  const mes = mesDaUrl(searchParams.mes);
+  const p = periodoFinanceiro(searchParams);
+  const mes = p.mes;
   const meses = ultimosMeses(mes, 12);
   const { ate } = limites(mes);
-  const [todas, demo] = await Promise.all([getDespesas(orgId, `${meses[0]}-01`, ate), emModoDemo()]);
+  const desde = p.anterior.de < `${meses[0]}-01` ? p.anterior.de : `${meses[0]}-01`;
+  const [todas, demo] = await Promise.all([getDespesas(orgId, desde, ate > p.ate ? ate : p.ate), emModoDemo()]);
+  const doPer = p.ehMes ? "do mês" : "do período";
 
   const ativas = todas.filter((d) => d.status !== "cancelada");
-  const doMes = ativas.filter((d) => d.vencimento.startsWith(mes));
-  const anterior = ativas.filter((d) => d.vencimento.startsWith(mesAnterior(mes)));
+  const doMes = noPeriodo(ativas, (d) => d.vencimento, p);
+  const anterior = noPeriodo(ativas, (d) => d.vencimento, p.anterior);
+  const comparar = (a: number, b: number) => (anteriorCompleto(ativas, (d) => d.vencimento, p.anterior) ? variacao(a, b) : null);
   const soma = (l: typeof ativas) => l.reduce((s, d) => s + Number(d.valor), 0);
   const hoje = hojeIso();
   const vencidas = doMes.filter((d) => d.status === "aberta" && d.vencimento < hoje);
@@ -32,9 +37,9 @@ export default async function DespesasPage({ searchParams }: { searchParams: { m
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Indicador
           icone={Receipt}
-          rotulo="Despesas do mês"
+          rotulo={`Despesas ${doPer}`}
           valor={reais(soma(doMes))}
-          variacao={variacao(soma(doMes), soma(anterior))}
+          variacao={comparar(soma(doMes), soma(anterior))}
           inverter
           nota={`${reais(fixas)} são fixas`}
           serie={meses.map((m) => soma(ativas.filter((d) => d.vencimento.startsWith(m))))}
@@ -58,11 +63,11 @@ export default async function DespesasPage({ searchParams }: { searchParams: { m
               { nome: "Fixas", cor: SERIES[1], valores: meses.map((m) => soma(ativas.filter((d) => d.fixa && d.vencimento.startsWith(m)))) },
               { nome: "Variáveis", cor: SERIES[2], valores: meses.map((m) => soma(ativas.filter((d) => !d.fixa && d.vencimento.startsWith(m)))) },
             ]}
-            destaque={meses.length - 1}
+            destaque={p.ehMes ? meses.length - 1 : undefined}
             altura={250}
           />
         </Painel>
-        <Painel titulo="Maiores categorias" descricao="No mês.">
+        <Painel titulo="Maiores categorias" descricao={p.ehMes ? "No mês." : "No período."}>
           <Ranking itens={porCategoria(doMes).map((c) => ({ nome: c.nome, valor: c.valor }))} cor={SERIES[2]} limite={7} />
         </Painel>
       </div>

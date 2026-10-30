@@ -38,6 +38,14 @@ export function FiltroPeriodo({
   const [de, setDe] = useState(atual.de ?? `${hoje.slice(0, 8)}01`);
   const [ate, setAte] = useState(atual.ate ?? hoje);
   const caixa = useRef<HTMLDivElement>(null);
+  // Abre para o lado que tem espaço: perto da borda direita, alinha pela direita
+  const [desloc, setDesloc] = useState(0);
+  function abrir() {
+    const r = caixa.current?.getBoundingClientRect();
+    const largura = Math.min(288, window.innerWidth - 32);
+    setDesloc(r ? Math.max(16 - r.left, Math.min(0, window.innerWidth - 16 - (r.left + largura))) : 0);
+    setAberto(!aberto);
+  }
 
   // A troca de URL terminou: some o indicador
   useEffect(() => setCarregando(null), [params]);
@@ -95,7 +103,7 @@ export function FiltroPeriodo({
         <button
           type="button"
           aria-expanded={aberto}
-          onClick={() => setAberto(!aberto)}
+          onClick={abrir}
           className={cn(
             "inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-xs font-semibold shadow-soft transition-colors sm:text-sm",
             personalizado ? "border-azul-medico bg-azul-medico text-white" : "border-border bg-white text-cinza-suave hover:text-azul-medico"
@@ -105,7 +113,10 @@ export function FiltroPeriodo({
           {personalizado ? (atual.de === atual.ate ? fmt(atual.de) : `${fmt(atual.de)} a ${fmt(atual.ate)}`) : "Escolher datas"}
         </button>
         {aberto && (
-          <div className="absolute right-0 z-30 mt-2 w-[min(18rem,calc(100vw-2rem))] rounded-xl border border-border bg-white p-4 shadow-card sm:left-0 sm:right-auto">
+          <div
+            className="absolute z-30 mt-2 w-[min(18rem,calc(100vw-2rem))] rounded-xl border border-border bg-white p-4 shadow-card"
+            style={{ left: desloc }}
+          >
             <p className="text-sm font-semibold text-azul-medico">Período personalizado</p>
             <div className="mt-3 grid gap-3">
               <label className="grid gap-1 text-xs font-medium text-cinza-suave">

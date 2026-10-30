@@ -344,6 +344,8 @@ export function ListaReceitas({
 }) {
   const [filtro, setFiltro] = useState<Filtro>("todas");
   const [forma, setForma] = useState("");
+  const [profissional, setProfissional] = useState("");
+  const [convenio, setConvenio] = useState("");
   const [busca, setBusca] = useState("");
   const [nova, setNova] = useState(false);
   const [editar, setEditar] = useState<Lancamento | null>(null);
@@ -362,13 +364,15 @@ export function ListaReceitas({
           filtro === "receber" ? l.status !== "recebido" : filtro === "atrasadas" ? atrasada(l) : filtro === "recebidas" ? l.status === "recebido" : true
         )
         .filter((l) => !forma || l.forma_pagamento === forma)
+        .filter((l) => !profissional || (profissional === "__sem" ? !l.medico_id : l.medico_id === profissional))
+        .filter((l) => !convenio || (convenio === "__particular" ? !l.convenio && l.forma_pagamento !== "convenio" : l.convenio === convenio))
         .filter((l) => {
           const t = busca.trim().toLowerCase();
           return !t || l.paciente_nome.toLowerCase().includes(t) || l.procedimento.toLowerCase().includes(t) || (l.convenio ?? "").toLowerCase().includes(t);
         })
         .sort((a, b) => b.data_competencia.localeCompare(a.data_competencia)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [receitas, filtro, forma, busca]
+    [receitas, filtro, forma, profissional, convenio, busca]
   );
   const total = lista.reduce((s, l) => s + bruto(l), 0);
   const cont = (f: Filtro) =>
@@ -406,12 +410,34 @@ export function ListaReceitas({
           <Plus /> Nova receita
         </Button>
       </div>
-      <div className="flex flex-col gap-2 border-b border-border px-4 py-3 sm:flex-row sm:px-5">
-        <div className="relative min-w-0 flex-1">
+      <div className="grid gap-2 border-b border-border px-4 py-3 sm:grid-cols-2 sm:px-5 xl:grid-cols-[minmax(0,1fr)_repeat(3,12rem)]">
+        <div className="relative min-w-0 sm:col-span-2 xl:col-span-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-cinza-suave" />
           <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar paciente, procedimento ou convênio" className="h-10 pl-9" />
         </div>
-        <div className="sm:w-52">
+        {opcoes.profissionais.length > 1 && (
+          <Select value={profissional} onChange={(e) => setProfissional(e.target.value)} className="h-10" aria-label="Profissional">
+            <option value="">Todos os profissionais</option>
+            {opcoes.profissionais.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.nome}
+              </option>
+            ))}
+            <option value="__sem">Sem profissional</option>
+          </Select>
+        )}
+        {opcoes.convenios.length > 0 && (
+          <Select value={convenio} onChange={(e) => setConvenio(e.target.value)} className="h-10" aria-label="Convênio">
+            <option value="">Particular e convênios</option>
+            <option value="__particular">Só particular</option>
+            {opcoes.convenios.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </Select>
+        )}
+        <div>
           <Select value={forma} onChange={(e) => setForma(e.target.value)} className="h-10" aria-label="Forma de pagamento">
             <option value="">Todas as formas</option>
             {FORMAS.map((f) => (
@@ -428,7 +454,7 @@ export function ListaReceitas({
         </div>
       )}
       {lista.length === 0 ? (
-        <p className="px-6 py-12 text-center text-sm text-cinza-suave">Nenhuma receita com esses filtros neste mês.</p>
+        <p className="px-6 py-12 text-center text-sm text-cinza-suave">Nenhuma receita com esses filtros no período.</p>
       ) : (
         <ul className="max-h-[640px] divide-y divide-border overflow-y-auto">
           {lista.map((l) => {

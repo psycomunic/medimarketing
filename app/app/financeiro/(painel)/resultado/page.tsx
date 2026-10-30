@@ -12,20 +12,23 @@ import {
 } from "@/lib/financeiro/calculos";
 import { Cascata, LinhaArea } from "@/components/graficos/graficos";
 import { COR, pct, reais } from "@/components/graficos/formato";
-import { Painel, Situacao, limites, mesDaUrl } from "@/components/app/financeiro/ui";
+import { Painel, Situacao, limites } from "@/components/app/financeiro/ui";
+import { noPeriodo, periodoFinanceiro } from "@/lib/financeiro/periodo";
 import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Resultado · Financeiro" };
 
-export default async function ResultadoPage({ searchParams }: { searchParams: { mes?: string } }) {
+export default async function ResultadoPage({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
   const { organizacao } = await exigirModulo("financeiro");
   const orgId = organizacao?.id ?? null;
-  const mes = mesDaUrl(searchParams.mes);
+  const p = periodoFinanceiro(searchParams);
+  const mes = p.mes;
   const meses = ultimosMeses(mes, 12);
   const { ate } = limites(mes);
+  const desde = p.anterior.de < `${meses[0]}-01` ? p.anterior.de : `${meses[0]}-01`;
   const [receitas, despesas, config, regras] = await Promise.all([
-    getReceitas(orgId, `${meses[0]}-01`, ate),
-    getDespesas(orgId, `${meses[0]}-01`, ate),
+    getReceitas(orgId, desde, ate),
+    getDespesas(orgId, desde, ate),
     getConfigFinanceira(orgId),
     getRegrasRepasse(orgId),
   ]);
@@ -36,8 +39,17 @@ export default async function ResultadoPage({ searchParams }: { searchParams: { 
     const rep = ms.reduce((s, m) => s + calcularRepasses(r.filter((l) => l.data_competencia.startsWith(m)), regras).reduce((a, x) => a + x.valor, 0), 0);
     return resumoMes(r, d, config, rep);
   };
-  const atual = resumoDe([mes]);
-  const anterior = resumoDe([mesAnterior(mes)]);
+  // Período escolhido (mês, trimestre, ano ou datas) e o anterior do mesmo tamanho
+  const resumoEntre = (q: { de: string; ate: string }) => {
+    const r = noPeriodo(receitas, (l) => l.data_competencia, q);
+    const d = noPeriodo(despesas, (x) => x.vencimento, q);
+    return resumoMes(r, d, config, calcularRepasses(r, regras).reduce((s, x) => s + x.valor, 0));
+  };
+  const atual = resumoEntre(p);
+  const anterior = resumoEntre(p.anterior);
+  const doPer = p.ehMes ? "do mês" : "do período";
+  const colAtual = p.ehMes ? mesCurto(mes) : "Período";
+  const colAnterior = p.ehMes ? mesCurto(mesAnterior(mes)) : "Anterior";
   const ano = resumoDe(meses);
   const linhas = dre(atual);
   const linhasAnt = dre(anterior);
@@ -50,7 +62,7 @@ export default async function ResultadoPage({ searchParams }: { searchParams: { 
       <div className="grid gap-5 lg:grid-cols-5">
         <Painel
           className="self-start lg:col-span-3"
-          titulo={`Do faturamento ao lucro · ${mesLongo(mes)}`}
+          titulo={`Do faturamento ao lucro · ${p.ehMes ? mesLongo(mes) : p.rotulo}`}
           descricao="Cada barra tira (ou soma) uma parte do caminho."
         >
           <Cascata
@@ -82,7 +94,7 @@ export default async function ResultadoPage({ searchParams }: { searchParams: { 
               <div className="grid gap-2 text-sm">
                 <p className="text-cinza-suave">
                   Faturar <strong className="text-azul-medico">{reais(pe.receitaNecessaria)}</strong>
-                  {pe.consultas ? <> (≈ {pe.consultas} atendimentos)</> : null} paga todas as despesas do mês.
+                  {pe.consultas ? <> (≈ {pe.consultas} atendimentos)</> : null} paga todas as despesas {doPer}.
                 </p>
                 <p className="text-cinza-suave">
                   Cada R$ 100 faturados deixam <strong className="text-azul-medico">{reais(pe.indice * 100, true)}</strong> para pagar as despesas.
@@ -100,9 +112,9 @@ export default async function ResultadoPage({ searchParams }: { searchParams: { 
             <thead>
               <tr className="border-b-2 border-azul-medico/70 text-[11px] uppercase tracking-wide text-cinza-suave">
                 <th className="px-5 py-3 text-left font-semibold">Conta</th>
-                <th className="px-3 py-3 text-right font-semibold">{mesCurto(mes)}</th>
+                <th className="px-3 py-3 text-right font-semibold">{colAtual}</th>
                 <th className="px-3 py-3 text-right font-semibold">% receita</th>
-                <th className="px-3 py-3 text-right font-semibold">{mesCurto(mesAnterior(mes))}</th>
+                <th className="px-3 py-3 text-right font-semibold">{colAnterior}</th>
                 <th className="px-5 py-3 text-right font-semibold">12 meses</th>
               </tr>
             </thead>

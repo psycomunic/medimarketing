@@ -5,25 +5,25 @@ import { getConfigFinanceira, getPrecos, getProfissionais, getReceitas, getReceb
 import {
   bruto,
   faixasAtraso,
-  mesAnterior,
   resumoMes,
   validos,
   variacao,
 } from "@/lib/financeiro/calculos";
 import { BarrasAgrupadas, Ranking } from "@/components/graficos/graficos";
 import { COR, SERIES, reais } from "@/components/graficos/formato";
-import { Indicador, Painel, limites, mesDaUrl } from "@/components/app/financeiro/ui";
+import { Indicador, Painel } from "@/components/app/financeiro/ui";
+import { anteriorCompleto, mesCurtoDe, periodoFinanceiro } from "@/lib/financeiro/periodo";
 import { ListaReceitas } from "@/components/app/financeiro/receitas-ui";
 import { FabNovaReceita } from "@/components/app/botoes-flutuantes";
 
 export const metadata = { title: "Receitas · Financeiro" };
 
-export default async function ReceitasPage({ searchParams }: { searchParams: { mes?: string } }) {
+export default async function ReceitasPage({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
   const { organizacao } = await exigirModulo("financeiro");
   const orgId = organizacao?.id ?? null;
-  const mes = mesDaUrl(searchParams.mes);
-  const { de, ate } = limites(mes);
-  const ant = limites(mesAnterior(mes));
+  const p = periodoFinanceiro(searchParams);
+  const { de, ate } = p;
+  const ant = p.anterior;
   const [receitas, anteriores, recebiveis, config, precos, profissionais, demo] = await Promise.all([
     getReceitas(orgId, de, ate),
     getReceitas(orgId, ant.de, ant.ate),
@@ -36,16 +36,25 @@ export default async function ReceitasPage({ searchParams }: { searchParams: { m
 
   const r = resumoMes(receitas, [], config);
   const ra = resumoMes(anteriores, [], config);
+  // Sem histórico desde o começo do período anterior, a variação some
+  const comparar = (a: number, b: number) => (anteriorCompleto(anteriores, (l) => l.data_competencia, p.anterior) ? variacao(a, b) : null);
   const faixas = faixasAtraso(recebiveis);
   const totalAtraso = faixas.reduce((s, f) => s + f.valor, 0);
   const nomes = Object.fromEntries(profissionais.map((p) => [p.id, p.nome]));
 
-  // Faturamento por dia do mês
-  const [a, m] = mes.split("-").map(Number);
-  const dias = Array.from({ length: new Date(a, m, 0).getDate() }, (_, i) => i + 1);
-  const porDia = (d: number, recebido: boolean) =>
+  // Faturamento por dia (até ~2 meses) ou por mês (períodos maiores)
+  const porMes = p.dias > 62;
+  const dias = porMes
+    ? p.meses
+    : Array.from({ length: p.dias }, (_, i) => {
+        const d = new Date(`${p.de}T12:00:00`);
+        d.setDate(d.getDate() + i);
+        return d.toLocaleDateString("sv-SE");
+      });
+  const rotuloDia = (k: string) => (porMes ? mesCurtoDe(k) : p.ehMes ? String(Number(k.slice(8, 10))) : `${k.slice(8, 10)}/${k.slice(5, 7)}`);
+  const porDia = (k: string, recebido: boolean) =>
     validos(receitas)
-      .filter((l) => Number(l.data_competencia.slice(8, 10)) === d && (l.status === "recebido") === recebido)
+      .filter((l) => l.data_competencia.startsWith(k) && (l.status === "recebido") === recebido)
       .reduce((s, l) => s + bruto(l), 0);
 
   const porProfissional = new Map<string, number>();
@@ -58,16 +67,16 @@ export default async function ReceitasPage({ searchParams }: { searchParams: { m
   return (
     <div className="grid gap-5">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Indicador icone={Banknote} rotulo="Faturamento" valor={reais(r.receitaBruta)} variacao={variacao(r.receitaBruta, ra.receitaBruta)} nota={`${r.atendimentos} lançamentos · ${r.pacientes} pacientes`} />
-        <Indicador icone={Wallet} rotulo="Recebido" valor={reais(r.recebido)} variacao={variacao(r.recebido, ra.recebido)} nota={`Ticket médio ${reais(r.ticketMedio)}`} />
+        <Indicador icone={Banknote} rotulo="Faturamento" valor={reais(r.receitaBruta)} variacao={comparar(r.receitaBruta, ra.receitaBruta)} nota={`${r.atendimentos} lançamentos · ${r.pacientes} pacientes`} />
+        <Indicador icone={Wallet} rotulo="Recebido" valor={reais(r.recebido)} variacao={comparar(r.recebido, ra.recebido)} nota={`Ticket médio ${reais(r.ticketMedio)}`} />
         <Indicador icone={AlertTriangle} rotulo="Em atraso (todos os meses)" valor={reais(totalAtraso)} nota={`${faixas.reduce((s, f) => s + f.quantidade, 0)} lançamentos`} />
-        <Indicador icone={Percent} rotulo="Taxas e descontos" valor={reais(r.taxas + r.descontos)} inverter variacao={variacao(r.taxas + r.descontos, ra.taxas + ra.descontos)} nota={`${reais(r.taxas)} de taxa · ${reais(r.descontos)} de desconto`} />
+        <Indicador icone={Percent} rotulo="Taxas e descontos" valor={reais(r.taxas + r.descontos)} inverter variacao={comparar(r.taxas + r.descontos, ra.taxas + ra.descontos)} nota={`${reais(r.taxas)} de taxa · ${reais(r.descontos)} de desconto`} />
       </div>
 
       <div className="grid gap-5 lg:grid-cols-3">
-        <Painel className="lg:col-span-2" titulo="Faturamento por dia" descricao="O que já entrou e o que ainda vai entrar, pela data do atendimento.">
+        <Painel className="lg:col-span-2" titulo={porMes ? "Faturamento por mês" : "Faturamento por dia"} descricao="O que já entrou e o que ainda vai entrar, pela data do atendimento.">
           <BarrasAgrupadas
-            categorias={dias.map(String)}
+            categorias={dias.map(rotuloDia)}
             barras={[
               { nome: "Recebido", cor: COR.receita, valores: dias.map((d) => porDia(d, true)) },
               { nome: "A receber", cor: COR.previsto, valores: dias.map((d) => porDia(d, false)) },
@@ -99,7 +108,7 @@ export default async function ReceitasPage({ searchParams }: { searchParams: { m
         </Painel>
       </div>
 
-      <Painel titulo="Por profissional" descricao="Faturamento do mês de cada um.">
+      <Painel titulo="Por profissional" descricao={`Faturamento de cada um ${p.ehMes ? "no mês" : "no período"}.`}>
         <Ranking itens={[...porProfissional.entries()].map(([nome, valor]) => ({ nome, valor }))} cor={SERIES[1]} />
       </Painel>
 
