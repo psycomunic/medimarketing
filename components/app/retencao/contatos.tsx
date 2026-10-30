@@ -2,8 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Cake, Check, CheckCircle2, ClipboardCopy, HeartPulse, Loader2, MessageCircle, RotateCcw, SkipForward, UserX } from "lucide-react";
-import type { ConfigAutomacao, ContatoFeito, ItemContato, TipoContato } from "@/lib/relacionamento/contatos";
+import { CalendarClock, Cake, Check, CheckCircle2, ClipboardCopy, HeartPulse, Loader2, MessageCircle, RotateCcw, SkipForward, Sparkles, UserRoundSearch, UserX } from "lucide-react";
+import type { ConfigAutomacao, ContatoFeito, InfoAutomacao, ItemContato, TipoContato } from "@/lib/relacionamento/contatos";
 import { desfazerContato, registrarContato, salvarAutomacao } from "@/lib/actions/relacionamento";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -12,6 +12,9 @@ const TIPO: Record<TipoContato, { rotulo: string; icone: typeof Cake; cor: strin
   aniversario: { rotulo: "Aniversário", icone: Cake, cor: "bg-[#FDF2F8] text-[#BE185D]" },
   faltou: { rotulo: "Faltou", icone: UserX, cor: "bg-[#F3F0FF] text-[#6D28D9]" },
   pos_consulta: { rotulo: "Pós-consulta", icone: HeartPulse, cor: "bg-verde-menta text-teal" },
+  retorno: { rotulo: "Retorno", icone: CalendarClock, cor: "bg-[#EAF2FC] text-[#1D5FAE]" },
+  primeira_sem_retorno: { rotulo: "1ª sem retorno", icone: UserRoundSearch, cor: "bg-[#FEF4E2] text-[#B45309]" },
+  reativacao: { rotulo: "Reativação", icone: Sparkles, cor: "bg-[#FDECEC] text-[#B91C1C]" },
 };
 
 /** wa.me com o texto atual (a mensagem pode ter sido ajustada na tela). */
@@ -162,7 +165,7 @@ export function ConfigAutomacoes({
   demo,
 }: {
   config: ConfigAutomacao[];
-  info: Record<TipoContato, { nome: string; descricao: string; temDias: boolean }>;
+  info: Record<TipoContato, InfoAutomacao>;
   podeEditar: boolean;
   demo: boolean;
 }) {
@@ -182,7 +185,7 @@ function CartaoAutomacao({
   demo,
 }: {
   c: ConfigAutomacao;
-  info: { nome: string; descricao: string; temDias: boolean };
+  info: InfoAutomacao;
   podeEditar: boolean;
   demo: boolean;
 }) {
@@ -222,7 +225,10 @@ function CartaoAutomacao({
           <input type="checkbox" checked={ativa} disabled={!podeEditar} onChange={(e) => setAtiva(e.target.checked)} className="size-4 accent-teal" />
         </label>
       </div>
-      <p className="mt-2 text-sm text-cinza-suave">{info.descricao}</p>
+      <p className="mt-2 text-sm text-cinza-suave">
+        {info.descricao}
+        {info.marketing && <span className="ml-1 rounded-full bg-branco-clinico px-1.5 py-0.5 text-[11px] font-semibold text-cinza-suave">marketing</span>}
+      </p>
       {info.temDias && (
         <label className="mt-3 flex flex-wrap items-center gap-2 text-sm text-cinza-texto">
           Aparece
@@ -234,7 +240,7 @@ function CartaoAutomacao({
             className="h-8 w-12 rounded-md border border-border bg-white text-center text-sm tabular-nums"
             aria-label="Dias depois"
           />
-          {c.tipo === "faltou" ? "dia(s) após a falta" : "dia(s) após a consulta"}
+          {info.rotuloDias}
         </label>
       )}
       <textarea
@@ -247,7 +253,7 @@ function CartaoAutomacao({
       />
       <p className="mt-1.5 text-[11px] text-cinza-suave">
         Variáveis: {"{nome}"}, {"{clinica}"}, {"{profissional}"}, {"{servico}"}
-        {c.tipo === "faltou" ? `, {data}` : ""}
+        {c.tipo !== "aniversario" ? `, {data}` : ""}
       </p>
       {erro && <p className="mt-2 rounded-md bg-coral/10 px-3 py-2 text-sm text-coral">{erro}</p>}
       {podeEditar && (

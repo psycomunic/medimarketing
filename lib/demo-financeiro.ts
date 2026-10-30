@@ -224,6 +224,10 @@ export function demoPrecos(): PrecoProcedimento[] {
     // Exemplos de faixa: o valor e o tempo mudam conforme a área tratada
     ...(proc === "Toxina botulínica" && { valor_max: 2600, duracao_max: 60, duracao_min: 30 }),
     ...(proc === "Laser para melasma" && { valor_max: 1800 }),
+    // Retorno recomendado: alimenta a lista de contatos da Retenção
+    ...(proc === "Toxina botulínica" && { retorno_dias: 120 }),
+    ...(proc === "Peeling químico" && { retorno_dias: 30 }),
+    ...(proc === "Consulta dermatológica" && { retorno_dias: 180 }),
     ativo: true,
     created_at: new Date().toISOString(),
   }));

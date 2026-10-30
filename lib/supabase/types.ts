@@ -241,7 +241,7 @@ export type ContatoRelacionamento = {
   id: string;
   organization_id: string;
   chave: string;
-  tipo: "aniversario" | "faltou" | "pos_consulta";
+  tipo: "aniversario" | "faltou" | "pos_consulta" | "retorno" | "primeira_sem_retorno" | "reativacao";
   paciente_id: string | null;
   consulta_id: string | null;
   nome: string;
@@ -255,7 +255,7 @@ export type ContatoRelacionamento = {
 export type AutomacaoConfig = {
   id: string;
   organization_id: string;
-  tipo: "aniversario" | "faltou" | "pos_consulta";
+  tipo: "aniversario" | "faltou" | "pos_consulta" | "retorno" | "primeira_sem_retorno" | "reativacao";
   ativa: boolean;
   mensagem: string;
   dias: number;
@@ -617,6 +617,8 @@ export type PrecoProcedimento = {
   duracao_min: number | null;
   /** Preenchido quando a duração varia: de `duracao_min` até `duracao_max`. */
   duracao_max?: number | null;
+  /** Retorno recomendado: a lista de contatos lembra o paciente perto disso. */
+  retorno_dias?: number | null;
   ativo: boolean;
   created_at: string;
 };

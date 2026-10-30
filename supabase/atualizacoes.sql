@@ -2506,3 +2506,20 @@ create policy "contatos_rel_insert" on public.contatos_relacionamento for insert
 drop policy if exists "contatos_rel_delete" on public.contatos_relacionamento;
 create policy "contatos_rel_delete" on public.contatos_relacionamento for delete to authenticated
   using ((organization_id = public.minha_org() and public.is_operacional()) or public.is_super_admin());
+
+-- =====================================================================
+-- Fase 4B — Retenção: retorno por serviço, 1ª consulta sem retorno e
+-- reativação. Rodar depois da Fase 4A.
+-- =====================================================================
+-- Retorno recomendado de cada serviço da Tabela de preços
+alter table public.tabela_precos add column if not exists retorno_dias smallint check (retorno_dias between 1 and 730);
+
+-- Os tipos novos de contato
+alter table public.automacoes_config drop constraint if exists automacoes_config_tipo_check;
+alter table public.automacoes_config add constraint automacoes_config_tipo_check
+  check (tipo in ('aniversario', 'faltou', 'pos_consulta', 'retorno', 'primeira_sem_retorno', 'reativacao'));
+alter table public.automacoes_config drop constraint if exists automacoes_config_dias_check;
+alter table public.automacoes_config add constraint automacoes_config_dias_check check (dias between 0 and 60);
+alter table public.contatos_relacionamento drop constraint if exists contatos_relacionamento_tipo_check;
+alter table public.contatos_relacionamento add constraint contatos_relacionamento_tipo_check
+  check (tipo in ('aniversario', 'faltou', 'pos_consulta', 'retorno', 'primeira_sem_retorno', 'reativacao'));

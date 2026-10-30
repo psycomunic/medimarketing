@@ -377,6 +377,8 @@ const precoSchema = z.object({
   /** Faixa: o valor e a duração vão de `valor`/`duracao` até estes. */
   valorMax: dinheiro.nullable().optional(),
   duracaoMax: z.coerce.number().int().min(0).max(600).nullable().optional(),
+  /** Retorno recomendado em dias (nulo = sem retorno programado). */
+  retornoDias: z.coerce.number().int().min(1).max(730).nullable().optional(),
 });
 
 export type PrecoInput = z.input<typeof precoSchema>;
@@ -404,9 +406,12 @@ export async function salvarPreco(input: PrecoInput): Promise<ActionResult> {
   // As colunas de faixa só vão quando usadas (ou para limpar uma faixa antiga)
   if (d.valorMax !== undefined) registro.valor_max = d.valorMax;
   if (d.duracaoMax !== undefined) registro.duracao_max = d.duracaoMax;
+  if (d.retornoDias !== undefined) registro.retorno_dias = d.retornoDias;
   const { error } = d.id
     ? await ctx.supabase.from("tabela_precos").update(registro).eq("id", d.id)
     : await ctx.supabase.from("tabela_precos").insert(registro);
+  if (error && /retorno_dias/.test(error.message))
+    return { ok: false, erro: "Para usar o retorno em dias, rode antes o SQL da Fase 4B." };
   if (error && /valor_max|duracao_max/.test(error.message))
     return { ok: false, erro: "Para usar faixa de valor ou duração, rode antes o SQL de atualização da tabela de preços." };
   if (error) return erroBanco(error, "Não foi possível salvar o preço.");

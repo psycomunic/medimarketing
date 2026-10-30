@@ -4,8 +4,8 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { bloqueio, contexto, GESTAO, OPERACIONAL, type ActionResult } from "@/lib/actions/contexto";
 
-const MSG_SQL = "As automações ainda não foram ativadas. Rode o SQL da Fase 4A no Supabase.";
-const TIPOS = ["aniversario", "faltou", "pos_consulta"] as const;
+const MSG_SQL = "As automações ainda não foram ativadas. Rode o SQL das Fases 4A e 4B no Supabase.";
+const TIPOS = ["aniversario", "faltou", "pos_consulta", "retorno", "primeira_sem_retorno", "reativacao"] as const;
 
 function revalidar() {
   revalidatePath("/app/retencao");
@@ -47,7 +47,7 @@ export async function registrarContato(input: z.input<typeof contatoSchema>): Pr
     revalidar();
     return { ok: true };
   }
-  if (error && /does not exist|schema cache/i.test(error.message)) return { ok: false, erro: MSG_SQL };
+  if (error && /does not exist|schema cache|tipo_check/i.test(error.message)) return { ok: false, erro: MSG_SQL };
   if (error) return { ok: false, erro: "Não foi possível registrar o contato." };
   revalidar();
   return { ok: true };
@@ -67,7 +67,7 @@ const configSchema = z.object({
   tipo: z.enum(TIPOS),
   ativa: z.boolean(),
   mensagem: z.string().trim().min(10, "Escreva a mensagem.").max(1500),
-  dias: z.coerce.number().int().min(0).max(30),
+  dias: z.coerce.number().int().min(0).max(60),
 });
 
 /** Liga, desliga e ajusta a mensagem e o prazo de uma automação. */
@@ -81,7 +81,7 @@ export async function salvarAutomacao(input: z.input<typeof configSchema>): Prom
   const { error } = await ctx.supabase
     .from("automacoes_config")
     .upsert({ organization_id: orgId, ...p.data, atualizado_em: new Date().toISOString() }, { onConflict: "organization_id,tipo" });
-  if (error && /does not exist|schema cache/i.test(error.message)) return { ok: false, erro: MSG_SQL };
+  if (error && /does not exist|schema cache|tipo_check/i.test(error.message)) return { ok: false, erro: MSG_SQL };
   if (error) return { ok: false, erro: "Não foi possível salvar." };
   revalidar();
   return { ok: true };

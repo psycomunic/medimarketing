@@ -2,10 +2,11 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { emModoDemo, getConsultas } from "@/lib/supabase/queries";
 import { pacientesDemo } from "@/lib/supabase/pacientes";
-import { getProfissionais } from "@/lib/supabase/financeiro-dados";
+import { getPrecos, getProfissionais } from "@/lib/supabase/financeiro-dados";
+import { catalogoServicos } from "@/lib/servicos";
 import { primeiroNome } from "@/lib/mensagens";
 import { linkWhatsApp } from "@/lib/lembretes";
-import type { Consulta } from "@/lib/supabase/types";
+import type { Consulta, PacienteResumo } from "@/lib/supabase/types";
 
 /**
  * CONTATOS DE RELACIONAMENTO
@@ -23,21 +24,36 @@ import type { Consulta } from "@/lib/supabase/types";
  *   pulado, não volta.
  */
 
-export type TipoContato = "aniversario" | "faltou" | "pos_consulta";
+export type TipoContato = "aniversario" | "faltou" | "pos_consulta" | "retorno" | "primeira_sem_retorno" | "reativacao";
 
 export type ConfigAutomacao = {
   tipo: TipoContato;
   ativa: boolean;
   mensagem: string;
-  /** Dias depois do gatilho para aparecer na lista (pós-consulta e faltou). */
+  /**
+   * Prazo, que muda de sentido conforme o tipo: dias depois da consulta ou
+   * da falta, dias antes do retorno vencer, ou meses sem consulta.
+   */
   dias: number;
 };
 
-export const AUTOMACOES: Record<TipoContato, { nome: string; descricao: string; padrao: Omit<ConfigAutomacao, "tipo">; temDias: boolean }> = {
+export type InfoAutomacao = {
+  nome: string;
+  descricao: string;
+  padrao: Omit<ConfigAutomacao, "tipo">;
+  temDias: boolean;
+  /** Texto depois do número: "dia(s) após a consulta". */
+  rotuloDias: string;
+  /** Novidade e oferta: só para quem aceitou receber. */
+  marketing?: boolean;
+};
+
+export const AUTOMACOES: Record<TipoContato, InfoAutomacao> = {
   aniversario: {
     nome: "Aniversário",
     descricao: "No dia do aniversário, uma felicitação da clínica.",
     temDias: false,
+    rotuloDias: "",
     padrao: {
       ativa: true,
       dias: 0,
@@ -49,6 +65,7 @@ export const AUTOMACOES: Record<TipoContato, { nome: string; descricao: string; 
     nome: "Faltou",
     descricao: "Quem faltou e ainda não remarcou. Sai da lista quando marcar outra consulta.",
     temDias: true,
+    rotuloDias: "dia(s) após a falta",
     padrao: {
       ativa: true,
       dias: 0,
@@ -60,6 +77,7 @@ export const AUTOMACOES: Record<TipoContato, { nome: string; descricao: string; 
     nome: "Pós-consulta",
     descricao: "Depois do atendimento, saber como o paciente está.",
     temDias: true,
+    rotuloDias: "dia(s) após a consulta",
     padrao: {
       ativa: true,
       dias: 1,
@@ -67,10 +85,49 @@ export const AUTOMACOES: Record<TipoContato, { nome: string; descricao: string; 
         "Olá, {nome}! Aqui é da {clinica}. Passando para saber como você está depois da sua consulta com {profissional}. Se tiver qualquer dúvida ou desconforto, é só responder por aqui. Estamos à disposição!",
     },
   },
+  retorno: {
+    nome: "Retorno do serviço",
+    descricao: "Perto do retorno recomendado de cada serviço (definido na Tabela de preços). Sai da lista quando marcar.",
+    temDias: true,
+    rotuloDias: "dia(s) antes de vencer",
+    padrao: {
+      ativa: true,
+      dias: 7,
+      mensagem:
+        "Olá, {nome}! Aqui é da {clinica}. Está chegando a hora do seu retorno de {servico} (o último foi em {data}). Quer que a gente reserve um horário para você? É só responder com o melhor dia e horário.",
+    },
+  },
+  primeira_sem_retorno: {
+    nome: "1ª consulta sem retorno",
+    descricao: "Veio uma vez e não voltou. Aparece um tempo depois da consulta e fica 30 dias.",
+    temDias: true,
+    rotuloDias: "dia(s) após a consulta",
+    padrao: {
+      ativa: true,
+      dias: 30,
+      mensagem:
+        "Olá, {nome}! Aqui é da {clinica}. Faz um tempinho desde a sua consulta com {profissional} e queríamos saber como você está. Se quiser dar continuidade, podemos agendar um horário. É só responder esta mensagem!",
+    },
+  },
+  reativacao: {
+    nome: "Reativação",
+    descricao: "Sumiu há meses e não tem nada marcado. Só quem aceitou receber novidades; os que mais gastaram primeiro.",
+    temDias: true,
+    rotuloDias: "meses após a última consulta",
+    marketing: true,
+    padrao: {
+      ativa: true,
+      dias: 6,
+      mensagem:
+        "Olá, {nome}! Aqui é da {clinica}. Sentimos sua falta por aqui! Que tal agendar um horário para cuidar de você? É só responder esta mensagem que a gente encontra o melhor dia.",
+    },
+  },
 };
 
 /** Ordem de importância: no mesmo dia, vale a primeira. */
-const PRIORIDADE: TipoContato[] = ["aniversario", "faltou", "pos_consulta"];
+const PRIORIDADE: TipoContato[] = ["aniversario", "faltou", "pos_consulta", "retorno", "primeira_sem_retorno", "reativacao"];
+/** Reativação por dia: a base parada pode ser grande; vai aos poucos. */
+const LIMITE_REATIVACAO = 15;
 /** Quanto tempo o contato fica na lista depois de aparecer. */
 const JANELA_DIAS = 3;
 /** Sem outra mensagem para o mesmo paciente nesse intervalo. */
@@ -130,7 +187,21 @@ export function preencher(texto: string, v: { nome: string; clinica: string; pro
     .replaceAll("{data}", v.data || "");
 }
 
-type PacienteBase = { id: string; nome: string; telefone: string | null; nascimento: string | null; descadastrado_em: string | null; ativo: boolean };
+type PacienteBase = Pick<
+  PacienteResumo,
+  | "id"
+  | "nome"
+  | "telefone"
+  | "nascimento"
+  | "descadastrado_em"
+  | "ativo"
+  | "consentimento_marketing"
+  | "consultas_realizadas"
+  | "ultima_consulta"
+  | "proxima_consulta"
+  | "total_gasto"
+>;
+const CAMPOS_PACIENTE = "id,nome,telefone,nascimento,descadastrado_em,ativo,consentimento_marketing,consultas_realizadas,ultima_consulta,proxima_consulta,total_gasto";
 
 export async function montarFilaContatos(orgId: string | null, clinica: string): Promise<FilaContatos> {
   const demo = await emModoDemo();
@@ -153,7 +224,25 @@ export async function montarFilaContatos(orgId: string | null, clinica: string):
   const cfg = Object.fromEntries(config.map((c) => [c.tipo, c])) as Record<TipoContato, ConfigAutomacao>;
 
   /* ---------- Dados ---------- */
-  const desde = new Date(`${somarDias(hoje, -(Math.max(cfg.pos_consulta.dias, cfg.faltou.dias) + JANELA_DIAS + 1))}T00:00:00-03:00`);
+  const precos = await getPrecos(orgId).catch(() => []);
+  // Retorno recomendado de cada linha da tabela (vale o do serviço inteiro)
+  const retornoDe = new Map<string, { dias: number; nome: string }>();
+  for (const s of catalogoServicos(precos)) {
+    const ref = s.linhas.find((l) => !l.convenio) ?? s.linhas[0];
+    const dias = ref.retorno_dias || s.linhas.find((l) => l.retorno_dias)?.retorno_dias;
+    if (dias) for (const l of s.linhas) retornoDe.set(l.id, { dias, nome: s.nome });
+  }
+  const maiorRetorno = Math.max(0, ...[...retornoDe.values()].map((r) => r.dias));
+  // Histórico: o bastante para o retorno mais longo e para a 1ª consulta sem retorno
+  const diasHistorico = Math.min(
+    800,
+    Math.max(
+      Math.max(cfg.pos_consulta.dias, cfg.faltou.dias) + JANELA_DIAS + 1,
+      cfg.retorno.ativa ? maiorRetorno + 31 : 0,
+      cfg.primeira_sem_retorno.ativa ? cfg.primeira_sem_retorno.dias + 31 : 0
+    )
+  );
+  const desde = new Date(`${somarDias(hoje, -diasHistorico)}T00:00:00-03:00`);
   const [consultasTodas, profissionais, pacientes, feitos] = await Promise.all([
     getConsultas(desde.toISOString(), new Date(Date.now() + 400 * 864e5).toISOString()),
     getProfissionais(orgId),
@@ -240,6 +329,107 @@ export async function montarFilaContatos(orgId: string | null, clinica: string):
     }
   }
 
+  /* ---------- Retorno do serviço ---------- */
+  if (cfg.retorno.ativa && retornoDe.size) {
+    // Última consulta realizada de cada paciente em cada serviço com retorno
+    const ultima = new Map<string, Consulta>();
+    for (const c of consultas) {
+      const r = c.servico_id ? retornoDe.get(c.servico_id) : undefined;
+      if (!r || c.status !== "realizada" || new Date(c.data_hora) > new Date()) continue;
+      const k = `${chavePaciente(c)}|${r.nome}`;
+      const atual = ultima.get(k);
+      if (!atual || c.data_hora > atual.data_hora) ultima.set(k, c);
+    }
+    for (const c of ultima.values()) {
+      const r = retornoDe.get(c.servico_id!)!;
+      const k = chavePaciente(c);
+      if (fora(c.paciente_id) || temFutura(k)) continue;
+      const dia = diaSP(c.data_hora);
+      const vence = somarDias(dia, r.dias);
+      const aparece = somarDias(vence, -cfg.retorno.dias);
+      if (hoje < aparece || hoje > somarDias(vence, 30)) continue;
+      const prof = nomesProf[c.medico_id] ?? null;
+      add({
+        chave: `retorno:${c.id}`,
+        tipo: "retorno",
+        pacienteId: c.paciente_id ?? null,
+        consultaId: c.id,
+        nome: c.paciente_nome,
+        telefone: c.paciente_telefone,
+        chavePac: k,
+        detalhe: `${r.nome} em ${dataBr(dia)} · retorno ${vence < hoje ? "venceu" : "vence"} em ${dataBr(vence)}`,
+        atrasoDias: diasEntre(aparece, hoje),
+        vars: { nome: c.paciente_nome, clinica, profissional: prof, servico: r.nome, data: dataBr(dia) },
+      });
+    }
+  }
+
+  /* ---------- Primeira consulta sem retorno ---------- */
+  if (cfg.primeira_sem_retorno.ativa) {
+    const dias = cfg.primeira_sem_retorno.dias;
+    for (const p of pacientes) {
+      if (p.consultas_realizadas !== 1 || p.proxima_consulta || !p.ultima_consulta || p.descadastrado_em || !p.ativo) continue;
+      const dia = diaSP(p.ultima_consulta);
+      const passados = diasEntre(dia, hoje);
+      if (passados < dias || passados > dias + 30) continue;
+      // A consulta, para dizer com quem foi
+      const c = consultas.find((x) => x.paciente_id === p.id && x.status === "realizada");
+      const prof = c ? nomesProf[c.medico_id] ?? null : null;
+      add({
+        chave: `primeira:${p.id}`,
+        tipo: "primeira_sem_retorno",
+        pacienteId: p.id,
+        consultaId: c?.id ?? null,
+        nome: p.nome,
+        telefone: p.telefone,
+        chavePac: p.id,
+        detalhe: [`Única consulta em ${dataBr(dia)}`, c?.servico_nome, prof].filter(Boolean).join(" · "),
+        atrasoDias: passados - dias,
+        vars: { nome: p.nome, clinica, profissional: prof, servico: c?.servico_nome, data: dataBr(dia) },
+      });
+    }
+  }
+
+  /* ---------- Reativação (só quem aceitou novidades) ---------- */
+  if (cfg.reativacao.ativa) {
+    const corte = somarDias(hoje, -cfg.reativacao.dias * 30);
+    const parados = pacientes
+      .filter(
+        (p) =>
+          p.ativo &&
+          !p.descadastrado_em &&
+          p.consentimento_marketing &&
+          !p.proxima_consulta &&
+          p.consultas_realizadas > 0 &&
+          !!p.ultima_consulta &&
+          diaSP(p.ultima_consulta) < corte
+      )
+      .sort((a, b) => Number(b.total_gasto) - Number(a.total_gasto));
+    let n = 0;
+    for (const p of parados) {
+      if (n >= LIMITE_REATIVACAO) break;
+      const dia = diaSP(p.ultima_consulta!);
+      const chave = `reativacao:${p.id}:${dia}`;
+      if (feitosChaves.has(chave)) continue;
+      n += 1;
+      const gasto = Number(p.total_gasto) || 0;
+      add({
+        chave,
+        tipo: "reativacao",
+        pacienteId: p.id,
+        consultaId: null,
+        nome: p.nome,
+        telefone: p.telefone,
+        chavePac: p.id,
+        detalhe: [`Última consulta em ${dataBr(dia)}/${dia.slice(0, 4)}`, gasto ? `já gastou ${gasto.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })}` : null]
+          .filter(Boolean)
+          .join(" · "),
+        atrasoDias: 0,
+        vars: { nome: p.nome, clinica, data: dataBr(dia) },
+      });
+    }
+  }
+
   /* ---------- Um por paciente, sem quem recebeu há pouco ---------- */
   let emIntervalo = 0;
   const escolhido = new Map<string, ItemContato & { chavePac: string }>();
@@ -259,13 +449,13 @@ export async function montarFilaContatos(orgId: string | null, clinica: string):
 }
 
 async function carregarPacientes(supabase: Awaited<ReturnType<typeof createClient>> | null, orgId: string | null, demo: boolean): Promise<PacienteBase[]> {
-  if (demo) return (await pacientesDemo()).map((p) => ({ id: p.id, nome: p.nome, telefone: p.telefone, nascimento: p.nascimento, descadastrado_em: p.descadastrado_em, ativo: p.ativo }));
+  if (demo) return pacientesDemo();
   if (!supabase || !orgId) return [];
   const lista: PacienteBase[] = [];
   for (let pagina = 0; pagina < 20; pagina++) {
     const { data, error } = await supabase
-      .from("pacientes")
-      .select("id,nome,telefone,nascimento,descadastrado_em,ativo")
+      .from("pacientes_resumo")
+      .select(CAMPOS_PACIENTE)
       .eq("organization_id", orgId)
       .order("id")
       .range(pagina * 1000, pagina * 1000 + 999);

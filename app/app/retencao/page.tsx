@@ -45,12 +45,9 @@ export default async function RetencaoPage() {
               Para contatar hoje <span className="text-cinza-suave">({fila.itens.length})</span>
             </h2>
             <p className="text-sm text-cinza-suave">
-              {[
-                porTipo("aniversario") && `${porTipo("aniversario")} aniversário${porTipo("aniversario") > 1 ? "s" : ""}`,
-                porTipo("faltou") && `${porTipo("faltou")} falta${porTipo("faltou") > 1 ? "s" : ""}`,
-                porTipo("pos_consulta") && `${porTipo("pos_consulta")} pós-consulta`,
-              ]
-                .filter(Boolean)
+              {(Object.keys(AUTOMACOES) as (keyof typeof AUTOMACOES)[])
+                .filter((t) => porTipo(t))
+                .map((t) => `${porTipo(t)} ${AUTOMACOES[t].nome.toLowerCase()}`)
                 .join(" · ") || "Lista em dia"}
               {fila.emIntervalo > 0 &&
                 ` · ${fila.emIntervalo} esperando: receberam mensagem há menos de ${INTERVALO_DIAS} dias`}
@@ -70,11 +67,7 @@ export default async function RetencaoPage() {
         </div>
         <ConfigAutomacoes
           config={fila.config}
-          info={{
-            aniversario: AUTOMACOES.aniversario,
-            faltou: AUTOMACOES.faltou,
-            pos_consulta: AUTOMACOES.pos_consulta,
-          }}
+          info={AUTOMACOES}
           podeEditar={podeEditar}
           demo={demo}
         />
