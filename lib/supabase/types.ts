@@ -236,6 +236,32 @@ export type DisparoDestinatario = {
 };
 
 /** Filtros da lista de pacientes guardados com um nome. */
+/** Contato de relacionamento feito à mão pela equipe (Retenção). */
+export type ContatoRelacionamento = {
+  id: string;
+  organization_id: string;
+  chave: string;
+  tipo: "aniversario" | "faltou" | "pos_consulta";
+  paciente_id: string | null;
+  consulta_id: string | null;
+  nome: string;
+  status: "enviado" | "pulado";
+  mensagem: string | null;
+  feito_por: string | null;
+  feito_em: string;
+};
+
+/** Ajuste de cada automação da clínica (mensagem, prazo, ligada ou não). */
+export type AutomacaoConfig = {
+  id: string;
+  organization_id: string;
+  tipo: "aniversario" | "faltou" | "pos_consulta";
+  ativa: boolean;
+  mensagem: string;
+  dias: number;
+  atualizado_em: string;
+};
+
 export type SegmentoPacientes = {
   id: string;
   organization_id: string;
@@ -1097,6 +1123,16 @@ export interface Database {
           processado_em?: string | null;
         },
         Partial<DisparoDestinatario>
+      >;
+      contatos_relacionamento: Tabela<
+        ContatoRelacionamento,
+        Omit<ContatoRelacionamento, "id" | "feito_em"> & { id?: string; feito_em?: string },
+        Partial<ContatoRelacionamento>
+      >;
+      automacoes_config: Tabela<
+        AutomacaoConfig,
+        Omit<AutomacaoConfig, "id" | "atualizado_em"> & { id?: string; atualizado_em?: string },
+        Partial<AutomacaoConfig>
       >;
       segmentos_pacientes: Tabela<
         SegmentoPacientes,

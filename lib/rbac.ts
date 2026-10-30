@@ -184,7 +184,7 @@ export const MODULOS: readonly Modulo[] = [
     fase: 1,
     grupo: "crescimento",
     resumo:
-      "Réguas de reabordagem, no-show, reativação de base e recall de retorno.",
+      "Quem contatar hoje (aniversário, falta, pós-consulta), com a mensagem pronta para o WhatsApp.",
   },
   {
     id: "marketing",

@@ -56,6 +56,7 @@ import {
   type Risco,
 } from "@/lib/financeiro/agencia";
 import { analisarServicos, SEM_SERVICO } from "@/lib/financeiro/servicos-analise";
+import { montarFilaContatos } from "@/lib/relacionamento/contatos";
 import type { Consulta, Contrato, IndicadorMensal, Organization, PlanoCliente, Profile, Repasse, Role } from "@/lib/supabase/types";
 
 /**
@@ -383,6 +384,20 @@ export async function dadosClinica(
       },
       { chave: "consulta", titulo: "Marcar a primeira consulta", detalhe: "A agenda dispara confirmação e financeiro.", href: "/app/agenda?novo=1", feito: temConsulta },
     ];
+  }
+
+  // Retenção: contatos de relacionamento do dia (aniversário, falta, pós-consulta)
+  if (role !== "medico" && orgId) {
+    const fila = await montarFilaContatos(orgId, org?.nome ?? "clínica").catch(() => null);
+    if (fila?.itens.length)
+      pendencias.push({
+        chave: "contatos-relacionamento",
+        titulo: `${fila.itens.length} contato${fila.itens.length > 1 ? "s" : ""} de relacionamento para hoje`,
+        detalhe: "Aniversários, faltas e pós-consulta, com a mensagem pronta para o WhatsApp.",
+        href: "/app/retencao",
+        quantidade: fila.itens.length,
+        urgente: false,
+      });
   }
 
   // Follow-ups: o médico vê os dele; dono e atendimento, os da clínica

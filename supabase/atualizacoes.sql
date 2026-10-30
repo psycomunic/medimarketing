@@ -2449,3 +2449,60 @@ select
 from public.pacientes p
 left join public.consultas c on c.paciente_id = p.id
 group by p.id;
+
+-- =====================================================================
+-- Fase 4A — Retenção manual: contatos de relacionamento do dia
+-- (aniversário, faltou, pós-consulta). Nada sai sozinho: a equipe envia
+-- pelo WhatsApp da clínica e registra aqui.
+-- =====================================================================
+create table if not exists public.automacoes_config (
+  id              uuid primary key default uuid_generate_v4(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  tipo            text not null check (tipo in ('aniversario', 'faltou', 'pos_consulta')),
+  ativa           boolean not null default true,
+  mensagem        text not null check (length(trim(mensagem)) > 0),
+  dias            smallint not null default 0 check (dias between 0 and 30),
+  atualizado_em   timestamptz not null default now(),
+  unique (organization_id, tipo)
+);
+
+create table if not exists public.contatos_relacionamento (
+  id              uuid primary key default uuid_generate_v4(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  -- tipo + consulta (ou tipo + paciente + ano): o mesmo contato não volta
+  chave           text not null,
+  tipo            text not null check (tipo in ('aniversario', 'faltou', 'pos_consulta')),
+  paciente_id     uuid references public.pacientes(id) on delete set null,
+  consulta_id     uuid references public.consultas(id) on delete set null,
+  nome            text not null,
+  status          text not null check (status in ('enviado', 'pulado')),
+  mensagem        text,
+  feito_por       uuid references public.profiles(id) on delete set null,
+  feito_em        timestamptz not null default now(),
+  unique (organization_id, chave)
+);
+create index if not exists idx_contatos_rel_org on public.contatos_relacionamento (organization_id, feito_em desc);
+create index if not exists idx_contatos_rel_paciente on public.contatos_relacionamento (paciente_id, feito_em desc);
+
+alter table public.automacoes_config enable row level security;
+alter table public.contatos_relacionamento enable row level security;
+
+-- Configurar: dono. Ver: toda a equipe operacional.
+drop policy if exists "automacoes_select" on public.automacoes_config;
+create policy "automacoes_select" on public.automacoes_config for select to authenticated
+  using ((organization_id = public.minha_org() and public.is_operacional()) or public.is_super_admin());
+drop policy if exists "automacoes_gestor" on public.automacoes_config;
+create policy "automacoes_gestor" on public.automacoes_config for all to authenticated
+  using ((organization_id = public.minha_org() and public.is_gestor()) or public.is_super_admin())
+  with check ((organization_id = public.minha_org() and public.is_gestor()) or public.is_super_admin());
+
+-- Registrar e desfazer contatos: dono e atendimento
+drop policy if exists "contatos_rel_select" on public.contatos_relacionamento;
+create policy "contatos_rel_select" on public.contatos_relacionamento for select to authenticated
+  using ((organization_id = public.minha_org() and public.is_operacional()) or public.is_super_admin());
+drop policy if exists "contatos_rel_insert" on public.contatos_relacionamento;
+create policy "contatos_rel_insert" on public.contatos_relacionamento for insert to authenticated
+  with check (organization_id = public.minha_org() and public.is_operacional());
+drop policy if exists "contatos_rel_delete" on public.contatos_relacionamento;
+create policy "contatos_rel_delete" on public.contatos_relacionamento for delete to authenticated
+  using ((organization_id = public.minha_org() and public.is_operacional()) or public.is_super_admin());
