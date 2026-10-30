@@ -117,14 +117,21 @@ export async function getConsultas(
   }
 
   const supabase = await createClient();
-  const { data } = await supabase
-    .from("consultas")
-    .select("*")
-    .gte("data_hora", inicio)
-    .lte("data_hora", fim)
-    .order("data_hora", { ascending: true });
-
-  return data ?? [];
+  // Paginado: o Supabase devolve no máximo 1000 linhas por pedido
+  const lista: Consulta[] = [];
+  for (let pagina = 0; pagina < 30; pagina++) {
+    const { data } = await supabase
+      .from("consultas")
+      .select("*")
+      .gte("data_hora", inicio)
+      .lte("data_hora", fim)
+      .order("data_hora", { ascending: true })
+      .order("id")
+      .range(pagina * 1000, pagina * 1000 + 999);
+    lista.push(...(data ?? []));
+    if (!data || data.length < 1000) break;
+  }
+  return lista;
 }
 
 /** Consulta com o nome da clínica e do profissional, para a agenda filtrável. */

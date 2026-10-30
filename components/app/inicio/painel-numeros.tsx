@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -17,6 +18,7 @@ import { BarrasAgrupadas, LinhaArea, Medidor, Ranking, Rosca } from "@/component
 import { COR, SERIES, pct, reais } from "@/components/graficos/formato";
 import { Indicador, Painel } from "@/components/app/financeiro/ui";
 import { cn } from "@/lib/utils";
+import { FiltroPeriodo } from "@/components/app/filtro-periodo";
 
 const hora = (iso: string) =>
   new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
@@ -45,7 +47,9 @@ export function PainelDeNumeros({
   const ehMes = r.periodo === "mes";
   const diaHoje = p.ritmo.filter((d) => d.atual !== null).length;
   const agendado = Math.max(p.faturamentoMes - p.ateHoje, 0);
-  const metaPct = ehMes && meta ? (p.faturamentoMes / meta) * 100 : null;
+  // A meta é da clínica: some quando o painel mostra um profissional só
+  const prof = r.filtro.profissional ? nomes[r.filtro.profissional] ?? "Profissional" : null;
+  const metaPct = ehMes && meta && !prof ? (p.faturamentoMes / meta) * 100 : null;
   const st = r.status;
   const totalStatus = st.confirmadas + st.pendentes + st.realizadas + st.canceladas + st.faltas;
   const tiposTotal = r.tipos.primeira + r.tipos.retorno + r.tipos.teleconsulta;
@@ -79,22 +83,15 @@ export function PainelDeNumeros({
       {/* Período */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="font-heading text-lg font-semibold text-azul-medico">Visão geral</h2>
-        <nav aria-label="Período" className="inline-flex rounded-full border border-border bg-white p-1 shadow-soft">
-          {PERIODOS.map((x) => (
-            <Link
-              key={x.chave}
-              href={x.chave === "mes" ? "/app" : `/app?periodo=${x.chave}`}
-              scroll={false}
-              aria-current={x.chave === r.periodo ? "page" : undefined}
-              className={cn(
-                "rounded-full px-3 py-1.5 text-xs font-semibold transition-colors sm:px-4 sm:text-sm",
-                x.chave === r.periodo ? "bg-azul-medico text-white" : "text-cinza-suave hover:text-azul-medico"
-              )}
-            >
-              {x.rotulo}
-            </Link>
-          ))}
-        </nav>
+        <Suspense fallback={<div className="h-10 w-80 rounded-full border border-border bg-white" />}>
+          <FiltroPeriodo
+            periodos={PERIODOS}
+            padrao="mes"
+            atual={r.filtro}
+            profissionais={Object.entries(nomes).map(([id, nome]) => ({ id, nome }))}
+            profissional={r.filtro.profissional}
+          />
+        </Suspense>
       </div>
 
       {/* Destaque do período e números do dia */}
@@ -103,7 +100,10 @@ export function PainelDeNumeros({
           <div aria-hidden className="pointer-events-none absolute -right-16 -top-20 size-64 rounded-full bg-teal/30 blur-3xl" />
           <div aria-hidden className="pointer-events-none absolute -bottom-24 left-1/3 size-56 rounded-full bg-white/5 blur-2xl" />
           <div className="relative">
-            <p className="text-xs font-semibold uppercase tracking-wider text-white/70">{r.titulo}</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-white/70">
+              {r.titulo}
+              {prof && <span className="normal-case tracking-normal"> · {prof}</span>}
+            </p>
             <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
               <p className="font-heading text-[2.5rem] font-bold leading-none tabular-nums sm:text-5xl">{reais(r.faturamento)}</p>
               {r.comparacao && (

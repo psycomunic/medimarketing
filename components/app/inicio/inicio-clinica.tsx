@@ -92,11 +92,7 @@ export function InicioGestor({ profile, org, dados, nomes }: { profile: Profile;
           dados={dados.relacionamento}
           clinica={org?.nome ?? "clínica"}
           nomes={nomes}
-          mesRotulo={new Date(
-            new Date().getFullYear(),
-            new Date().getMonth() - (dados.painel?.recorte.periodo === "mes-passado" ? 1 : 0),
-            1
-          ).toLocaleDateString("pt-BR", { month: "long" })}
+          quando={dados.painel?.recorte.quando ?? "neste mês"}
         />
       )}
 

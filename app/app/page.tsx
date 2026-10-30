@@ -1,7 +1,7 @@
 import { exigirSessao } from "@/lib/acesso";
 import { dadosAgencia, dadosClinica } from "@/lib/inicio/dados";
 import { getProfissionais } from "@/lib/supabase/financeiro-dados";
-import { lerPeriodo } from "@/lib/inicio/painel";
+import { lerFiltro } from "@/lib/inicio/painel";
 import { InicioAgencia } from "@/components/app/inicio/inicio-agencia";
 import { InicioAtendente, InicioGestor, InicioMedico } from "@/components/app/inicio/inicio-clinica";
 
@@ -12,7 +12,7 @@ import { InicioAtendente, InicioGestor, InicioMedico } from "@/components/app/in
  * - Atendente: a fila do dia e a lista do que fazer.
  * - Médico: quem vem a seguir.
  */
-export default async function InicioPage({ searchParams }: { searchParams: { periodo?: string } }) {
+export default async function InicioPage({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
   const { profile, organizacao, role } = await exigirSessao();
 
   if (role === "super_admin") {
@@ -25,7 +25,7 @@ export default async function InicioPage({ searchParams }: { searchParams: { per
   }
 
   const [dados, profissionais] = await Promise.all([
-    dadosClinica(role, profile, organizacao, lerPeriodo(searchParams.periodo)),
+    dadosClinica(role, profile, organizacao, lerFiltro(searchParams)),
     getProfissionais(organizacao?.id ?? null),
   ]);
   const nomes = Object.fromEntries(profissionais.map((p) => [p.id, p.nome]));

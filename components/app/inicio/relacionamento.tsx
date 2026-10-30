@@ -26,12 +26,13 @@ export function RelacionamentoPacientes({
   dados,
   clinica,
   nomes,
-  mesRotulo,
+  quando,
 }: {
   dados: Relacionamento;
   clinica: string;
   nomes: Record<string, string>;
-  mesRotulo: string;
+  /** "em outubro", "nos últimos 7 dias"... */
+  quando: string;
 }) {
   const { vagas, semRetorno, origens } = dados;
   const totalContatos = origens.reduce((s, o) => s + o.contatos, 0);
@@ -90,7 +91,7 @@ export function RelacionamentoPacientes({
         {/* Origem dos contatos */}
         <Painel
           titulo="De onde vêm os pacientes"
-          descricao={`Contatos que chegaram em ${mesRotulo} e quantos agendaram.`}
+          descricao={`Contatos que chegaram ${quando} e quantos agendaram.`}
           acao={
             <Link href="/app/crm" className="inline-flex items-center gap-1 text-sm font-medium text-teal hover:underline">
               CRM <ArrowRight className="size-4" />
@@ -127,7 +128,7 @@ export function RelacionamentoPacientes({
               </p>
             </div>
           ) : (
-            <Vazio texto={`Nenhum contato registrado no CRM em ${mesRotulo}.`} />
+            <Vazio texto={`Nenhum contato registrado no CRM ${quando}.`} />
           )}
         </Painel>
       </div>

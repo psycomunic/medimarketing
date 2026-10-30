@@ -2,7 +2,7 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 
 import { emModoDemo, getBloqueios, getConsultas, getDisponibilidade } from "@/lib/supabase/queries";
-import { montarPainel, type Periodo, type PainelNumeros } from "@/lib/inicio/painel";
+import { intervaloDoFiltro, montarPainel, type Filtro, type PainelNumeros } from "@/lib/inicio/painel";
 import {
   aniversariantes,
   horariosVagos,
@@ -155,7 +155,7 @@ export async function dadosClinica(
   role: Role,
   profile: Profile,
   org: Organization | null,
-  periodo: Periodo = "mes"
+  filtro: Filtro = { periodo: "mes" }
 ): Promise<DadosClinica> {
   const orgId = org?.id ?? null;
   const agora = new Date();
@@ -169,11 +169,16 @@ export async function dadosClinica(
   const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1);
   // O dono pode olhar o mês passado inteiro no painel
   const inicioJanela = role === "gestor" ? new Date(agora.getFullYear(), agora.getMonth() - 1, 1) : inicioMes;
-  const desde = domingo < inicioJanela ? domingo : inicioJanela;
+  // O recorte do dono pode pedir mais história (ano, intervalo) e a comparação com o anterior
+  const intervalo = role === "gestor" ? intervaloDoFiltro(filtro, agora) : null;
+  const menor = (...ds: Date[]) => new Date(Math.min(...ds.map((d) => d.getTime())));
+  const maior = (...ds: Date[]) => new Date(Math.max(...ds.map((d) => d.getTime())));
+  const desde = intervalo ? menor(domingo, inicioJanela, intervalo.antIni) : menor(domingo, inicioJanela);
+  const ateConsultas = intervalo ? maior(fimJanela, intervalo.fim) : fimJanela;
 
   const [painel, consultas, indicadores, plano] = await Promise.all([
     getPainel(role, orgId),
-    getConsultas(desde.toISOString(), fimJanela.toISOString()),
+    getConsultas(desde.toISOString(), ateConsultas.toISOString()),
     role === "secretaria" ? Promise.resolve([] as IndicadorMensal[]) : getIndicadores(orgId, 12),
     role === "gestor" ? getPlano(orgId) : Promise.resolve(null),
   ]);
@@ -219,11 +224,15 @@ export async function dadosClinica(
   if (role === "gestor" && orgId) {
     const mes = mesDe(agora);
     const meses = ultimosMeses(mes, 6);
-    const ate = somarDias(`${mes}-01`, 40);
+    const inicioSerie = `${meses[0]}-01`;
+    // Seis meses de série; mais, se o recorte (com a comparação) pedir
+    const deCarga = intervalo && isoLocal(intervalo.antIni) < inicioSerie ? isoLocal(intervalo.antIni) : inicioSerie;
+    const fimRecorte = intervalo ? isoLocal(new Date(intervalo.fim.getTime() - 864e5)) : "";
+    const ate = fimRecorte > somarDias(`${mes}-01`, 40) ? fimRecorte : somarDias(`${mes}-01`, 40);
     const [instalado, receitas, despesas, config, contas, regras, precos, profissionais] = await Promise.all([
       financeiroInstalado(),
-      getReceitas(orgId, `${meses[0]}-01`, ate),
-      getDespesas(orgId, `${meses[0]}-01`, ate),
+      getReceitas(orgId, deCarga, ate),
+      getDespesas(orgId, deCarga, ate),
       getConfigFinanceira(orgId),
       getContasAbertas(orgId),
       getRegrasRepasse(orgId),
@@ -261,29 +270,30 @@ export async function dadosClinica(
         isoLocal(new Date(agora.getFullYear() - 1, agora.getMonth() + 1, 0))
       ),
       getHistoricoPacientes(orgId, ha24Meses, fimJanela),
-      getOrigensLeads(orgId, inicioMesAnt),
+      getOrigensLeads(orgId, intervalo ? menor(inicioMesAnt, intervalo.ini) : inicioMesAnt),
       resumoNps(orgId, org?.pesquisa_ativa ?? false),
     ]);
     const daClinica = new Set(profissionais.map((p) => p.id));
     const disponibilidade = disponibilidadeTodas.filter((d) => !daClinica.size || daClinica.has(d.medico_id));
+    // Filtro por profissional: os números do painel passam a ser só dele; o lucro, que é da clínica, sai
+    const prof = filtro.profissional && daClinica.has(filtro.profissional) ? filtro.profissional : null;
+    const doProf = <T extends { medico_id?: string | null }>(lista: T[]) => (prof ? lista.filter((x) => x.medico_id === prof) : lista);
     painelNumeros = montarPainel({
-      periodo,
+      filtro: { ...filtro, profissional: prof ?? undefined },
       agora,
-      consultas: minhas,
-      receitas,
+      consultas: doProf(minhas),
+      receitas: doProf(receitas),
       serieTicket: series.map((s) => s.ticketMedio),
-      resumoDe,
-      disponibilidade,
-      bloqueios,
-      receitasAnoPassado,
+      resumoDe: prof ? null : resumoDe,
+      disponibilidade: prof ? disponibilidade.filter((d) => d.medico_id === prof) : disponibilidade,
+      bloqueios: prof ? bloqueios.filter((b) => b.medico_id === prof) : bloqueios,
+      receitasAnoPassado: doProf(receitasAnoPassado),
     });
-    const recorteIni = painelNumeros.recorte.periodo === "mes-passado" ? inicioMesAnt : inicioMes;
-    const recorteFim = painelNumeros.recorte.periodo === "mes-passado" ? inicioMes : inicioProxMes;
     relacionamento = {
       vagas: horariosVagos(agora, minhas, disponibilidade, bloqueios),
       aniversariantes: aniversariantes(agora, historico),
       semRetorno: semRetorno(agora, historico),
-      origens: origens(leads, recorteIni, recorteFim),
+      origens: origens(leads, intervalo?.ini ?? inicioMes, intervalo?.fim ?? inicioProxMes),
       nps,
     };
 
@@ -292,7 +302,7 @@ export async function dadosClinica(
       const vencidas = contas.filter((c) => c.vencimento < hojeStr);
       const semana7 = contas.filter((c) => c.vencimento >= hojeStr && c.vencimento <= somarDias(hojeStr, 7));
       const semPagamento = receitas.filter(
-        (l) => l.origem === "agenda" && l.status === "previsto" && l.forma_pagamento !== "convenio" && l.data_competencia < hojeStr && bruto(l) > 0
+        (l) => l.origem === "agenda" && l.status === "previsto" && l.forma_pagamento !== "convenio" && l.data_competencia >= inicioSerie && l.data_competencia < hojeStr && bruto(l) > 0
       );
       if (vencidas.length)
         pendencias.unshift({

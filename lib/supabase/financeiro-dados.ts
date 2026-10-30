@@ -43,15 +43,22 @@ export async function getReceitas(orgId: string | null, de: string, ate: string)
   if (await emModoDemo()) return entre(demoReceitas(), "data_competencia", de, ate);
   if (!orgId) return [];
   const supabase = await createClient();
-  const { data } = await supabase
-    .from("lancamentos")
-    .select("*")
-    .eq("organization_id", orgId)
-    .gte("data_competencia", de)
-    .lte("data_competencia", ate)
-    .order("data_competencia", { ascending: false })
-    .limit(5000);
-  return (data ?? []) as Lancamento[];
+  // Paginado: o Supabase devolve no máximo 1000 linhas por pedido
+  const lista: Lancamento[] = [];
+  for (let pagina = 0; pagina < 30; pagina++) {
+    const { data } = await supabase
+      .from("lancamentos")
+      .select("*")
+      .eq("organization_id", orgId)
+      .gte("data_competencia", de)
+      .lte("data_competencia", ate)
+      .order("data_competencia", { ascending: false })
+      .order("id")
+      .range(pagina * 1000, pagina * 1000 + 999);
+    lista.push(...((data ?? []) as Lancamento[]));
+    if (!data || data.length < 1000) break;
+  }
+  return lista;
 }
 
 /** Receitas ainda não recebidas, de qualquer data (para caixa e atrasos). */

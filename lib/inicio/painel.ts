@@ -4,27 +4,63 @@ import type { Bloqueio, Consulta, Disponibilidade, Lancamento } from "@/lib/supa
 /**
  * PAINEL DO DONO
  *
- * Os números do Início do gestor. O recorte (hoje, 7 dias, mês, mês
- * passado) muda faturamento, consultas e composição; o ritmo do mês, as
+ * Os números do Início do gestor. O recorte (atalhos, intervalo livre e
+ * profissional) muda faturamento, consultas e composição; o ritmo do mês, as
  * reservas e a ocupação olham sempre para o mês corrente e para a frente.
  */
 
-export type Periodo = "hoje" | "7d" | "mes" | "mes-passado";
+export type Periodo = "hoje" | "ontem" | "7d" | "30d" | "mes" | "mes-passado" | "3m" | "ano" | "personalizado";
 
-export const PERIODOS: { chave: Periodo; rotulo: string }[] = [
+export const PERIODOS: { chave: Exclude<Periodo, "personalizado">; rotulo: string }[] = [
   { chave: "hoje", rotulo: "Hoje" },
+  { chave: "ontem", rotulo: "Ontem" },
   { chave: "7d", rotulo: "7 dias" },
+  { chave: "30d", rotulo: "30 dias" },
   { chave: "mes", rotulo: "Mês" },
   { chave: "mes-passado", rotulo: "Mês passado" },
+  { chave: "3m", rotulo: "3 meses" },
+  { chave: "ano", rotulo: "Ano" },
 ];
 
+/** O que o dono escolheu ver: período (com datas, no personalizado) e profissional. */
+export type Filtro = { periodo: Periodo; de?: string; ate?: string; profissional?: string };
+
+const DATA = /^\d{4}-\d{2}-\d{2}$/;
+/** Intervalo personalizado de até dois anos. */
+const MAX_DIAS = 731;
+
+export function lerFiltro(sp: Record<string, string | string[] | undefined>): Filtro {
+  const um = (k: string) => {
+    const v = sp[k];
+    return Array.isArray(v) ? v[0] : v;
+  };
+  const periodo = um("periodo");
+  const profissional = um("profissional") || undefined;
+  if (periodo === "personalizado") {
+    let de = um("de") ?? "";
+    let ate = um("ate") ?? de;
+    if (DATA.test(de) && DATA.test(ate)) {
+      if (ate < de) [de, ate] = [ate, de];
+      const limite = somar(new Date(`${ate}T12:00:00`), -(MAX_DIAS - 1));
+      if (new Date(`${de}T12:00:00`) < limite) de = iso(limite);
+      return { periodo, de, ate, profissional };
+    }
+  }
+  const valido = PERIODOS.some((p) => p.chave === periodo);
+  return { periodo: valido ? (periodo as Periodo) : "mes", profissional };
+}
+
+/** Compatível com quem só passa o período. */
 export function lerPeriodo(v: string | string[] | undefined): Periodo {
-  const s = Array.isArray(v) ? v[0] : v;
-  return PERIODOS.some((p) => p.chave === s) ? (s as Periodo) : "mes";
+  return lerFiltro({ periodo: v }).periodo;
 }
 
 export type Recorte = {
   periodo: Periodo;
+  filtro: Filtro;
+  /** Início (inclusivo) e fim (exclusivo) do recorte, em YYYY-MM-DD. */
+  de: string;
+  ate: string;
   /** "Faturamento de outubro", "Faturamento de hoje"... */
   titulo: string;
   /** "em outubro", "hoje", "nos últimos 7 dias" — completa frases. */
@@ -38,7 +74,7 @@ export type Recorte = {
   atendimentos: number;
   /** O mesmo mês um ano antes (só nos recortes de mês). */
   anoPassado: { rotulo: string; valor: number; pct: number | null } | null;
-  /** Só nos recortes de mês fechado ou corrente. */
+  /** Só quando o recorte é feito de meses inteiros e sem filtro de profissional. */
   lucro: number | null;
   margem: number | null;
   status: { confirmadas: number; pendentes: number; realizadas: number; canceladas: number; faltas: number };
@@ -88,8 +124,89 @@ const mesLongo = (d: Date) => d.toLocaleDateString("pt-BR", { month: "long" });
 const DIAS = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
 const DIAS_CURTOS = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
 
+const dataCurta = (d: Date, agora: Date) =>
+  d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", ...(d.getFullYear() !== agora.getFullYear() && { year: "numeric" }) });
+
+export type Intervalo = {
+  ini: Date;
+  /** Exclusivo. */
+  fim: Date;
+  /** Começo do período usado na comparação. */
+  antIni: Date;
+  titulo: string;
+  quando: string;
+  rotuloComparacao: string;
+};
+
+/** Datas, textos e período de comparação de cada filtro. */
+export function intervaloDoFiltro(f: Filtro, agora: Date): Intervalo {
+  const hoje0 = new Date(agora);
+  hoje0.setHours(0, 0, 0, 0);
+  const amanha0 = somar(hoje0, 1);
+  const mes = (n: number) => new Date(agora.getFullYear(), agora.getMonth() + n, 1);
+  switch (f.periodo) {
+    case "hoje":
+      return { ini: hoje0, fim: amanha0, antIni: somar(hoje0, -7), titulo: "Faturamento de hoje", quando: "hoje", rotuloComparacao: `da ${DIAS[agora.getDay()]} passada` };
+    case "ontem": {
+      const ontem = somar(hoje0, -1);
+      return { ini: ontem, fim: hoje0, antIni: somar(ontem, -7), titulo: "Faturamento de ontem", quando: "ontem", rotuloComparacao: `da ${DIAS[ontem.getDay()]} anterior` };
+    }
+    case "7d":
+      return { ini: somar(hoje0, -6), fim: amanha0, antIni: somar(hoje0, -13), titulo: "Faturamento dos últimos 7 dias", quando: "nos últimos 7 dias", rotuloComparacao: "dos 7 dias anteriores" };
+    case "30d":
+      return { ini: somar(hoje0, -29), fim: amanha0, antIni: somar(hoje0, -59), titulo: "Faturamento dos últimos 30 dias", quando: "nos últimos 30 dias", rotuloComparacao: "dos 30 dias anteriores" };
+    case "mes-passado":
+      return { ini: mes(-1), fim: mes(0), antIni: mes(-2), titulo: `Faturamento de ${mesLongo(mes(-1))}`, quando: `em ${mesLongo(mes(-1))}`, rotuloComparacao: `de ${mesLongo(mes(-2))}` };
+    case "3m":
+      return {
+        ini: mes(-2),
+        fim: mes(1),
+        antIni: mes(-5),
+        titulo: `Faturamento de ${mesLongo(mes(-2))} a ${mesLongo(mes(0))}`,
+        quando: `de ${mesLongo(mes(-2))} a ${mesLongo(mes(0))}`,
+        rotuloComparacao: "do mesmo ponto dos 3 meses anteriores",
+      };
+    case "ano": {
+      const ano = agora.getFullYear();
+      return {
+        ini: new Date(ano, 0, 1),
+        fim: new Date(ano + 1, 0, 1),
+        antIni: new Date(ano - 1, 0, 1),
+        titulo: `Faturamento de ${ano}`,
+        quando: `em ${ano}`,
+        rotuloComparacao: `do mesmo período de ${ano - 1}`,
+      };
+    }
+    case "personalizado": {
+      const ini = new Date(`${f.de}T00:00:00`);
+      const ultimo = new Date(`${f.ate}T00:00:00`);
+      const fim = somar(ultimo, 1);
+      const dias = Math.round((fim.getTime() - ini.getTime()) / 864e5);
+      const texto = dias === 1 ? dataCurta(ini, agora) : `${dataCurta(ini, agora)} a ${dataCurta(ultimo, agora)}`;
+      return {
+        ini,
+        fim,
+        antIni: somar(ini, -dias),
+        titulo: `Faturamento de ${texto}`,
+        quando: dias === 1 ? `em ${texto}` : `de ${texto}`,
+        rotuloComparacao: dias === 1 ? "do dia anterior" : `dos ${dias} dias anteriores`,
+      };
+    }
+    default:
+      return { ini: mes(0), fim: mes(1), antIni: mes(-1), titulo: `Faturamento de ${mesLongo(mes(0))}`, quando: `em ${mesLongo(mes(0))}`, rotuloComparacao: "do mesmo dia do mês passado" };
+  }
+}
+
+/** Meses inteiros ("YYYY-MM") que formam o intervalo; vazio se ele corta algum mês. */
+function mesesInteiros(ini: Date, fim: Date): string[] {
+  if (ini.getDate() !== 1 || fim.getDate() !== 1) return [];
+  const lista: string[] = [];
+  for (let d = new Date(ini); d < fim; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) lista.push(iso(d).slice(0, 7));
+  return lista;
+}
+
 export function montarPainel({
-  periodo,
+  filtro,
   agora,
   consultas,
   receitas,
@@ -99,13 +216,14 @@ export function montarPainel({
   bloqueios,
   receitasAnoPassado = [],
 }: {
-  periodo: Periodo;
+  filtro: Filtro;
   agora: Date;
+  /** Da janela de carga: do começo da comparação até 31 dias à frente. */
   consultas: Consulta[];
   receitas: Lancamento[];
   serieTicket: number[];
-  /** Resumo financeiro (com lucro) de um mês "YYYY-MM". */
-  resumoDe: (mes: string) => ResumoMes;
+  /** Resumo financeiro (com lucro) de um mês "YYYY-MM". Sem ele, o lucro não aparece. */
+  resumoDe: ((mes: string) => ResumoMes) | null;
   disponibilidade: Disponibilidade[];
   bloqueios: Bloqueio[];
   /** Receitas de 12 a 13 meses atrás, para o comparativo anual. */
@@ -117,7 +235,6 @@ export function montarPainel({
   const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1);
   const inicioProxMes = new Date(agora.getFullYear(), agora.getMonth() + 1, 1);
   const inicioMesAnt = new Date(agora.getFullYear(), agora.getMonth() - 1, 1);
-  const inicioMesAnt2 = new Date(agora.getFullYear(), agora.getMonth() - 2, 1);
 
   const validas = receitas.filter((l) => l.status !== "cancelado");
   const somaEntre = (ini: Date, fim: Date) => {
@@ -144,45 +261,17 @@ export function montarPainel({
 
   /* ---------------- Recorte escolhido ---------------- */
   const variacao = (atual: number, antes: number) => (antes > 0 ? ((atual - antes) / antes) * 100 : null);
-  let ini: Date;
-  let fim: Date;
-  let titulo: string;
-  let quando: string;
-  let comparacao: Recorte["comparacao"];
-  let mesResumo: string | null = null;
-
-  if (periodo === "hoje") {
-    ini = hoje0;
-    fim = amanha0;
-    titulo = "Faturamento de hoje";
-    quando = "hoje";
-    const v = variacao(somaEntre(ini, fim), somaEntre(somar(hoje0, -7), somar(hoje0, -6)));
-    comparacao = v === null ? null : { pct: v, rotulo: `da ${DIAS[agora.getDay()]} passada` };
-  } else if (periodo === "7d") {
-    ini = somar(hoje0, -6);
-    fim = amanha0;
-    titulo = "Faturamento dos últimos 7 dias";
-    quando = "nos últimos 7 dias";
-    const v = variacao(somaEntre(ini, fim), somaEntre(somar(hoje0, -13), somar(hoje0, -6)));
-    comparacao = v === null ? null : { pct: v, rotulo: "dos 7 dias anteriores" };
-  } else if (periodo === "mes-passado") {
-    ini = inicioMesAnt;
-    fim = inicioMes;
-    titulo = `Faturamento de ${mesLongo(inicioMesAnt)}`;
-    quando = `em ${mesLongo(inicioMesAnt)}`;
-    const v = variacao(somaEntre(ini, fim), somaEntre(inicioMesAnt2, inicioMesAnt));
-    comparacao = v === null ? null : { pct: v, rotulo: `de ${mesLongo(inicioMesAnt2)}` };
-    mesResumo = iso(inicioMesAnt).slice(0, 7);
-  } else {
-    ini = inicioMes;
-    fim = inicioProxMes;
-    titulo = `Faturamento de ${mesLongo(inicioMes)}`;
-    quando = `em ${mesLongo(inicioMes)}`;
-    // Mês em andamento: compara o que já aconteceu com o mesmo dia do mês passado
-    const v = variacao(acA, anteriorMesmoDia);
-    comparacao = v === null ? null : { pct: v, rotulo: "do mesmo dia do mês passado" };
-    mesResumo = iso(inicioMes).slice(0, 7);
-  }
+  const { ini, fim, antIni, titulo, quando, rotuloComparacao } = intervaloDoFiltro(filtro, agora);
+  // Período em andamento: compara só o que já passou com o mesmo trecho do anterior
+  const corte = fim < amanha0 ? fim : amanha0;
+  const diasComparados = Math.round((corte.getTime() - ini.getTime()) / 864e5);
+  // Sem lançamentos desde o começo do período anterior (clínica nova no sistema), a comparação engana
+  const primeiro = validas.reduce((m, l) => (l.data_competencia < m ? l.data_competencia : m), "9999-12-31");
+  const historiaCompleta = primeiro <= iso(somar(antIni, 7));
+  const vComp = diasComparados > 0 && historiaCompleta ? variacao(somaEntre(ini, corte), somaEntre(antIni, somar(antIni, diasComparados))) : null;
+  const comparacao: Recorte["comparacao"] = vComp === null ? null : { pct: vComp, rotulo: rotuloComparacao };
+  const meses = resumoDe ? mesesInteiros(ini, fim) : [];
+  const mesResumo = meses.length === 1 ? meses[0] : null;
 
   const a = iso(ini);
   const b = iso(fim);
@@ -216,7 +305,9 @@ export function montarPainel({
     faltas: conta("faltou"),
   };
   const ativasR = doRecorteC.filter(ativa);
-  const resumo = mesResumo ? resumoDe(mesResumo) : null;
+  const resumos = resumoDe ? meses.map(resumoDe) : [];
+  const lucro = resumos.length ? resumos.reduce((x, r) => x + r.lucro, 0) : null;
+  const brutoMeses = resumos.reduce((x, r) => x + r.receitaBruta, 0);
 
   let anoPassado: Recorte["anoPassado"] = null;
   if (mesResumo) {
@@ -234,7 +325,10 @@ export function montarPainel({
   }
 
   const recorte: Recorte = {
-    periodo,
+    periodo: filtro.periodo,
+    filtro,
+    de: a,
+    ate: b,
     titulo,
     quando,
     faturamento,
@@ -244,8 +338,8 @@ export function montarPainel({
     ticketMedio: cobrados.length ? cobrados.reduce((s, l) => s + bruto(l), 0) / cobrados.length : 0,
     atendimentos: cobrados.length,
     anoPassado,
-    lucro: resumo ? resumo.lucro : null,
-    margem: resumo ? resumo.margem : null,
+    lucro,
+    margem: lucro !== null && brutoMeses ? (lucro / brutoMeses) * 100 : null,
     status,
     taxaFaltas: status.realizadas + status.faltas ? (status.faltas / (status.realizadas + status.faltas)) * 100 : null,
     tipos: {
@@ -259,7 +353,8 @@ export function montarPainel({
   };
 
   /* ---------------- Agenda daqui para a frente ---------------- */
-  const futuras = consultas.filter((c) => new Date(c.data_hora) >= agora && ativa(c));
+  const fimReservas = somar(hoje0, 31);
+  const futuras = consultas.filter((c) => new Date(c.data_hora) >= agora && new Date(c.data_hora) < fimReservas && ativa(c));
   const doDia = (d: Date) => consultas.filter((c) => new Date(c.data_hora).toDateString() === d.toDateString() && ativa(c));
   const proximos14 = Array.from({ length: 14 }, (_, i) => {
     const d = somar(hoje0, i);
