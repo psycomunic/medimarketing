@@ -5,6 +5,12 @@ const nextConfig = {
     // cujo limite padrão é 1 MB.
     serverActions: { bodySizeLimit: "12mb" },
   },
+  async rewrites() {
+    return [
+      // Linktree do Instituto Correr (página estática em public/institutocorrer).
+      { source: "/institutocorrer", destination: "/institutocorrer/index.html" },
+    ];
+  },
   images: {
     remotePatterns: [
       // Domínios externos permitidos para next/image (ex.: fotos de perfil no Supabase Storage).
