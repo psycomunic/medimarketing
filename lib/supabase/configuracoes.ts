@@ -3,10 +3,12 @@ import { emModoDemo } from "@/lib/supabase/queries";
 import { demoIntegracoes } from "@/lib/demo-modulos";
 import type { Integracao, ProvedorIntegracao } from "@/lib/supabase/types";
 
-/** Provedores oferecidos na tela, na ordem em que aparecem. */
+/**
+ * Provedores oferecidos na tela, na ordem em que aparecem. Meta Ads e
+ * Google Ads não entram: a conexão é da BM/MCC da Medi Marketing, feita
+ * no painel administrativo (Contas de anúncio).
+ */
 export const PROVEDORES: readonly ProvedorIntegracao[] = [
-  "meta_ads",
-  "google_ads",
   "ga4",
   "whatsapp",
   "instagram",

@@ -517,6 +517,17 @@ function Integracoes({
 }) {
   return (
     <div className="space-y-4">
+      <article className="rounded-lg border border-border bg-white p-5 shadow-soft">
+        <p className="font-heading text-base font-semibold text-azul-medico">Meta Ads e Google Ads</p>
+        <p className="mt-1 text-sm text-cinza-suave">
+          Conectados pela equipe Medi Marketing, direto da BM e da conta de administrador dela: a clínica não precisa fazer nada. Os
+          números aparecem em{" "}
+          <a href="/app/marketing" className="font-medium text-teal hover:underline">
+            Marketing
+          </a>
+          .
+        </p>
+      </article>
       {integracoes.map((i) => (
         <CartaoIntegracao
           key={i.provedor}
