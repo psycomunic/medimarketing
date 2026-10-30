@@ -2523,3 +2523,53 @@ alter table public.automacoes_config add constraint automacoes_config_dias_check
 alter table public.contatos_relacionamento drop constraint if exists contatos_relacionamento_tipo_check;
 alter table public.contatos_relacionamento add constraint contatos_relacionamento_tipo_check
   check (tipo in ('aniversario', 'faltou', 'pos_consulta', 'retorno', 'primeira_sem_retorno', 'reativacao'));
+
+-- =====================================================================
+-- Marketing (Fase 1): números diários de cada campanha do Meta e do
+-- Google (por planilha agora; pela API da BM/MCC da Medi depois) e o
+-- orçamento de mídia do mês.
+-- =====================================================================
+create table if not exists public.anuncios_diarios (
+  id              uuid primary key default uuid_generate_v4(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  plataforma      text not null check (plataforma in ('meta', 'google')),
+  -- Conta de anúncio (act_... no Meta, id do cliente no Google)
+  conta_id        text,
+  campanha_id     text not null,
+  campanha_nome   text not null,
+  data            date not null,
+  investimento    numeric(12,2) not null default 0,
+  impressoes      bigint not null default 0,
+  alcance         bigint not null default 0,
+  cliques         integer not null default 0,
+  leads           integer not null default 0,
+  conversas       integer not null default 0,
+  conversoes      integer not null default 0,
+  origem          text not null default 'planilha' check (origem in ('planilha', 'api')),
+  atualizado_em   timestamptz not null default now(),
+  unique (organization_id, plataforma, campanha_id, data)
+);
+create index if not exists idx_anuncios_org_data on public.anuncios_diarios (organization_id, data);
+
+create table if not exists public.orcamentos_midia (
+  id              uuid primary key default uuid_generate_v4(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  mes             date not null,
+  plataforma      text not null check (plataforma in ('meta', 'google')),
+  valor           numeric(12,2) not null default 0,
+  atualizado_em   timestamptz not null default now(),
+  unique (organization_id, mes, plataforma)
+);
+
+alter table public.anuncios_diarios enable row level security;
+alter table public.orcamentos_midia enable row level security;
+
+-- Dono da clínica e equipe Medi
+drop policy if exists "anuncios_gestor" on public.anuncios_diarios;
+create policy "anuncios_gestor" on public.anuncios_diarios for all to authenticated
+  using ((organization_id = public.minha_org() and public.is_gestor()) or public.is_super_admin())
+  with check ((organization_id = public.minha_org() and public.is_gestor()) or public.is_super_admin());
+drop policy if exists "orcamentos_midia_gestor" on public.orcamentos_midia;
+create policy "orcamentos_midia_gestor" on public.orcamentos_midia for all to authenticated
+  using ((organization_id = public.minha_org() and public.is_gestor()) or public.is_super_admin())
+  with check ((organization_id = public.minha_org() and public.is_gestor()) or public.is_super_admin());

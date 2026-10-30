@@ -236,6 +236,36 @@ export type DisparoDestinatario = {
 };
 
 /** Filtros da lista de pacientes guardados com um nome. */
+/** Números de uma campanha num dia (planilha importada ou, depois, a API). */
+export type AnuncioDiario = {
+  id: string;
+  organization_id: string;
+  plataforma: "meta" | "google";
+  conta_id: string | null;
+  campanha_id: string;
+  campanha_nome: string;
+  data: string; // YYYY-MM-DD
+  investimento: number;
+  impressoes: number;
+  alcance: number;
+  cliques: number;
+  leads: number;
+  conversas: number;
+  conversoes: number;
+  origem: "planilha" | "api";
+  atualizado_em: string;
+};
+
+/** Verba de mídia planejada para o mês, por plataforma. */
+export type OrcamentoMidia = {
+  id: string;
+  organization_id: string;
+  mes: string; // YYYY-MM-01
+  plataforma: "meta" | "google";
+  valor: number;
+  atualizado_em: string;
+};
+
 /** Contato de relacionamento feito à mão pela equipe (Retenção). */
 export type ContatoRelacionamento = {
   id: string;
@@ -1125,6 +1155,16 @@ export interface Database {
           processado_em?: string | null;
         },
         Partial<DisparoDestinatario>
+      >;
+      anuncios_diarios: Tabela<
+        AnuncioDiario,
+        Omit<AnuncioDiario, "id" | "atualizado_em"> & { id?: string; atualizado_em?: string },
+        Partial<AnuncioDiario>
+      >;
+      orcamentos_midia: Tabela<
+        OrcamentoMidia,
+        Omit<OrcamentoMidia, "id" | "atualizado_em"> & { id?: string; atualizado_em?: string },
+        Partial<OrcamentoMidia>
       >;
       contatos_relacionamento: Tabela<
         ContatoRelacionamento,

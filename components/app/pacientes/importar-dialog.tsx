@@ -1,5 +1,6 @@
 "use client";
 
+import { lerCsv } from "@/lib/csv";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, FileSpreadsheet, Loader2, Upload } from "lucide-react";
@@ -40,39 +41,6 @@ const normal = (t: string) =>
     .toLowerCase()
     .replace(/[_.]/g, " ")
     .trim();
-
-/** CSV com vírgula ou ponto e vírgula (o Excel em português usa ;), com aspas. */
-function lerCsv(texto: string): string[][] {
-  const primeira = texto.split(/\r?\n/, 1)[0] ?? "";
-  const sep = (primeira.match(/;/g)?.length ?? 0) > (primeira.match(/,/g)?.length ?? 0) ? ";" : ",";
-  const linhas: string[][] = [];
-  let linha: string[] = [];
-  let campo = "";
-  let aspas = false;
-  for (let i = 0; i < texto.length; i++) {
-    const c = texto[i];
-    if (aspas) {
-      if (c === '"' && texto[i + 1] === '"') {
-        campo += '"';
-        i++;
-      } else if (c === '"') aspas = false;
-      else campo += c;
-    } else if (c === '"') aspas = true;
-    else if (c === sep) {
-      linha.push(campo);
-      campo = "";
-    } else if (c === "\n" || c === "\r") {
-      if (c === "\r" && texto[i + 1] === "\n") i++;
-      linha.push(campo);
-      if (linha.some((x) => x.trim())) linhas.push(linha);
-      linha = [];
-      campo = "";
-    } else campo += c;
-  }
-  linha.push(campo);
-  if (linha.some((x) => x.trim())) linhas.push(linha);
-  return linhas;
-}
 
 export function ImportarDialog({ organizationId }: { organizationId?: string }) {
   const router = useRouter();
