@@ -48,6 +48,8 @@ export type LinhaCampanha = {
   serie: number[];
   /** Custo por contato contra o período anterior. */
   variacaoCpl: number | null;
+  /** O que a campanha virou na clínica (leads com a campanha marcada no CRM). */
+  crm: { leads: number; primeiras: number; atendidos: number; faturamento: number };
 };
 
 export type Atribuicao = {
@@ -83,6 +85,8 @@ export type PainelMidia = {
     linhas: { plataforma: Plataforma; orcado: number; gasto: number; projecao: number }[];
   };
   alertas: Alerta[];
+  /** Leads de anúncio no período sem campanha marcada no CRM. */
+  leadsSemCampanha: number;
   /** Conta do Meta ligada à clínica pela BM da Medi (dados chegam sozinhos). */
   metaConectado: boolean;
   metaAtualizado: string | null;
@@ -162,23 +166,62 @@ async function getConexaoMeta(orgId: string | null): Promise<{ conectado: boolea
   return { conectado: !!data?.length, atualizado: datas[datas.length - 1] ?? null };
 }
 
-/** Pacientes e leads que vieram dos anúncios, para seguir até o faturamento. */
-async function getOrigens(orgId: string | null, desde: string) {
+type OrigemPaciente = { id: string; nome: string; origem: string; campanhaId: string | null };
+type OrigemLead = { origem: string; created_at: string; campanhaId: string | null };
+
+/**
+ * Pacientes e leads que vieram dos anúncios, para seguir até o faturamento.
+ * A campanha do paciente é a do lead ligado a ele (a ficha se liga ao lead
+ * pelo telefone quando a primeira consulta é marcada).
+ */
+async function getOrigens(orgId: string | null, desde: string): Promise<{ pacientes: OrigemPaciente[]; leads: OrigemLead[] }> {
   const todas = [...ORIGENS.meta, ...ORIGENS.google];
   if (await emModoDemo()) {
-    const pacientes = (await pacientesDemo()).filter((p) => p.origem && todas.includes(p.origem)).map((p) => ({ id: p.id, nome: p.nome, origem: p.origem! }));
+    // Demonstração: cada paciente e lead de anúncio cai numa campanha da plataforma dele
+    const campanhas = demoAnuncios().reduce<Record<string, string[]>>((m, l) => {
+      const k = l.plataforma === "meta" ? "meta_ads" : "google_ads";
+      if (!(m[k] ??= []).includes(l.campanha_id)) m[k].push(l.campanha_id);
+      return m;
+    }, {});
+    const escolher = (origem: string, chave: string) => {
+      const lista = campanhas[origem] ?? [];
+      const n = [...chave].reduce((s, c) => s + c.charCodeAt(0), 0);
+      return lista.length ? lista[n % lista.length] : null;
+    };
+    const pacientes = (await pacientesDemo())
+      .filter((p) => p.origem && todas.includes(p.origem))
+      .map((p) => ({ id: p.id, nome: p.nome, origem: p.origem!, campanhaId: escolher(p.origem!, p.id) }));
     const leads = demoLeads().filter((l) => l.origem && todas.includes(l.origem) && l.created_at.slice(0, 10) >= desde);
-    return { pacientes, leads: leads.map((l) => ({ origem: l.origem!, created_at: l.created_at })) };
+    return { pacientes, leads: leads.map((l) => ({ origem: l.origem!, created_at: l.created_at, campanhaId: escolher(l.origem!, l.id) })) };
   }
   if (!orgId) return { pacientes: [], leads: [] };
   const supabase = await createClient();
-  const [{ data: pacientes }, { data: leads }] = await Promise.all([
-    supabase.from("pacientes").select("id,nome,origem").eq("organization_id", orgId).in("origem", todas).limit(10000),
-    supabase.from("leads").select("origem,created_at").eq("organization_id", orgId).in("origem", todas).gte("created_at", `${desde}T00:00:00-03:00`).limit(10000),
-  ]);
+  // Leads de anúncio de qualquer data: o paciente de hoje pode ter vindo de um lead antigo
+  let { data: leadsTodos, error } = await supabase
+    .from("leads")
+    .select("id,origem,created_at,campanha_id")
+    .eq("organization_id", orgId)
+    .in("origem", todas)
+    .order("created_at", { ascending: false })
+    .limit(10000);
+  // Banco sem a coluna de campanha ainda: segue só por plataforma
+  if (error) {
+    const r = await supabase.from("leads").select("id,origem,created_at").eq("organization_id", orgId).in("origem", todas).order("created_at", { ascending: false }).limit(10000);
+    leadsTodos = (r.data ?? []).map((l) => ({ ...l, campanha_id: null }));
+    error = null;
+  }
+  const campanhaDoLead = new Map((leadsTodos ?? []).map((l) => [l.id as string, (l.campanha_id as string | null) ?? null]));
+  const { data: pacientes } = await supabase.from("pacientes").select("id,nome,origem,lead_id").eq("organization_id", orgId).in("origem", todas).limit(10000);
   return {
-    pacientes: (pacientes ?? []).map((p) => ({ id: p.id as string, nome: p.nome as string, origem: p.origem as string })),
-    leads: (leads ?? []) as { origem: string; created_at: string }[],
+    pacientes: (pacientes ?? []).map((p) => ({
+      id: p.id as string,
+      nome: p.nome as string,
+      origem: p.origem as string,
+      campanhaId: p.lead_id ? campanhaDoLead.get(p.lead_id as string) ?? null : null,
+    })),
+    leads: (leadsTodos ?? [])
+      .filter((l) => (l.created_at as string).slice(0, 10) >= desde)
+      .map((l) => ({ origem: l.origem as string, created_at: l.created_at as string, campanhaId: (l.campanha_id as string | null) ?? null })),
   };
 }
 
@@ -259,6 +302,7 @@ export async function montarPainelMidia(orgId: string | null, filtro: Filtro, pl
         totais: t,
         serie: datas.map((d) => ls.filter((l) => l.data === d).reduce((s, l) => s + Number(l.investimento), 0)),
         variacaoCpl: anterior && antC.contatos >= 3 && atualC.contatos ? ((atualC.cpl - antC.cpl) / antC.cpl) * 100 : null,
+        crm: { leads: 0, primeiras: 0, atendidos: 0, faturamento: 0 },
       };
     })
     .sort((x, y) => y.totais.investimento - x.totais.investimento);
@@ -272,26 +316,44 @@ export async function montarPainelMidia(orgId: string | null, filtro: Filtro, pl
   const plataformaDaOrigem = (o: string | null | undefined): Plataforma | null =>
     o ? (PLATAFORMAS.find((p) => ORIGENS[p].includes(o)) ?? null) : null;
   const pacPlat = new Map(origens.pacientes.map((p) => [p.id, plataformaDaOrigem(p.origem)]));
+  const pacCamp = new Map(origens.pacientes.map((p) => [p.id, p.campanhaId]));
+  const pacCampNome = new Map(origens.pacientes.map((p) => [p.nome.trim().toLowerCase(), p.campanhaId]));
+  const porCampanha = new Map(campanhas.map((x) => [x.id, x.crm]));
+  const naCampanha = (pacienteId: string | null | undefined, nome: string) =>
+    porCampanha.get((pacienteId ? pacCamp.get(pacienteId) : pacCampNome.get(nome.trim().toLowerCase())) ?? "");
   const nomeNorm = (s: string) => s.trim().toLowerCase();
   const pacPorNome = new Map(origens.pacientes.map((p) => [nomeNorm(p.nome), plataformaDaOrigem(p.origem)]));
   const consultaPorId = new Map(consultas.map((c) => [c.id, c]));
+  let leadsSemCampanha = 0;
   const vazio = (): Atribuicao => ({ leadsCrm: 0, primeiras: 0, atendidos: 0, faturamento: 0, roas: null, custoPorPaciente: null });
   const atrib: Record<Plataforma, Atribuicao> = { meta: vazio(), google: vazio() };
   for (const l of origens.leads) {
     const p = plataformaDaOrigem(l.origem);
-    if (p && l.created_at.slice(0, 10) <= b) atrib[p].leadsCrm += 1;
+    if (p && l.created_at.slice(0, 10) <= b) {
+      atrib[p].leadsCrm += 1;
+      const crm = l.campanhaId ? porCampanha.get(l.campanhaId) : undefined;
+      if (crm) crm.leads += 1;
+      if (!l.campanhaId && (!plataforma || p === plataforma)) leadsSemCampanha += 1;
+    }
   }
   for (const c of consultas) {
     const p = c.paciente_id ? pacPlat.get(c.paciente_id) : pacPorNome.get(nomeNorm(c.paciente_nome));
     if (!p || c.tipo !== "primeira" || c.status === "cancelada") continue;
     atrib[p].primeiras += 1;
     if (c.status === "realizada") atrib[p].atendidos += 1;
+    const crm = naCampanha(c.paciente_id, c.paciente_nome);
+    if (crm) {
+      crm.primeiras += 1;
+      if (c.status === "realizada") crm.atendidos += 1;
+    }
   }
   for (const r of receitas) {
     if (r.status === "cancelado") continue;
     const c = r.consulta_id ? consultaPorId.get(r.consulta_id) : undefined;
     const p = c?.paciente_id ? pacPlat.get(c.paciente_id) : pacPorNome.get(nomeNorm(r.paciente_nome));
     if (p) atrib[p].faturamento += bruto(r);
+    const crm = naCampanha(c?.paciente_id, r.paciente_nome);
+    if (crm) crm.faturamento += bruto(r);
   }
   for (const p of PLATAFORMAS) {
     const inv = porPlataforma[p].investimento;
@@ -372,6 +434,7 @@ export async function montarPainelMidia(orgId: string | null, filtro: Filtro, pl
     atribuicao: { ...atrib, total },
     orcamento,
     alertas,
+    leadsSemCampanha,
     metaConectado: conexao.conectado,
     metaAtualizado: conexao.atualizado,
   };

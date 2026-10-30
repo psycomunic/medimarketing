@@ -45,6 +45,9 @@ const leadSchema = z.object({
   proximoContato: z.string().optional().or(z.literal("")),
   mensagem: z.string().trim().max(2000).optional().or(z.literal("")),
   motivoPerda: z.string().trim().max(500).optional().or(z.literal("")),
+  /** Campanha do anúncio (só com origem Meta Ads ou Google Ads). */
+  campanhaId: z.string().trim().max(160).nullable().optional(),
+  campanhaNome: z.string().trim().max(300).nullable().optional(),
 });
 
 export type LeadInput = z.input<typeof leadSchema>;
@@ -86,6 +89,11 @@ export async function salvarLead(input: LeadInput): Promise<ActionResult> {
     proximo_contato: d.proximoContato ? new Date(d.proximoContato).toISOString() : null,
     mensagem: d.mensagem || null,
     motivo_perda: perdido ? d.motivoPerda || null : null,
+    // As colunas de campanha só vão quando o formulário mandou (o banco pode não ter ainda)
+    ...(d.campanhaId !== undefined && {
+      campanha_id: d.campanhaId || null,
+      campanha_nome: d.campanhaId ? d.campanhaNome || null : null,
+    }),
   };
 
   const { error } = d.id
@@ -99,6 +107,7 @@ export async function salvarLead(input: LeadInput): Promise<ActionResult> {
         consentimento_lgpd: true,
       });
 
+  if (error && /campanha_/.test(error.message)) return { ok: false, erro: "Para guardar a campanha do lead, rode antes o SQL do Marketing (Fase 4)." };
   if (error) {
     console.error("[crm] Erro ao salvar lead:", error.message);
     return { ok: false, erro: "Não foi possível salvar o lead." };

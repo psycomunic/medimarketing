@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import type { EtapaFunil, LeadComContexto, Profile } from "@/lib/supabase/types";
 import { salvarLead } from "@/lib/actions/crm";
+import { listarCampanhasAnuncio, type OpcaoCampanha } from "@/lib/actions/midia";
 import { ETAPAS_FUNIL, rotuloEtapa, rotuloOrigem } from "@/lib/rotulos";
 import {
   Dialog,
@@ -28,6 +29,8 @@ function paraInputLocal(iso: string | null): string {
 }
 
 const ORIGENS = ["meta_ads", "google_ads", "instagram", "indicacao", "site", "whatsapp", "outro"];
+/** Origem de anúncio pago e a plataforma das campanhas dela. */
+const PLATAFORMA_DA_ORIGEM: Record<string, "meta" | "google"> = { meta_ads: "meta", google_ads: "google" };
 
 /** Cadastro e edição de lead. Sem `lead`, cria um novo. */
 export function LeadForm({
@@ -60,9 +63,21 @@ export function LeadForm({
     proximoContato: paraInputLocal(lead?.proximo_contato ?? null),
     mensagem: lead?.mensagem ?? "",
     motivoPerda: lead?.motivo_perda ?? "",
+    campanhaId: lead?.campanha_id ?? "",
   };
 
   const [v, setV] = useState(inicial);
+
+  // Campanhas da clínica, para marcar de qual anúncio o lead veio
+  const [campanhas, setCampanhas] = useState<OpcaoCampanha[] | null>(null);
+  const plataforma = PLATAFORMA_DA_ORIGEM[v.origem];
+  useEffect(() => {
+    if (!aberto || !plataforma || campanhas) return;
+    listarCampanhasAnuncio(organizationId).then(setCampanhas).catch(() => setCampanhas([]));
+  }, [aberto, plataforma, campanhas, organizationId]);
+  const daPlataforma = (campanhas ?? []).filter((c) => c.plataforma === plataforma);
+  // Campanha antiga que saiu da lista continua aparecendo no lead
+  const campanhaAtual = v.campanhaId && !daPlataforma.some((c) => c.id === v.campanhaId) ? { id: v.campanhaId, nome: lead?.campanha_nome ?? v.campanhaId } : null;
 
   // Reabrir o diálogo com outro lead precisa recarregar os campos
   useEffect(() => {
@@ -91,6 +106,15 @@ export function LeadForm({
         proximoContato: v.proximoContato,
         mensagem: v.mensagem,
         motivoPerda: v.motivoPerda,
+        // Só manda quando há anúncio na origem ou para limpar uma campanha antiga
+        ...(plataforma
+          ? {
+              campanhaId: v.campanhaId || null,
+              campanhaNome: daPlataforma.find((c) => c.id === v.campanhaId)?.nome ?? campanhaAtual?.nome ?? null,
+            }
+          : lead?.campanha_id
+            ? { campanhaId: null, campanhaNome: null }
+            : {}),
       });
 
       if (!res.ok) {
@@ -165,6 +189,20 @@ export function LeadForm({
               ))}
             </Select>
           </Campo>
+
+          {plataforma && (
+            <Campo label="Campanha do anúncio" id="campanha">
+              <Select id="campanha" value={v.campanhaId} onChange={(e) => setV({ ...v, campanhaId: e.target.value })}>
+                <option value="">{campanhas === null ? "Carregando campanhas…" : daPlataforma.length ? "Não sei / outra" : "Nenhuma campanha importada"}</option>
+                {campanhaAtual && <option value={campanhaAtual.id}>{campanhaAtual.nome}</option>}
+                {daPlataforma.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nome}
+                  </option>
+                ))}
+              </Select>
+            </Campo>
+          )}
 
           <Campo label="Etapa do funil" id="etapa">
             <Select

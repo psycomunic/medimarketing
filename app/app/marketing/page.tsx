@@ -39,6 +39,8 @@ const ORDENS = {
   contatos: { r: "Contatos", f: (c: LinhaCampanha) => c.totais.contatos },
   cpl: { r: "Custo por contato", f: (c: LinhaCampanha) => (c.totais.contatos ? -c.totais.cpl : -Infinity) },
   ctr: { r: "CTR", f: (c: LinhaCampanha) => c.totais.ctr },
+  pacientes: { r: "Pacientes", f: (c: LinhaCampanha) => c.crm.atendidos },
+  retorno: { r: "Retorno", f: (c: LinhaCampanha) => (c.totais.investimento ? c.crm.faturamento / c.totais.investimento : 0) },
 } as const;
 type Ordem = keyof typeof ORDENS;
 
@@ -346,7 +348,7 @@ export default async function MarketingPage({ searchParams }: { searchParams: Re
               ))}
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px] text-sm">
+              <table className="w-full min-w-[1180px] text-sm">
                 <thead>
                   <tr className="border-b border-border text-left text-[11px] uppercase tracking-wide text-cinza-suave">
                     <th className="px-5 py-2.5 font-semibold">Campanha</th>
@@ -357,6 +359,9 @@ export default async function MarketingPage({ searchParams }: { searchParams: Re
                     <th className="px-2 py-2.5 text-right font-semibold">CPC</th>
                     <th className="px-2 py-2.5 text-right font-semibold">Contatos</th>
                     <th className="px-2 py-2.5 text-right font-semibold">Custo/contato</th>
+                    <th className="px-2 py-2.5 text-right font-semibold">Leads CRM</th>
+                    <th className="px-2 py-2.5 text-right font-semibold">Pacientes</th>
+                    <th className="px-2 py-2.5 text-right font-semibold">Faturamento</th>
                     <th className="px-5 py-2.5 font-semibold">Gasto por dia</th>
                   </tr>
                 </thead>
@@ -388,6 +393,19 @@ export default async function MarketingPage({ searchParams }: { searchParams: Re
                           </span>
                         )}
                       </td>
+                      <td className="px-2 py-2.5 text-right tabular-nums text-cinza-suave">{x.crm.leads || "—"}</td>
+                      <td className="px-2 py-2.5 text-right tabular-nums">
+                        <span className="text-cinza-texto">{x.crm.atendidos || "—"}</span>
+                        {x.crm.atendidos > 0 && <span className="block text-[11px] text-cinza-suave">{reais(x.totais.investimento / x.crm.atendidos)} cada</span>}
+                      </td>
+                      <td className="px-2 py-2.5 text-right tabular-nums">
+                        <span className="font-semibold text-cinza-texto">{x.crm.faturamento ? reais(x.crm.faturamento) : "—"}</span>
+                        {x.crm.faturamento > 0 && x.totais.investimento > 0 && (
+                          <span className="block text-[11px] font-medium text-teal">
+                            {(x.crm.faturamento / x.totais.investimento).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}× o investido
+                          </span>
+                        )}
+                      </td>
                       <td className="px-5 py-2.5">
                         <Minigrafico valores={x.serie} cor={COR_PLAT[x.plataforma]} />
                       </td>
@@ -398,7 +416,14 @@ export default async function MarketingPage({ searchParams }: { searchParams: Re
             </div>
             <p className="border-t border-border px-5 py-2.5 text-xs text-cinza-suave">
               Contatos: leads de formulário e conversas iniciadas no WhatsApp (no Google, as conversões). A variação do custo por contato
-              compara com o mesmo trecho do período anterior: verde é mais barato.
+              compara com o mesmo trecho do período anterior: verde é mais barato. Leads CRM, pacientes e faturamento contam os leads com a
+              campanha marcada no cadastro do CRM.
+              {p.leadsSemCampanha > 0 && (
+                <strong className="text-[#B45309]">
+                  {" "}
+                  {p.leadsSemCampanha} lead{p.leadsSemCampanha === 1 ? "" : "s"} de anúncio no período sem campanha marcada.
+                </strong>
+              )}
             </p>
           </Painel>
         </>

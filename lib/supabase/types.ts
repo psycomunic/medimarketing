@@ -400,6 +400,9 @@ export type Lead = {
   proximo_contato: string | null;
   ultimo_contato: string | null;
   motivo_perda: string | null;
+  /** Campanha de anúncio de onde o lead veio (nulo até o SQL rodar). */
+  campanha_id?: string | null;
+  campanha_nome?: string | null;
   created_at: string;
 };
 

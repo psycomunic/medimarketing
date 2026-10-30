@@ -4,6 +4,9 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { bloqueio, contexto, GESTAO, organizacaoAlvo, type ActionResult } from "@/lib/actions/contexto";
 import { sincronizarConta } from "@/lib/marketing/sincronizar";
+import { demoAnuncios } from "@/lib/marketing/demo";
+import { emModoDemo } from "@/lib/supabase/queries";
+import { adminDisponivel, createAdminClient } from "@/lib/supabase/admin";
 
 const MSG_SQL = "O painel de mídia ainda não foi ativado. Rode o SQL do Marketing no Supabase.";
 
@@ -136,4 +139,38 @@ export async function sincronizarContaAgora(plataforma: "meta" | "google", conta
   revalidatePath("/app/admin/anuncios");
   revalidatePath("/app/marketing");
   return r;
+}
+
+/* ------------------------------ Campanhas para o CRM ------------------------------ */
+
+export type OpcaoCampanha = { id: string; nome: string; plataforma: "meta" | "google" };
+
+/**
+ * Campanhas com gasto nos últimos 120 dias, para marcar de onde veio o
+ * lead. A atendente também cadastra lead, mas não enxerga o painel de
+ * mídia: a lista sai pela service role, só da clínica de quem pede.
+ */
+export async function listarCampanhasAnuncio(organizationId?: string | null): Promise<OpcaoCampanha[]> {
+  if (await emModoDemo()) {
+    const vistas = new Map<string, OpcaoCampanha>();
+    for (const l of demoAnuncios()) vistas.set(l.campanha_id, { id: l.campanha_id, nome: l.campanha_nome, plataforma: l.plataforma });
+    return [...vistas.values()];
+  }
+  const ctx = await contexto(["super_admin", "gestor", "secretaria"]);
+  if (ctx.estado !== "ok") return [];
+  const orgId = organizacaoAlvo(ctx.profile, organizationId);
+  if (!orgId || !adminDisponivel()) return [];
+  const desde = new Date(Date.now() - 120 * 864e5).toISOString().slice(0, 10);
+  const { data } = await createAdminClient()
+    .from("anuncios_diarios")
+    .select("campanha_id,campanha_nome,plataforma,data")
+    .eq("organization_id", orgId)
+    .gte("data", desde)
+    .gt("investimento", 0)
+    .order("data", { ascending: false })
+    .limit(5000);
+  // Vale o nome mais recente de cada campanha
+  const vistas = new Map<string, OpcaoCampanha>();
+  for (const l of data ?? []) if (!vistas.has(l.campanha_id)) vistas.set(l.campanha_id, { id: l.campanha_id, nome: l.campanha_nome, plataforma: l.plataforma });
+  return [...vistas.values()].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 }

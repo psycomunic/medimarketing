@@ -128,7 +128,8 @@ export function LeadDialog({
           <DialogHeader>
             <DialogTitle>{lead.nome}</DialogTitle>
             <DialogDescription>
-              {nomeOrigem(lead.origem)} · entrou {tempoRelativo(lead.created_at)} ·{" "}
+              {nomeOrigem(lead.origem)}
+              {lead.campanha_nome ? ` (${lead.campanha_nome})` : ""} · entrou {tempoRelativo(lead.created_at)} ·{" "}
               {rotuloStatusLead[lead.status]}
             </DialogDescription>
           </DialogHeader>

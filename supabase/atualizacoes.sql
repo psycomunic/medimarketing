@@ -2600,3 +2600,12 @@ create policy "contas_anuncio_admin" on public.contas_anuncio for all to authent
 drop policy if exists "contas_anuncio_clinica" on public.contas_anuncio;
 create policy "contas_anuncio_clinica" on public.contas_anuncio for select to authenticated
   using (organization_id = public.minha_org() and public.is_gestor());
+
+-- =====================================================================
+-- Marketing (Fase 4): de qual campanha veio o lead. O paciente herda pelo
+-- lead (a ficha já se liga ao lead pelo telefone), e o painel segue a
+-- campanha até a consulta e o faturamento.
+-- =====================================================================
+alter table public.leads add column if not exists campanha_id text;
+alter table public.leads add column if not exists campanha_nome text;
+create index if not exists idx_leads_campanha on public.leads (organization_id, campanha_id);
