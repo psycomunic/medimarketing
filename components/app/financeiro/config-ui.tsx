@@ -5,11 +5,13 @@ import { CheckCircle2, Pencil, Plus, Trash2 } from "lucide-react";
 import type { ConfigFinanceira, FormaPagamento, PrecoProcedimento } from "@/lib/supabase/types";
 import { excluirPreco, salvarConfigFinanceira, salvarPreco } from "@/lib/actions/financeiro";
 import { TAXAS_PADRAO } from "@/lib/financeiro/calculos";
+import { temFaixa, textoDuracao, textoValor } from "@/lib/financeiro/precos";
 import { rotuloFormaPagamento } from "@/lib/rotulos";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { reais } from "@/components/graficos/formato";
+import { cn } from "@/lib/utils";
 import { Campo, CampoReais, Erro, Girando, emTexto, numero, useAcao } from "./form-comum";
 import { useAcaoFlutuante } from "@/components/app/botao-flutuante";
 
@@ -130,12 +132,13 @@ export function TabelaPrecos({ precos, demo }: { precos: PrecoProcedimento[]; de
         <p className="px-6 py-12 text-center text-sm text-cinza-suave">Nenhum preço cadastrado ainda.</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[620px] text-sm">
+          <table className="w-full min-w-[700px] text-sm">
             <thead>
               <tr className="border-b border-border text-left text-[11px] uppercase tracking-wide text-cinza-suave">
                 <th className="px-5 py-2.5 font-semibold">Procedimento</th>
                 <th className="px-2 py-2.5 font-semibold">Tabela</th>
                 <th className="px-2 py-2.5 text-right font-semibold">Valor</th>
+                <th className="px-2 py-2.5 text-right font-semibold">Duração</th>
                 <th className="px-2 py-2.5 text-right font-semibold">Custo</th>
                 <th className="px-2 py-2.5 text-right font-semibold">Margem</th>
                 <th className="w-20 px-5 py-2.5" />
@@ -146,7 +149,12 @@ export function TabelaPrecos({ precos, demo }: { precos: PrecoProcedimento[]; de
                 lista
                   .sort((a, b) => (a.convenio ?? "").localeCompare(b.convenio ?? ""))
                   .map((p, i) => {
-                    const margem = Number(p.valor) ? ((Number(p.valor) - Number(p.custo)) / Number(p.valor)) * 100 : 0;
+                    const margemDe = (valor: number) => `${Math.round(((valor - Number(p.custo)) / valor) * 100)}%`;
+                    const margem = !Number(p.valor)
+                      ? "—"
+                      : temFaixa(p)
+                        ? `${margemDe(Number(p.valor))} a ${margemDe(Number(p.valor_max))}`
+                        : margemDe(Number(p.valor));
                     return (
                       <tr key={p.id}>
                         <td className="px-5 py-2.5">
@@ -158,9 +166,10 @@ export function TabelaPrecos({ precos, demo }: { precos: PrecoProcedimento[]; de
                           ) : null}
                         </td>
                         <td className="px-2 py-2.5 text-cinza-texto">{p.convenio ?? "Particular"}</td>
-                        <td className="px-2 py-2.5 text-right font-semibold tabular-nums text-azul-medico">{reais(Number(p.valor), true)}</td>
+                        <td className="whitespace-nowrap px-2 py-2.5 text-right font-semibold tabular-nums text-azul-medico">{textoValor(p)}</td>
+                        <td className="whitespace-nowrap px-2 py-2.5 text-right tabular-nums text-cinza-suave">{textoDuracao(p) ?? "—"}</td>
                         <td className="px-2 py-2.5 text-right tabular-nums text-cinza-suave">{Number(p.custo) ? reais(Number(p.custo), true) : "—"}</td>
-                        <td className="px-2 py-2.5 text-right tabular-nums text-cinza-suave">{Number(p.valor) ? `${Math.round(margem)}%` : "—"}</td>
+                        <td className="whitespace-nowrap px-2 py-2.5 text-right tabular-nums text-cinza-suave">{margem}</td>
                         <td className="px-5 py-2.5">
                           <div className="flex justify-end gap-1">
                             <button type="button" onClick={() => setEditar(p)} className="grid size-8 place-items-center rounded-lg text-cinza-suave hover:bg-branco-clinico hover:text-azul-medico" aria-label="Editar">
@@ -190,23 +199,107 @@ export function TabelaPrecos({ precos, demo }: { precos: PrecoProcedimento[]; de
   );
 }
 
+/** Chave "Fixo / Varia" ao lado do rótulo de um campo. */
+function RotuloFaixa({ htmlFor, rotulo, faixa, onChange }: { htmlFor: string; rotulo: string; faixa: boolean; onChange: (f: boolean) => void }) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <label htmlFor={htmlFor} className="text-sm font-medium text-cinza-texto">
+        {rotulo}
+      </label>
+      <div role="radiogroup" aria-label={`${rotulo}: fixo ou varia`} className="flex rounded-full bg-branco-clinico p-0.5 text-xs font-semibold">
+        {[
+          { f: false, r: "Fixo" },
+          { f: true, r: "Varia" },
+        ].map((o) => (
+          <button
+            key={o.r}
+            type="button"
+            role="radio"
+            aria-checked={faixa === o.f}
+            onClick={() => onChange(o.f)}
+            className={cn(
+              "rounded-full px-2.5 py-1 transition-colors",
+              faixa === o.f ? "bg-white text-azul-medico shadow-sm" : "text-cinza-suave hover:text-azul-medico"
+            )}
+          >
+            {o.r}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CampoMinutos({ id, valor, onChange, placeholder }: { id: string; valor: string; onChange: (v: string) => void; placeholder?: string }) {
+  return (
+    <div className="relative">
+      <Input id={id} inputMode="numeric" value={valor} placeholder={placeholder} onChange={(e) => onChange(e.target.value.replace(/\D/g, "").slice(0, 3))} className="pr-12 tabular-nums" />
+      <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-sm text-cinza-suave">min</span>
+    </div>
+  );
+}
+
+/** Dois campos lado a lado: "de [ ] até [ ]". */
+function Faixa({ de, ate }: { de: React.ReactNode; ate: React.ReactNode }) {
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
+      {de}
+      <span className="text-xs text-cinza-suave">até</span>
+      {ate}
+    </div>
+  );
+}
+
 function PrecoDialog({ preco, demo, onFechar }: { preco: PrecoProcedimento | null; demo: boolean; onFechar: () => void }) {
   const [v, setV] = useState({
     procedimento: preco?.procedimento ?? "",
     categoria: preco?.categoria ?? "",
     convenio: preco?.convenio ?? "",
     valor: emTexto(preco ? Number(preco.valor) : null),
+    valorMax: emTexto(preco?.valor_max != null ? Number(preco.valor_max) : null),
     custo: emTexto(preco ? Number(preco.custo) : null),
     duracao: preco?.duracao_min ? String(preco.duracao_min) : "",
+    duracaoMax: preco?.duracao_max ? String(preco.duracao_max) : "",
   });
-  const { pending, erro, executar } = useAcao();
+  const [valorVaria, setValorVaria] = useState(!!preco && temFaixa(preco));
+  const [duracaoVaria, setDuracaoVaria] = useState(!!preco?.duracao_max);
+  const { pending, erro, setErro, executar } = useAcao();
   const set = <K extends keyof typeof v>(k: K, x: string) => setV({ ...v, [k]: x });
+
+  function salvar() {
+    const valor = numero(v.valor);
+    const valorMax = numero(v.valorMax);
+    const duracao = v.duracao ? Number(v.duracao) : 0;
+    const duracaoMax = v.duracaoMax ? Number(v.duracaoMax) : 0;
+    if (Number.isNaN(valor) || Number.isNaN(valorMax)) return setErro("Valor inválido.");
+    if (valorVaria && (!valor || !valorMax)) return setErro("Preencha o valor mínimo e o máximo.");
+    if (valorVaria && valorMax <= valor) return setErro("O valor máximo precisa ser maior que o mínimo.");
+    if (duracaoVaria && (!duracao || !duracaoMax)) return setErro("Preencha a duração mínima e a máxima.");
+    if (duracaoVaria && duracaoMax <= duracao) return setErro("A duração máxima precisa ser maior que a mínima.");
+    // Só manda as colunas de faixa quando usadas ou quando havia faixa para limpar
+    executar(
+      () =>
+        salvarPreco({
+          id: preco?.id,
+          procedimento: v.procedimento,
+          categoria: v.categoria,
+          convenio: v.convenio,
+          valor: valor || 0,
+          custo: numero(v.custo) || 0,
+          duracao: duracao || undefined,
+          valorMax: valorVaria ? valorMax : preco?.valor_max != null ? null : undefined,
+          duracaoMax: duracaoVaria ? duracaoMax : preco?.duracao_max != null ? null : undefined,
+        }),
+      onFechar
+    );
+  }
+
   return (
     <Dialog open onOpenChange={(a) => !a && onFechar()}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>{preco ? "Editar preço" : "Novo preço"}</DialogTitle>
-          <DialogDescription>Deixe o convênio em branco para o valor particular.</DialogDescription>
+          <DialogDescription>Deixe o convênio em branco para o valor particular. Se o valor ou o tempo mudam de caso para caso, marque “Varia”.</DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">
           <div className="grid gap-4 sm:grid-cols-2">
@@ -219,41 +312,42 @@ function PrecoDialog({ preco, demo, onFechar }: { preco: PrecoProcedimento | nul
             <Campo id="p-conv" rotulo="Convênio">
               <Input id="p-conv" value={v.convenio} onChange={(e) => set("convenio", e.target.value)} placeholder="Particular" />
             </Campo>
-            <Campo id="p-dur" rotulo="Duração (min)">
-              <Input id="p-dur" inputMode="numeric" value={v.duracao} onChange={(e) => set("duracao", e.target.value.replace(/\D/g, ""))} />
-            </Campo>
-            <Campo id="p-valor" rotulo="Valor">
-              <CampoReais id="p-valor" valor={v.valor} onChange={(x) => set("valor", x)} />
-            </Campo>
             <Campo id="p-custo" rotulo="Custo direto">
               <CampoReais id="p-custo" valor={v.custo} onChange={(x) => set("custo", x)} />
             </Campo>
           </div>
+
+          <div className="grid gap-1.5">
+            <RotuloFaixa htmlFor="p-valor" rotulo="Valor" faixa={valorVaria} onChange={setValorVaria} />
+            {valorVaria ? (
+              <Faixa
+                de={<CampoReais id="p-valor" valor={v.valor} onChange={(x) => set("valor", x)} placeholder="mínimo" />}
+                ate={<CampoReais id="p-valor-max" valor={v.valorMax} onChange={(x) => set("valorMax", x)} placeholder="máximo" />}
+              />
+            ) : (
+              <CampoReais id="p-valor" valor={v.valor} onChange={(x) => set("valor", x)} />
+            )}
+            {valorVaria && <p className="text-xs text-cinza-suave">Ao lançar a receita, você informa quanto cobrou de cada paciente.</p>}
+          </div>
+
+          <div className="grid gap-1.5">
+            <RotuloFaixa htmlFor="p-dur" rotulo="Duração" faixa={duracaoVaria} onChange={setDuracaoVaria} />
+            {duracaoVaria ? (
+              <Faixa
+                de={<CampoMinutos id="p-dur" valor={v.duracao} onChange={(x) => set("duracao", x)} placeholder="mín." />}
+                ate={<CampoMinutos id="p-dur-max" valor={v.duracaoMax} onChange={(x) => set("duracaoMax", x)} placeholder="máx." />}
+              />
+            ) : (
+              <CampoMinutos id="p-dur" valor={v.duracao} onChange={(x) => set("duracao", x)} />
+            )}
+          </div>
+
           <Erro texto={erro} />
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={onFechar}>
               Cancelar
             </Button>
-            <Button
-              type="button"
-              variant="marca"
-              disabled={pending || demo || !v.procedimento.trim()}
-              onClick={() =>
-                executar(
-                  () =>
-                    salvarPreco({
-                      id: preco?.id,
-                      procedimento: v.procedimento,
-                      categoria: v.categoria,
-                      convenio: v.convenio,
-                      valor: numero(v.valor) || 0,
-                      custo: numero(v.custo) || 0,
-                      duracao: v.duracao ? Number(v.duracao) : undefined,
-                    }),
-                  onFechar
-                )
-              }
-            >
+            <Button type="button" variant="marca" disabled={pending || demo || !v.procedimento.trim()} onClick={salvar}>
               {pending && <Girando />} Salvar
             </Button>
           </div>

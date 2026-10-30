@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { CalendarClock, Check, FileText, MoreHorizontal, Pencil, Plus, Search, Stethoscope, Trash2, Wallet } from "lucide-react";
 import type { FormaPagamento, Lancamento, PrecoProcedimento } from "@/lib/supabase/types";
+import { temFaixa, textoValor } from "@/lib/financeiro/precos";
 import { excluirReceita, registrarRecebimento, salvarReceita } from "@/lib/actions/financeiro";
 import { bruto, dataDeEntrada, liquido } from "@/lib/financeiro/calculos";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -205,10 +206,12 @@ export function ReceitaDialog({
       ...v,
       procedimento: nome,
       categoria: preco?.categoria ?? v.categoria,
-      valor: preco ? emTexto(Number(preco.valor)) : v.valor,
+      valor: preco ? (temFaixa(preco) ? "" : emTexto(Number(preco.valor))) : v.valor,
       custo: preco ? emTexto(Number(preco.custo)) : v.custo,
     });
   }
+
+  const precoAtual = opcoes.precos.find((p) => p.procedimento === v.procedimento && temFaixa(p));
 
   function salvar() {
     const valor = numero(v.valor);
@@ -292,7 +295,7 @@ export function ReceitaDialog({
             )}
           </div>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-            <Campo id="rc-valor" rotulo="Valor">
+            <Campo id="rc-valor" rotulo="Valor" dica={precoAtual ? `Tabela: ${textoValor(precoAtual)}` : undefined}>
               <CampoReais id="rc-valor" valor={v.valor} onChange={(x) => set("valor", x)} />
             </Campo>
             <Campo id="rc-desc" rotulo="Desconto">

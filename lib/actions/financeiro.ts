@@ -12,7 +12,7 @@ import {
 } from "@/lib/actions/contexto";
 import { adminDisponivel, createAdminClient } from "@/lib/supabase/admin";
 import { CONFIG_PADRAO, taxaDe } from "@/lib/financeiro/calculos";
-import type { ConfigFinanceira, FormaPagamento } from "@/lib/supabase/types";
+import type { ConfigFinanceira, FormaPagamento, PrecoProcedimento } from "@/lib/supabase/types";
 
 /**
  * AÇÕES DO FINANCEIRO DA CLÍNICA
@@ -374,6 +374,9 @@ const precoSchema = z.object({
   valor: dinheiro,
   custo: dinheiro.default(0),
   duracao: z.coerce.number().int().min(0).max(600).optional(),
+  /** Faixa: o valor e a duração vão de `valor`/`duracao` até estes. */
+  valorMax: dinheiro.nullable().optional(),
+  duracaoMax: z.coerce.number().int().min(0).max(600).nullable().optional(),
 });
 
 export type PrecoInput = z.input<typeof precoSchema>;
@@ -384,9 +387,11 @@ export async function salvarPreco(input: PrecoInput): Promise<ActionResult> {
   const ctx = await contexto(GESTAO);
   if (ctx.estado !== "ok") return bloqueio(ctx);
   const d = p.data;
+  if (d.valorMax != null && d.valorMax <= d.valor) return { ok: false, erro: "O valor máximo precisa ser maior que o mínimo." };
+  if (d.duracaoMax != null && d.duracaoMax <= (d.duracao ?? 0)) return { ok: false, erro: "A duração máxima precisa ser maior que a mínima." };
   const orgId = organizacaoAlvo(ctx.profile, d.organizationId);
   if (!orgId) return { ok: false, erro: "Clínica inválida." };
-  const registro = {
+  const registro: Pick<PrecoProcedimento, "organization_id" | "procedimento"> & Partial<PrecoProcedimento> = {
     organization_id: orgId,
     procedimento: d.procedimento,
     categoria: d.categoria || null,
@@ -396,9 +401,14 @@ export async function salvarPreco(input: PrecoInput): Promise<ActionResult> {
     duracao_min: d.duracao || null,
     ativo: true,
   };
+  // As colunas de faixa só vão quando usadas (ou para limpar uma faixa antiga)
+  if (d.valorMax !== undefined) registro.valor_max = d.valorMax;
+  if (d.duracaoMax !== undefined) registro.duracao_max = d.duracaoMax;
   const { error } = d.id
     ? await ctx.supabase.from("tabela_precos").update(registro).eq("id", d.id)
     : await ctx.supabase.from("tabela_precos").insert(registro);
+  if (error && /valor_max|duracao_max/.test(error.message))
+    return { ok: false, erro: "Para usar faixa de valor ou duração, rode antes o SQL de atualização da tabela de preços." };
   if (error) return erroBanco(error, "Não foi possível salvar o preço.");
   revalidar();
   return { ok: true };

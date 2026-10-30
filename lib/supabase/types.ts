@@ -575,9 +575,14 @@ export type PrecoProcedimento = {
   categoria: string | null;
   /** Nulo = particular. */
   convenio: string | null;
+  /** Valor mínimo, ou o valor fixo. */
   valor: number;
+  /** Preenchido quando o valor varia: faixa de `valor` até `valor_max`. */
+  valor_max?: number | null;
   custo: number;
   duracao_min: number | null;
+  /** Preenchido quando a duração varia: de `duracao_min` até `duracao_max`. */
+  duracao_max?: number | null;
   ativo: boolean;
   created_at: string;
 };

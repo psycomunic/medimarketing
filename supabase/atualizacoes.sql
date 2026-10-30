@@ -2401,3 +2401,9 @@ create policy "destinatarios_insert" on public.disparo_destinatarios for insert 
 drop policy if exists "destinatarios_update" on public.disparo_destinatarios;
 create policy "destinatarios_update" on public.disparo_destinatarios for update to authenticated
   using ((organization_id = public.minha_org() and public.is_operacional()) or public.is_super_admin());
+
+-- =====================================================================
+-- Tabela de preços: valor e duração com faixa ("de R$ 120 a R$ 250")
+-- =====================================================================
+alter table public.tabela_precos add column if not exists valor_max numeric(12,2);
+alter table public.tabela_precos add column if not exists duracao_max smallint;

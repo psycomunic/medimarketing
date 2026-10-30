@@ -221,6 +221,9 @@ export function demoPrecos(): PrecoProcedimento[] {
     valor,
     custo,
     duracao_min: cat === "Consultas" ? 30 : 60,
+    // Exemplos de faixa: o valor e o tempo mudam conforme a área tratada
+    ...(proc === "Toxina botulínica" && { valor_max: 2600, duracao_max: 60, duracao_min: 30 }),
+    ...(proc === "Laser para melasma" && { valor_max: 1800 }),
     ativo: true,
     created_at: new Date().toISOString(),
   }));
