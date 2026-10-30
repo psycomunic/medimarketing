@@ -21,6 +21,7 @@ const filtrosSchema = z
     convenio: z.string().max(120).optional(),
     profissional: z.string().max(60).optional(),
     tag: z.string().max(60).optional(),
+    servico: z.string().max(60).optional(),
   })
   .strip();
 

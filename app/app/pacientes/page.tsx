@@ -2,7 +2,8 @@ import Link from "next/link";
 import { CalendarClock, ChevronLeft, ChevronRight, Contact, Copy, Download, MailCheck, Send, UserPlus, UserRoundX, Users } from "lucide-react";
 import { exigirModulo } from "@/lib/acesso";
 import { getNumerosPacientes, getPacientes, POR_PAGINA, type FiltrosPacientes, type Ordem, type Situacao } from "@/lib/supabase/pacientes";
-import { getProfissionais } from "@/lib/supabase/financeiro-dados";
+import { getPrecos, getProfissionais } from "@/lib/supabase/financeiro-dados";
+import { catalogoServicos } from "@/lib/servicos";
 import { getSegmentos } from "@/lib/supabase/followup";
 import { Indicador } from "@/components/app/financeiro/ui";
 import { FiltrosPacientes as Filtros } from "@/components/app/pacientes/filtros";
@@ -13,7 +14,7 @@ import { reais } from "@/components/graficos/formato";
 
 export const metadata = { title: "Pacientes" };
 
-type Busca = { busca?: string; situacao?: string; convenio?: string; profissional?: string; tag?: string; ordem?: string; pagina?: string };
+type Busca = { busca?: string; situacao?: string; convenio?: string; profissional?: string; tag?: string; servico?: string; ordem?: string; pagina?: string };
 
 export default async function PacientesPage({ searchParams }: { searchParams: Busca }) {
   const { organizacao, role } = await exigirModulo("pacientes");
@@ -23,14 +24,17 @@ export default async function PacientesPage({ searchParams }: { searchParams: Bu
     convenio: searchParams.convenio,
     profissional: searchParams.profissional,
     tag: searchParams.tag,
+    servico: searchParams.servico,
     ordem: searchParams.ordem as Ordem | undefined,
     pagina: Number(searchParams.pagina) || 1,
   };
-  const [dados, numeros, profissionais, segmentos] = await Promise.all([
+  const [dados, numeros, profissionais, segmentos, precos] = await Promise.all([
     getPacientes(filtros),
     getNumerosPacientes(),
     getProfissionais(organizacao?.id ?? null),
     getSegmentos(),
+    // Serviços da tabela de preços, para o filtro "fizeram o serviço"
+    getPrecos(organizacao?.id ?? null).catch(() => []),
   ]);
   const nomes = Object.fromEntries(profissionais.map((p) => [p.id, p.nome]));
   const pagina = filtros.pagina ?? 1;
@@ -43,7 +47,7 @@ export default async function PacientesPage({ searchParams }: { searchParams: Bu
   };
   const podeImportar = role !== "medico";
   const filtroDisparo = new URLSearchParams(
-    Object.entries(searchParams).filter(([k, v]) => v && ["busca", "situacao", "convenio", "profissional", "tag"].includes(k)) as [string, string][]
+    Object.entries(searchParams).filter(([k, v]) => v && ["busca", "situacao", "convenio", "profissional", "tag", "servico"].includes(k)) as [string, string][]
   );
 
   return (
@@ -110,6 +114,7 @@ export default async function PacientesPage({ searchParams }: { searchParams: Bu
             profissionais={profissionais.map((p) => ({ id: p.id, nome: p.nome }))}
             segmentos={segmentos}
             organizationId={organizacao?.id}
+            servicos={catalogoServicos(precos).map((s) => ({ id: s.id, nome: s.nome }))}
           />
 
           <section className="overflow-hidden rounded-xl border border-border bg-white shadow-soft">

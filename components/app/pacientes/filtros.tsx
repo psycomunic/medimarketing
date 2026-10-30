@@ -23,7 +23,7 @@ const PRONTOS = [
   { v: "detratores", r: "Detratores (NPS 0–6)", dica: "Pedem um contato da equipe" },
   { v: "valiosos", r: "Mais valiosos", dica: "Ordenados pelo total gasto" },
 ];
-const CHAVES = ["busca", "situacao", "convenio", "profissional", "tag", "ordem"];
+const CHAVES = ["busca", "situacao", "convenio", "profissional", "tag", "servico", "ordem"];
 
 const seletor =
   "h-10 min-w-0 rounded-lg border border-border bg-white px-3 text-sm text-cinza-texto focus:border-teal focus:outline-none focus:ring-2 focus:ring-teal/20";
@@ -35,12 +35,15 @@ export function FiltrosPacientes({
   profissionais,
   segmentos = [],
   organizationId,
+  servicos = [],
 }: {
   convenios: string[];
   tags: string[];
   profissionais: { id: string; nome: string }[];
   segmentos?: SegmentoPacientes[];
   organizationId?: string;
+  /** Serviços da Tabela de preços: "pacientes que fizeram". */
+  servicos?: { id: string; nome: string }[];
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -197,7 +200,12 @@ export function FiltrosPacientes({
         {erroSeg && <span className="w-full text-xs text-coral">{erroSeg}</span>}
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_repeat(4,minmax(0,1fr))]">
+      <div
+        className={cn(
+          "grid gap-2 sm:grid-cols-2",
+          servicos.length ? "lg:grid-cols-[minmax(0,2fr)_repeat(5,minmax(0,1fr))]" : "lg:grid-cols-[minmax(0,2fr)_repeat(4,minmax(0,1fr))]"
+        )}
+      >
         <label className="relative sm:col-span-2 lg:col-span-1">
           <span className="sr-only">Buscar paciente</span>
           {pending ? (
@@ -228,6 +236,16 @@ export function FiltrosPacientes({
             </option>
           ))}
         </select>
+        {servicos.length > 0 && (
+          <select aria-label="Fizeram o serviço" value={params.get("servico") ?? ""} onChange={(e) => aplicar({ servico: e.target.value })} className={seletor}>
+            <option value="">Serviços</option>
+            {servicos.map((s) => (
+              <option key={s.id} value={s.id}>
+                Fizeram {s.nome}
+              </option>
+            ))}
+          </select>
+        )}
         <select aria-label="Etiqueta" value={params.get("tag") ?? ""} onChange={(e) => aplicar({ tag: e.target.value })} className={seletor}>
           <option value="">Etiquetas</option>
           {tags.map((t) => (

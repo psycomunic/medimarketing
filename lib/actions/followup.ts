@@ -157,7 +157,7 @@ export async function excluirNota(id: string): Promise<ActionResult> {
 
 /* ------------------------------ Segmentos ------------------------------ */
 
-const CHAVES_FILTRO = ["busca", "situacao", "convenio", "profissional", "tag", "ordem"] as const;
+const CHAVES_FILTRO = ["busca", "situacao", "convenio", "profissional", "tag", "servico", "ordem"] as const;
 
 export async function salvarSegmento(nome: string, filtros: Record<string, string>, organizationId?: string): Promise<ActionResult> {
   const n = nome.trim();

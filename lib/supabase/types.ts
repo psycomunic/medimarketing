@@ -248,6 +248,8 @@ export type SegmentoPacientes = {
 /** Ficha com o resumo calculado a partir das consultas e receitas. */
 export type PacienteResumo = Paciente & {
   mes_nascimento: number | null;
+  /** Serviços (linhas da Tabela de preços) de consultas realizadas; nulo até o SQL rodar. */
+  servicos?: string[] | null;
   consultas_realizadas: number;
   faltas: number;
   primeira_consulta: string | null;

@@ -2,15 +2,16 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { exigirModulo } from "@/lib/acesso";
 import { getSegmentos } from "@/lib/supabase/followup";
+import { getPrecos } from "@/lib/supabase/financeiro-dados";
 import { NovoDisparo } from "@/components/app/disparos/novo-disparo";
 
 export const metadata = { title: "Novo disparo" };
 
-const CHAVES = ["busca", "situacao", "convenio", "profissional", "tag"] as const;
+const CHAVES = ["busca", "situacao", "convenio", "profissional", "tag", "servico"] as const;
 
 export default async function NovoDisparoPage({ searchParams }: { searchParams: Record<string, string | undefined> }) {
   const { organizacao } = await exigirModulo("disparos");
-  const segmentos = await getSegmentos();
+  const [segmentos, precos] = await Promise.all([getSegmentos(), getPrecos(organizacao?.id ?? null).catch(() => [])]);
   // Vindo da lista de pacientes com um filtro aberto
   const filtros = Object.fromEntries(CHAVES.filter((k) => searchParams[k]).map((k) => [k, String(searchParams[k])]));
 
@@ -27,6 +28,7 @@ export default async function NovoDisparoPage({ searchParams }: { searchParams: 
         segmentos={segmentos}
         filtrosIniciais={Object.keys(filtros).length ? filtros : null}
         clinica={organizacao?.nome ?? "Clínica"}
+        nomesServicos={Object.fromEntries(precos.map((p) => [p.id, p.procedimento]))}
       />
     </div>
   );

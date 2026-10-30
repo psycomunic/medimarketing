@@ -84,20 +84,23 @@ export function NovoDisparo({
   segmentos,
   filtrosIniciais,
   clinica,
+  nomesServicos = {},
 }: {
   segmentos: SegmentoPacientes[];
   /** Vindo da lista de pacientes: o filtro que estava aberto. */
   filtrosIniciais: Filtros | null;
   clinica: string;
+  /** Para descrever o filtro de serviço pelo nome. */
+  nomesServicos?: Record<string, string>;
 }) {
   const router = useRouter();
   const opcoes: OpcaoPublico[] = useMemo(
     () => [
-      ...(filtrosIniciais ? [{ chave: "lista", rotulo: "O filtro da lista de pacientes", dica: descreverFiltro(filtrosIniciais), filtros: filtrosIniciais }] : []),
+      ...(filtrosIniciais ? [{ chave: "lista", rotulo: "O filtro da lista de pacientes", dica: descreverFiltro(filtrosIniciais, nomesServicos), filtros: filtrosIniciais }] : []),
       ...PRONTOS,
       ...segmentos.map((s) => ({ chave: `seg-${s.id}`, rotulo: s.nome, dica: "Segmento salvo", filtros: s.filtros })),
     ],
-    [segmentos, filtrosIniciais]
+    [segmentos, filtrosIniciais, nomesServicos]
   );
 
   const [passo, setPasso] = useState(0);
@@ -581,12 +584,13 @@ const ROTULOS_SITUACAO: Record<string, string> = {
   valiosos: "mais valiosos",
 };
 
-function descreverFiltro(f: Filtros): string {
+function descreverFiltro(f: Filtros, servicos: Record<string, string> = {}): string {
   return (
     [
       f.situacao && ROTULOS_SITUACAO[f.situacao],
       f.convenio && `convênio ${f.convenio}`,
       f.tag && `etiqueta ${f.tag}`,
+      f.servico && `fizeram ${servicos[f.servico] ?? "um serviço"}`,
       f.busca && `busca “${f.busca}”`,
       f.profissional && "um profissional",
     ]

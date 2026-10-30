@@ -42,6 +42,8 @@ export type FiltrosPacientes = {
   convenio?: string;
   profissional?: string;
   tag?: string;
+  /** Linha da Tabela de preços: pacientes que já fizeram esse serviço. */
+  servico?: string;
   ordem?: Ordem;
   pagina?: number;
 };
@@ -169,6 +171,7 @@ async function consultaFiltrada(supabase: Awaited<ReturnType<typeof createClient
   if (f.convenio) q = q.eq("convenio", f.convenio);
   if (f.profissional) q = q.eq("profissional_principal", f.profissional);
   if (f.tag) q = q.contains("tags", [f.tag]);
+  if (f.servico) q = q.contains("servicos", [f.servico]);
 
   const ordem = f.ordem ?? (situacao === "valiosos" ? "gasto" : "recentes");
   if (ordem === "nome") q = q.order("nome", { ascending: true });
@@ -484,6 +487,7 @@ export async function pacientesDemo(): Promise<PacienteResumo[]> {
       created_at: criado.toISOString(),
       updated_at: recente.data_hora,
       mes_nascimento: nascimento ? Number(nascimento.slice(5, 7)) : null,
+      servicos: [...new Set(realizadas.map((c) => c.servico_id).filter((x): x is string => !!x))],
       consultas_realizadas: realizadas.length,
       faltas: cs.filter((c) => c.status === "faltou").length,
       primeira_consulta: realizadas.length ? realizadas[realizadas.length - 1].data_hora : null,
@@ -520,6 +524,7 @@ function filtrarEmMemoria(todos: PacienteResumo[], f: FiltrosPacientes, porPagin
     if (f.convenio && p.convenio !== f.convenio) return false;
     if (f.profissional && p.profissional_principal !== f.profissional) return false;
     if (f.tag && !p.tags.includes(f.tag)) return false;
+    if (f.servico && !(p.servicos ?? []).includes(f.servico)) return false;
     return true;
   });
   const ordem = f.ordem ?? (situacao === "valiosos" ? "gasto" : "recentes");

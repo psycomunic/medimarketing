@@ -2417,3 +2417,35 @@ alter table public.consultas add column if not exists servico_nome text;
 alter table public.lancamentos add column if not exists servico_id uuid references public.tabela_precos(id) on delete set null;
 create index if not exists idx_consultas_servico on public.consultas (organization_id, servico_id, data_hora);
 create index if not exists idx_lancamentos_servico on public.lancamentos (organization_id, servico_id, data_competencia);
+
+-- =====================================================================
+-- Pacientes por serviço: a view ganha a lista de serviços (consultas
+-- realizadas) de cada paciente, para o filtro "fizeram o serviço"
+-- Rodar depois do SQL dos serviços (Fase 1). Recria a view do zero.
+-- =====================================================================
+drop view if exists public.pacientes_resumo;
+create view public.pacientes_resumo with (security_invoker = true) as
+select
+  p.*,
+  extract(month from p.nascimento)::int as mes_nascimento,
+  count(c.id) filter (where c.status = 'realizada')::int as consultas_realizadas,
+  count(c.id) filter (where c.status = 'faltou')::int as faltas,
+  min(c.data_hora) filter (where c.status = 'realizada') as primeira_consulta,
+  max(c.data_hora) filter (where c.status = 'realizada') as ultima_consulta,
+  min(c.data_hora) filter (where c.data_hora > now() and c.status in ('pendente', 'confirmada')) as proxima_consulta,
+  coalesce((
+    select sum(greatest(l.valor - coalesce(l.desconto, 0), 0))
+    from public.lancamentos l join public.consultas c2 on c2.id = l.consulta_id
+    where c2.paciente_id = p.id and l.status <> 'cancelado'
+  ), 0)::numeric as total_gasto,
+  (
+    select c3.medico_id from public.consultas c3
+    where c3.paciente_id = p.id group by c3.medico_id order by count(*) desc limit 1
+  ) as profissional_principal,
+  coalesce(
+    array_agg(distinct c.servico_id) filter (where c.status = 'realizada' and c.servico_id is not null),
+    '{}'
+  ) as servicos
+from public.pacientes p
+left join public.consultas c on c.paciente_id = p.id
+group by p.id;
