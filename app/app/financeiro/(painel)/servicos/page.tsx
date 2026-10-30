@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { ArrowDownRight, ArrowUpRight, CalendarClock, Crown, Flame, Info, Receipt, Sheet } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, CalendarClock, Crown, Flame, Info, Receipt, Sheet, Tags } from "lucide-react";
 import { exigirModulo } from "@/lib/acesso";
 import { lerFiltro, PERIODOS } from "@/lib/inicio/painel";
 import { carregarServicos } from "@/lib/financeiro/servicos-dados";
@@ -56,12 +56,20 @@ export default async function ServicosPage({ searchParams }: { searchParams: Rec
           <h2 className="font-heading text-lg font-semibold text-azul-medico">Serviços</h2>
           <p className="text-sm text-cinza-suave">Procura e faturamento de cada serviço da Tabela de preços, {quando}.</p>
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+        <Link
+          href="/app/financeiro/servicos/classificar"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-white px-3 py-2 text-sm font-medium text-azul-medico transition-colors hover:border-teal hover:text-teal"
+        >
+          <Tags className="size-4" /> Classificar antigos
+        </Link>
         <a
           href={`/app/financeiro/exportar-servicos${qs({ ordem: null })}`}
           className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-white px-3 py-2 text-sm font-medium text-azul-medico transition-colors hover:border-teal hover:text-teal"
         >
           <Sheet className="size-4" /> Planilha
         </a>
+        </div>
       </div>
       <Suspense fallback={<div className="h-10 w-80 rounded-full border border-border bg-white" />}>
         <FiltroPeriodo
@@ -126,9 +134,16 @@ export default async function ServicosPage({ searchParams }: { searchParams: Rec
       <Painel
         titulo="Todos os serviços"
         descricao={
-          a.semServico > 0
-            ? `${a.semServico} consulta${a.semServico === 1 ? "" : "s"} do período sem serviço definido (marcadas antes desta função ou como "outro serviço").`
-            : "Serviços sem movimento também aparecem: mostram o que não está vendendo."
+          a.semServico > 0 ? (
+            <>
+              {a.semServico} consulta{a.semServico === 1 ? "" : "s"} do período sem serviço definido.{" "}
+              <Link href="/app/financeiro/servicos/classificar" className="font-medium text-teal hover:underline">
+                Classificar agora
+              </Link>
+            </>
+          ) : (
+            "Serviços sem movimento também aparecem: mostram o que não está vendendo."
+          )
         }
         corpo="p-0"
       >
