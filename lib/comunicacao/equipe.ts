@@ -4,6 +4,7 @@ import { createAdminClient, adminDisponivel } from "@/lib/supabase/admin";
 import { envioAutomatico } from "@/lib/envio";
 import { emailConfigurado } from "@/lib/email";
 import { canaisEfetivos, type EventoEquipe } from "@/lib/comunicacao/eventos";
+import { comAparelho } from "@/lib/push";
 import { enfileirar, type ItemFila } from "@/lib/comunicacao/fila";
 import type { CanalAviso, Organization, Role, TipoNotificacao } from "@/lib/supabase/types";
 
@@ -124,6 +125,8 @@ export async function avisarEquipe(a: AvisoEquipeInput): Promise<number> {
     a.clinica !== undefined ? a.clinica : clinicaParaEnvio(a.organizationId),
   ]);
   if (!clinica) return 0;
+  // Só toca no aparelho de quem ativou as notificações do app em algum aparelho
+  const comPush = await comAparelho(membros.map((m) => m.id));
 
   const conexaoId = clinica.merge_connection_id ?? null;
   const podeWhatsApp = !!a.whatsapp && envioAutomatico(conexaoId);
@@ -157,6 +160,17 @@ export async function avisarEquipe(a: AvisoEquipeInput): Promise<number> {
           conteudo: a.descricao ?? null,
           payload: { tipo: a.tipoPainel, href: a.href ?? null, prioridade: a.prioridade ?? "normal" },
           chave: `${a.chave}:${m.id}:painel`,
+        });
+      } else if (canal === "push" && comPush.has(m.id)) {
+        itens.push({
+          ...base,
+          canal,
+          usuarioId: m.id,
+          destinoNome: m.nome,
+          assunto: a.titulo,
+          conteudo: a.descricao ?? null,
+          payload: { href: a.href ?? null },
+          chave: `${a.chave}:${m.id}:push`,
         });
       } else if (canal === "whatsapp" && podeWhatsApp && m.telefone) {
         // O número da clínica é o que envia: não manda para si mesmo

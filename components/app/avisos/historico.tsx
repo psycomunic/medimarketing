@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, CheckCircle2, Clock, Loader2, Mail, MessageCircle, RotateCw, TriangleAlert, XCircle } from "lucide-react";
+import { Bell, CheckCircle2, Clock, Loader2, Mail, MessageCircle, RotateCw, Smartphone, TriangleAlert, XCircle } from "lucide-react";
 import type { Envio, StatusEnvio } from "@/lib/supabase/types";
 import { reenviarEnvio } from "@/lib/actions/avisos";
 import { tempoRelativo } from "@/lib/rotulos";
@@ -38,7 +38,7 @@ const STATUS: Record<StatusEnvio, { rotulo: string; cor: string; icone: typeof C
   cancelado: { rotulo: "Cancelado", cor: "bg-cinza-suave/15 text-cinza-suave", icone: XCircle },
 };
 
-const ICONE_CANAL = { whatsapp: MessageCircle, email: Mail, painel: Bell };
+const ICONE_CANAL = { whatsapp: MessageCircle, email: Mail, painel: Bell, push: Smartphone };
 
 type Filtro = "todos" | "problemas" | "paciente" | "equipe";
 

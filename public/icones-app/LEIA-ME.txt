@@ -1,0 +1,1 @@
+Gerado por scripts/gerar-icones-app.mjs — não edite à mão.

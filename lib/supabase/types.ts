@@ -961,7 +961,20 @@ export type Notificacao = {
 /* Comunicação                                                         */
 /* ------------------------------------------------------------------ */
 
-export type CanalAviso = "painel" | "whatsapp" | "email";
+export type CanalAviso = "painel" | "whatsapp" | "email" | "push";
+
+/** Aparelho (celular ou computador) que aceitou notificações do app. */
+export type PushInscricao = {
+  id: string;
+  usuario_id: string;
+  organization_id: string | null;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  aparelho: string | null;
+  created_at: string;
+  ultimo_envio: string | null;
+};
 
 export type StatusEnvio = "pendente" | "enviando" | "enviado" | "falhou" | "ignorado" | "cancelado";
 
@@ -1284,6 +1297,11 @@ export interface Database {
         Partial<Fechamento>
       >;
       profissional_servicos: Tabela<ProfissionalServico, ProfissionalServico, Partial<ProfissionalServico>>;
+      push_inscricoes: Tabela<
+        PushInscricao,
+        Pick<PushInscricao, "usuario_id" | "endpoint" | "p256dh" | "auth"> & Partial<PushInscricao>,
+        Partial<PushInscricao>
+      >;
       leads: Tabela<
         Lead,
         // Os campos de trabalho do funil têm default no banco: quem insere

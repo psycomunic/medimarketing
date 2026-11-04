@@ -2691,3 +2691,30 @@ alter table public.organizations add column if not exists agendamento_mostrar_pr
 
 alter table public.consultas add column if not exists origem text
   check (origem is null or origem in ('link'));
+
+-- =====================================================================
+-- App instalável: notificações no aparelho (web push).
+-- Cada aparelho em que a pessoa ativou as notificações vira uma inscrição;
+-- a fila de envios ganha o canal 'push'.
+-- =====================================================================
+create table if not exists public.push_inscricoes (
+  id              uuid primary key default gen_random_uuid(),
+  usuario_id      uuid not null references public.profiles(id) on delete cascade,
+  organization_id uuid references public.organizations(id) on delete cascade,
+  endpoint        text not null unique,
+  p256dh          text not null,
+  auth            text not null,
+  aparelho        text,
+  created_at      timestamptz not null default now(),
+  ultimo_envio    timestamptz
+);
+create index if not exists idx_push_usuario on public.push_inscricoes (usuario_id);
+
+alter table public.push_inscricoes enable row level security;
+drop policy if exists "push_proprias" on public.push_inscricoes;
+create policy "push_proprias" on public.push_inscricoes for all to authenticated
+  using (usuario_id = auth.uid()) with check (usuario_id = auth.uid());
+
+alter table public.envios drop constraint if exists envios_canal_check;
+alter table public.envios add constraint envios_canal_check
+  check (canal in ('email','whatsapp','painel','push'));

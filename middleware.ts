@@ -11,6 +11,6 @@ export const config = {
      * Executa em todas as rotas, exceto:
      * arquivos estáticos, imagens e o favicon.
      */
-    "/((?!_next/static|_next/image|favicon.svg|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.svg|sw.js|manifest.webmanifest|offline.html|icones-app/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

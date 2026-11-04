@@ -2,8 +2,19 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { LogOut, Menu, X, Building2, Bell, ChevronsLeft, ChevronsRight, Plus } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import {
+  LogOut,
+  Menu,
+  X,
+  Building2,
+  Bell,
+  ChevronsLeft,
+  ChevronsRight,
+  Plus,
+  CalendarDays,
+  Users,
+} from "lucide-react";
 import { Logo } from "@/components/logo";
 import { MarcaClinica } from "@/components/marca-clinica";
 import { SeletorTema } from "@/components/app/tema";
@@ -41,6 +52,7 @@ export function Sidebar({
   recolhidoInicial?: boolean;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [aberto, setAberto] = useState(false);
   const [recolhido, setRecolhido] = useState(recolhidoInicial);
 
@@ -260,7 +272,7 @@ export function Sidebar({
   return (
     <>
       {/* Topbar mobile */}
-      <div className="sticky top-0 z-40 flex items-center justify-between border-b border-border bg-white px-4 py-3 lg:hidden print:hidden">
+      <div className="sticky top-0 z-40 flex items-center justify-between border-b border-border bg-white px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] lg:hidden print:hidden">
         {organizacao ? (
           <MarcaClinica nome={organizacao} logoUrl={logoUrl} href="/app" tamanho="sm" />
         ) : (
@@ -269,32 +281,20 @@ export function Sidebar({
             <Logo href="/app" light className="so-escuro" />
           </>
         )}
-        <div className="flex items-center gap-1">
-          {/* No celular o sino fica no topo: é o atalho mais usado */}
-          <Link
-            href="/app/notificacoes"
-            className="relative grid size-10 place-items-center rounded-md text-azul-medico"
-            aria-label={
-              naoLidas > 0 ? `${naoLidas} notificações não lidas` : "Notificações"
-            }
-          >
-            <Bell className="size-5" />
-            {naoLidas > 0 && (
-              <span className="absolute right-1.5 top-1.5 grid min-w-4 place-items-center rounded-full bg-coral px-1 text-[9px] font-bold text-white">
-                {naoLidas > 9 ? "9+" : naoLidas}
-              </span>
-            )}
-          </Link>
-          <button
-            type="button"
-            onClick={() => setAberto(true)}
-            className="grid size-10 place-items-center rounded-md text-azul-medico"
-            aria-label="Abrir menu"
-          >
-            <Menu />
-          </button>
-        </div>
       </div>
+
+      {/* Barra inferior do celular: o que mais se usa, ao alcance do polegar */}
+      <BarraInferior
+        pathname={pathname}
+        naoLidas={naoLidas}
+        temAgenda={modulos.some((m) => m.id === "agenda")}
+        temPacientes={modulos.some((m) => m.id === "pacientes")}
+        onMais={() => setAberto(true)}
+        onNova={() => {
+          if (pathname === "/app/agenda") window.dispatchEvent(new CustomEvent("fab:nova-consulta"));
+          else router.push("/app/agenda?novo=1");
+        }}
+      />
 
       {/* Sidebar desktop */}
       <aside
@@ -322,7 +322,7 @@ export function Sidebar({
             className="absolute inset-0 bg-azul-profundo/40"
             onClick={() => setAberto(false)}
           />
-          <div className="absolute inset-y-0 left-0 w-72 bg-white shadow-card">
+          <div className="absolute inset-y-0 left-0 w-72 overflow-y-auto bg-white pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] shadow-card">
             <button
               type="button"
               onClick={() => setAberto(false)}
@@ -336,6 +336,81 @@ export function Sidebar({
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * Agenda · Pacientes · Nova consulta · Notificações · Mais.
+ * Some no computador (lg), onde o menu lateral faz esse papel. Respeita
+ * a barra de gestos do iPhone (safe-area) e o que o papel pode acessar.
+ */
+function BarraInferior({
+  pathname,
+  naoLidas,
+  temAgenda,
+  temPacientes,
+  onMais,
+  onNova,
+}: {
+  pathname: string;
+  naoLidas: number;
+  temAgenda: boolean;
+  temPacientes: boolean;
+  onMais: () => void;
+  onNova: () => void;
+}) {
+  const item = (ativo: boolean) =>
+    cn(
+      "flex h-14 min-w-0 flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition-colors",
+      ativo ? "text-azul-medico" : "text-cinza-suave active:text-azul-medico"
+    );
+  const itens = [
+    temAgenda && (
+      <Link key="agenda" href="/app/agenda" className={item(pathname.startsWith("/app/agenda"))}>
+        <CalendarDays className="size-[22px]" strokeWidth={pathname.startsWith("/app/agenda") ? 2.4 : 2} />
+        Agenda
+      </Link>
+    ),
+    temPacientes && (
+      <Link key="pacientes" href="/app/pacientes" className={item(pathname.startsWith("/app/pacientes"))}>
+        <Users className="size-[22px]" strokeWidth={pathname.startsWith("/app/pacientes") ? 2.4 : 2} />
+        Pacientes
+      </Link>
+    ),
+    temAgenda && (
+      <button key="nova" type="button" onClick={onNova} className="flex h-14 items-center justify-center" aria-label="Nova consulta">
+        <span className="grid size-12 place-items-center rounded-full bg-coral text-white shadow-card active:scale-95">
+          <Plus className="size-6" strokeWidth={2.6} />
+        </span>
+      </button>
+    ),
+    <Link key="notificacoes" href="/app/notificacoes" className={item(pathname.startsWith("/app/notificacoes"))}>
+      <span className="relative">
+        <Bell className="size-[22px]" strokeWidth={pathname.startsWith("/app/notificacoes") ? 2.4 : 2} />
+        {naoLidas > 0 && (
+          <span className="absolute -right-2 -top-1.5 grid min-w-[1.1rem] place-items-center rounded-full bg-coral px-1 text-[10px] font-bold leading-[1.1rem] text-white">
+            {naoLidas > 9 ? "9+" : naoLidas}
+          </span>
+        )}
+      </span>
+      Avisos
+    </Link>,
+    <button key="mais" type="button" onClick={onMais} className={item(false)} aria-label="Abrir o menu">
+      <Menu className="size-[22px]" />
+      Mais
+    </button>,
+  ].filter(Boolean);
+
+  return (
+    <nav
+      data-barra-inferior
+      aria-label="Navegação principal"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden print:hidden"
+    >
+      <div className="mx-auto grid max-w-lg" style={{ gridTemplateColumns: `repeat(${itens.length}, minmax(0, 1fr))` }}>
+        {itens}
+      </div>
+    </nav>
   );
 }
 

@@ -34,8 +34,11 @@ export function BotaoFlutuante({ acoes, rotulo }: { acoes: AcaoFlutuante[]; rotu
   // A barra da demonstração ocupa o rodapé: o botão sobe acima dela
   useEffect(() => {
     const medir = () => {
-      const barra = document.querySelector("[data-barra-demo]");
-      setFolga(barra ? barra.getBoundingClientRect().height : 0);
+      // A barra da demonstração e a barra inferior do celular ocupam o rodapé
+      const alturas = [...document.querySelectorAll("[data-barra-demo], [data-barra-inferior]")].map(
+        (b) => b.getBoundingClientRect().height
+      );
+      setFolga(alturas.reduce((s, h) => s + h, 0));
     };
     medir();
     window.addEventListener("resize", medir);

@@ -465,7 +465,10 @@ export function AgendaCalendar({
         podeApagar={podeApagar}
         onOpenChange={(o) => !o && setSelecionada(null)}
       />
-      <BotaoFlutuante acoes={[{ rotulo: "Nova consulta", icone: CalendarPlus, evento: "fab:nova-consulta" }]} />
+      {/* No celular o "+" da barra inferior já faz isso */}
+      <div className="hidden lg:block">
+        <BotaoFlutuante acoes={[{ rotulo: "Nova consulta", icone: CalendarPlus, evento: "fab:nova-consulta" }]} />
+      </div>
       <NovaConsultaDialog
         aberto={novaAberta}
         data={dataNova}

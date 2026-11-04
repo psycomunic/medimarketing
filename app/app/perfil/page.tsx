@@ -7,6 +7,7 @@ import { emModoDemo } from "@/lib/supabase/queries";
 import { listarConexoesMerge } from "@/lib/actions/configuracoes";
 import { rotuloPapel, modulosDoPapel } from "@/lib/rbac";
 import { PreferenciasAviso } from "@/components/app/avisos/preferencias";
+import { NotificacoesAparelho } from "@/components/app/avisos/notificacoes-aparelho";
 import { getPreferencia } from "@/lib/supabase/envios";
 import { envioAutomatico } from "@/lib/envio";
 import { createClient } from "@/lib/supabase/server";
@@ -115,6 +116,9 @@ export default async function PerfilPage() {
       {/* Avisos da agenda: só quem é de uma clínica recebe */}
       {organizacao && role !== "super_admin" && (
         <div className="mt-6">
+          <div className="mb-6">
+            <NotificacoesAparelho demo={demo} />
+          </div>
           <PreferenciasAviso
             usuarioId={profile.id}
             papel={role}

@@ -7,10 +7,14 @@ import { exigirSessao } from "@/lib/acesso";
 import { emModoDemo } from "@/lib/supabase/queries";
 import { contarNaoLidas } from "@/lib/supabase/notificacoes";
 import { NotificacoesAoVivo } from "@/components/app/notificacoes/ao-vivo";
+import { AppInstalavel } from "@/components/app/app-instalavel";
+import { metadataApp, viewportApp } from "@/lib/app-instalavel";
 
 export const metadata = {
+  ...metadataApp,
   title: "Plataforma",
 };
+export const viewport = viewportApp;
 
 // Layout protegido: exige sessão (reforço além do middleware).
 export default async function AppLayout({
@@ -40,7 +44,8 @@ export default async function AppLayout({
         logoUrl={organizacao?.logo_url ?? null}
         naoLidas={naoLidas}
       />
-      <main className="min-w-0 flex-1 overflow-x-hidden">
+      {/* No celular, folga para a barra inferior (e a barra de gestos do iPhone) */}
+      <main className="min-w-0 flex-1 overflow-x-hidden pb-[calc(3.5rem+env(safe-area-inset-bottom))] lg:pb-0">
         {demo && (
           /* Um parágrafo só, e não três caixas flex: no celular cada
              trecho virava uma coluna e a frase quebrava no meio. */
@@ -52,6 +57,7 @@ export default async function AppLayout({
         )}
         {children}
         {!demo && <NotificacoesAoVivo />}
+        <AppInstalavel naoLidas={naoLidas} versao={process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 12) ?? "local"} />
         {/* Espaço para a barra flutuante não cobrir o fim da página */}
         {demo && <div aria-hidden className="h-20" />}
       </main>

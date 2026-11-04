@@ -21,7 +21,7 @@ import { urlPainel } from "@/lib/lembretes";
 const TODOS_PAPEIS = ["super_admin", "gestor", "secretaria", "medico"] as const;
 const MSG_SEM_CHAVE = "Falta a SUPABASE_SERVICE_ROLE_KEY nas variáveis de ambiente.";
 
-const canalSchema = z.enum(["painel", "whatsapp", "email"]);
+const canalSchema = z.enum(["painel", "whatsapp", "email", "push"]);
 
 const prefSchema = z.object({
   usuarioId: z.string().min(1),

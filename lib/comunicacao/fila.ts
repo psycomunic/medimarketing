@@ -3,6 +3,7 @@ import "server-only";
 import { createAdminClient, adminDisponivel } from "@/lib/supabase/admin";
 import { enviarEmail } from "@/lib/email";
 import { enviarWhatsApp } from "@/lib/envio";
+import { enviarPush } from "@/lib/push";
 import type { CanalAviso, Envio, TipoNotificacao } from "@/lib/supabase/types";
 
 /**
@@ -227,6 +228,19 @@ async function entregar(item: Envio): Promise<Entrega> {
       entidade_id: item.consulta_id,
     });
     return error ? { ok: false, erro: error.message, definitivo: false } : { ok: true, canalReal: "painel" };
+  }
+
+  if (item.canal === "push") {
+    if (!item.usuario_id) return { ok: false, erro: "sem destinatário", definitivo: true };
+    const r = await enviarPush(item.usuario_id, {
+      titulo: item.assunto ?? "Aviso",
+      corpo: item.conteudo,
+      url: p.href ?? "/app/notificacoes",
+      tag: item.consulta_id ?? undefined,
+    });
+    if (r.enviados) return { ok: true, canalReal: "push" };
+    // Sem aparelho ativo não melhora tentando de novo
+    return { ok: false, erro: r.erro ?? "falhou", definitivo: /nenhum aparelho|configurad/i.test(r.erro ?? "") };
   }
 
   if (!item.destino) return { ok: false, erro: "sem endereço", definitivo: true };

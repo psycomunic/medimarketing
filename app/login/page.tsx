@@ -5,11 +5,14 @@ import { LoginForm } from "@/components/auth/login-form";
 import { supabaseConfigurado } from "@/lib/supabase/queries";
 import { CONTAS_DEMO, DEMO_EMAIL, DEMO_SENHA } from "@/lib/demo";
 import { rotuloPapel } from "@/lib/rbac";
+import { metadataApp, viewportApp } from "@/lib/app-instalavel";
 
 export const metadata = {
+  ...metadataApp,
   title: "Entrar",
   description: "Acesse a plataforma Medi Marketing.",
 };
+export const viewport = viewportApp;
 
 export default function LoginPage({
   searchParams,

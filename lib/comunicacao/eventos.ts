@@ -17,6 +17,7 @@ import type { CanalAviso, Role } from "@/lib/supabase/types";
 
 export const CANAIS: { id: CanalAviso; rotulo: string }[] = [
   { id: "painel", rotulo: "Painel" },
+  { id: "push", rotulo: "No aparelho" },
   { id: "whatsapp", rotulo: "WhatsApp" },
   { id: "email", rotulo: "E-mail" },
 ];
@@ -134,6 +135,9 @@ export function eventosDoPapel(papel: Role): EventoEquipe[] {
   });
 }
 
+/** Eventos que ficam só no painel, sem tocar no aparelho. */
+const SEM_PUSH = new Set<EventoEquipe>(["paciente_confirmou", "horario_lotado", "pendentes_vespera"]);
+
 /** Canais padrão de alguém para um evento, conforme o papel e a relação. */
 export function canaisPadrao(
   evento: EventoEquipe,
@@ -145,6 +149,9 @@ export function canaisPadrao(
   if (ehMedicoDaConsulta) p.medico?.forEach((c) => conjunto.add(c));
   if (papel === "gestor") p.gestor?.forEach((c) => conjunto.add(c));
   if (papel === "secretaria") p.secretaria?.forEach((c) => conjunto.add(c));
+  // O que aparece no painel também toca no aparelho (app instalado), menos
+  // o que é rotina demais para tirar a atenção de alguém
+  if (conjunto.has("painel") && !SEM_PUSH.has(evento)) conjunto.add("push");
   return [...conjunto];
 }
 

@@ -1,0 +1,41 @@
+{
+  "id": "/app",
+  "name": "Medi Marketing",
+  "short_name": "Medi",
+  "description": "Agenda, pacientes e atendimento da sua clínica.",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "start_url": "/app?origem=app",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#F8FBFC",
+  "theme_color": "#0B4F6C",
+  "categories": ["medical", "business", "productivity"],
+  "icons": [
+    { "src": "/icones-app/icone-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icones-app/icone-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icones-app/icone-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icones-app/icone-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Nova consulta",
+      "short_name": "Nova consulta",
+      "url": "/app/agenda?novo=1",
+      "icons": [{ "src": "/icones-app/icone-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Agenda",
+      "short_name": "Agenda",
+      "url": "/app/agenda",
+      "icons": [{ "src": "/icones-app/icone-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Pacientes",
+      "short_name": "Pacientes",
+      "url": "/app/pacientes",
+      "icons": [{ "src": "/icones-app/icone-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ]
+}
