@@ -40,6 +40,7 @@ import {
 } from "@/lib/lembretes";
 import { gerarToken } from "@/lib/supabase/confirmacoes";
 import { avisarEquipe, clinicaParaEnvio, type ClinicaEnvio } from "@/lib/comunicacao/equipe";
+import { emSegundoPlano } from "@/lib/segundo-plano";
 import { cancelarPendentes, enfileirar, type ItemFila } from "@/lib/comunicacao/fila";
 import type { EventoEquipe } from "@/lib/comunicacao/eventos";
 import type { TipoNotificacao } from "@/lib/supabase/types";
@@ -78,11 +79,8 @@ export type EventoConsulta =
 
 export async function comunicarConsulta(consultaId: string, ev: EventoConsulta): Promise<void> {
   if (!adminDisponivel()) return;
-  try {
-    await comunicar(consultaId, ev);
-  } catch (e) {
-    console.error("[comunicacao] Falha:", e instanceof Error ? e.message : e);
-  }
+  // Em segundo plano: o botão responde na hora, as mensagens saem logo depois
+  emSegundoPlano("consulta", () => comunicar(consultaId, ev));
 }
 
 async function comunicar(consultaId: string, ev: EventoConsulta): Promise<void> {

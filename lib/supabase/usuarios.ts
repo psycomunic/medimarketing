@@ -25,6 +25,28 @@ export type EscopoUsuarios = {
  * não alcança. Sem a service role a lista ainda vem — só sem esses campos,
  * e a tela avisa o que está faltando.
  */
+/**
+ * A equipe sem os dados de login (e-mail, último acesso).
+ *
+ * É o que agenda, disponibilidade, follow-ups e ficha do paciente precisam:
+ * nome, papel e clínica. `getUsuarios` lista as contas de login da
+ * plataforma inteira para achar os e-mails — caro demais para cada troca
+ * de tela, e só a gestão de usuários precisa disso.
+ */
+export async function getEquipe(escopo: EscopoUsuarios): Promise<UsuarioGerenciavel[]> {
+  if (await emModoDemo()) return usuariosDemo(escopo);
+  const perfis = await carregarPerfis(escopo);
+  if (!perfis.length) return [];
+  const nomeOrg = await mapaOrganizacoes(escopo);
+  return perfis.map((p) => ({
+    ...p,
+    email: null,
+    email_confirmado: false,
+    ultimo_acesso: null,
+    organizacao_nome: p.organization_id ? nomeOrg.get(p.organization_id) ?? null : null,
+  }));
+}
+
 export async function getUsuarios(
   escopo: EscopoUsuarios
 ): Promise<UsuarioGerenciavel[]> {

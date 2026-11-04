@@ -5,6 +5,7 @@ import { emailEquipe } from "@/lib/email-modelos";
 import { diaDaSemana, diaRelativo, formatarData, formatarHora, urlPainel } from "@/lib/lembretes";
 import { avisarEquipe, clinicaParaEnvio, membrosDaClinica } from "@/lib/comunicacao/equipe";
 import { lerVaga } from "@/lib/agenda-vaga";
+import { emSegundoPlano } from "@/lib/segundo-plano";
 
 /**
  * O QUE A OCUPAÇÃO DE UM HORÁRIO COMUNICA
@@ -29,11 +30,7 @@ export type EventoOcupacao =
 
 export async function comunicarOcupacao(consultaId: string, ev: EventoOcupacao): Promise<void> {
   if (!adminDisponivel()) return;
-  try {
-    await comunicar(consultaId, ev);
-  } catch (e) {
-    console.error("[comunicacao/ocupacao] Falha:", e instanceof Error ? e.message : e);
-  }
+  emSegundoPlano("ocupacao", () => comunicar(consultaId, ev));
 }
 
 async function comunicar(consultaId: string, ev: EventoOcupacao): Promise<void> {

@@ -22,7 +22,7 @@ import { exigirModulo } from "@/lib/acesso";
 import { getFichaPaciente } from "@/lib/supabase/pacientes";
 import { getProfissionais } from "@/lib/supabase/financeiro-dados";
 import { getFollowupDoPaciente } from "@/lib/supabase/followup";
-import { getUsuarios } from "@/lib/supabase/usuarios";
+import { getEquipe } from "@/lib/supabase/usuarios";
 import { Anotacoes, TarefasDoPaciente } from "@/components/app/pacientes/followup";
 import { rotuloStatus, rotuloTipo } from "@/lib/agenda";
 import { nomeOrigem } from "@/lib/rotulos";
@@ -65,7 +65,7 @@ export default async function FichaPacientePage({ params }: { params: { id: stri
     getFichaPaciente(params.id),
     getProfissionais(organizacao?.id ?? null),
     getFollowupDoPaciente(params.id),
-    getUsuarios({ organizationId: organizacao?.id ?? null, ehSuperAdmin: role === "super_admin" }),
+    getEquipe({ organizationId: organizacao?.id ?? null, ehSuperAdmin: role === "super_admin" }),
   ]);
   if (!ficha) notFound();
   const equipe = usuarios

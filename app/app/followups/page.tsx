@@ -2,7 +2,7 @@ import Link from "next/link";
 import { CheckCircle2, ListTodo } from "lucide-react";
 import { exigirModulo } from "@/lib/acesso";
 import { contarTarefas, getTarefas, type Aba } from "@/lib/supabase/followup";
-import { getUsuarios } from "@/lib/supabase/usuarios";
+import { getEquipe } from "@/lib/supabase/usuarios";
 import { linkWhatsApp } from "@/lib/lembretes";
 import { ItemTarefa } from "@/components/app/pacientes/followup";
 import { cn } from "@/lib/utils";
@@ -25,7 +25,7 @@ export default async function FollowupsPage({ searchParams }: { searchParams: { 
   const aba = (ABAS.some((a) => a.v === searchParams.aba) ? searchParams.aba : abaPadrao) as Aba;
   const [{ instalado, lista }, usuarios] = await Promise.all([
     getTarefas({ aba, minhas }),
-    getUsuarios({ organizationId: organizacao?.id ?? null, ehSuperAdmin: role === "super_admin" }),
+    getEquipe({ organizationId: organizacao?.id ?? null, ehSuperAdmin: role === "super_admin" }),
   ]);
   const nomes = Object.fromEntries(usuarios.map((u) => [u.id, u.nome ?? "Equipe"]));
   const clinica = organizacao?.nome ?? "clínica";

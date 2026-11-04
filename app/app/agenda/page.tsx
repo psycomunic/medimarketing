@@ -8,11 +8,14 @@ import {
   getServicosDosProfissionais,
 } from "@/lib/supabase/queries";
 import { exigirModulo } from "@/lib/acesso";
-import { getClinicasDisponiveis, getUsuarios } from "@/lib/supabase/usuarios";
+import { getClinicasDisponiveis, getEquipe } from "@/lib/supabase/usuarios";
 import { getConfirmacoesDaAgenda } from "@/lib/supabase/confirmacoes";
 import { whatsappConfigurado } from "@/lib/envio";
 import { getPacientesBasicos } from "@/lib/supabase/pacientes";
 import { getPrecos } from "@/lib/supabase/financeiro-dados";
+import { createAdminClient, adminDisponivel } from "@/lib/supabase/admin";
+import { DEMO_SLUGS_AGENDA } from "@/lib/demo";
+import type { LinkDaAgenda } from "@/components/app/agenda-links";
 
 export const metadata = { title: "Agenda" };
 
@@ -43,7 +46,7 @@ export default async function AgendaPage() {
     vinculos,
   ] = await Promise.all([
     getAgenda(inicio.toISOString(), fim.toISOString()),
-    getUsuarios(escopo),
+    getEquipe(escopo),
     getClinicasDisponiveis(escopo),
     emModoDemo(),
     getDisponibilidade(),
@@ -68,6 +71,29 @@ export default async function AgendaPage() {
       nome: u.nome ?? "Profissional",
       organization_id: u.organization_id,
     }));
+
+  // Links de agendamento: o médico vê o dele; recepção e gestor, os da clínica
+  const linksDe = role === "medico" ? profissionais.filter((p) => p.id === profile.id) : profissionais;
+  const base = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.medimarketing.com.br").replace(/\/$/, "");
+  let linksAgenda: LinkDaAgenda[] = [];
+  if (organizacao?.slug && linksDe.length) {
+    let perfis: { id: string; slug_agenda?: string | null; agenda_publica?: boolean }[] = [];
+    if (demo) {
+      perfis = linksDe.map((p) => ({ id: p.id, slug_agenda: DEMO_SLUGS_AGENDA[p.id] ?? null, agenda_publica: !!DEMO_SLUGS_AGENDA[p.id] }));
+    } else if (adminDisponivel()) {
+      const { data } = await createAdminClient().from("profiles").select("*").in("id", linksDe.map((p) => p.id));
+      perfis = (data ?? []) as typeof perfis;
+    }
+    linksAgenda = linksDe.map((p) => {
+      const perfil = perfis.find((x) => x.id === p.id);
+      return {
+        medicoId: p.id,
+        nome: p.nome,
+        url: perfil?.slug_agenda ? `${base}/agendar/${organizacao.slug}/${perfil.slug_agenda}` : null,
+        ativo: !!perfil?.agenda_publica,
+      };
+    });
+  }
 
   return (
     <div className="mx-auto max-w-6xl px-5 py-8 md:px-8 md:py-10">
@@ -98,6 +124,7 @@ export default async function AgendaPage() {
         podeApagar={ehSuperAdmin || role === "gestor"}
         fechamentos={fechamentos}
         vinculos={vinculos}
+        linksAgenda={linksAgenda}
       />
     </div>
   );

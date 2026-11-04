@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { adminDisponivel, createAdminClient } from "@/lib/supabase/admin";
 import { emModoDemo } from "@/lib/supabase/queries";
@@ -70,7 +71,7 @@ export async function notificar(n: NovaNotificacao): Promise<void> {
  * A RLS já filtra por clínica e papel; o `lida` é resolvido aqui porque
  * depende de quem está olhando.
  */
-export async function getNotificacoes(
+export const getNotificacoes = cache(async function getNotificacoes(
   profile: Profile
 ): Promise<NotificacaoComLeitura[]> {
   if (await emModoDemo()) return demoNotificacoes(profile.role);
@@ -95,7 +96,7 @@ export async function getNotificacoes(
   const lidas = new Set((leituras ?? []).map((l) => l.notificacao_id));
 
   return notificacoes.map((n) => ({ ...n, lida: lidas.has(n.id) }));
-}
+});
 
 /** Só o número, para o contador da navegação. */
 export async function contarNaoLidas(profile: Profile): Promise<number> {

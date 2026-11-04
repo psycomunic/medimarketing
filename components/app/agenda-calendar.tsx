@@ -69,6 +69,7 @@ import {
   type CorProfissional,
 } from "@/lib/agenda-capacidade";
 import { BotaoFlutuante, useAcaoFlutuante } from "@/components/app/botao-flutuante";
+import { AgendaLinks, type LinkDaAgenda } from "@/components/app/agenda-links";
 
 type Visao = "mes" | "semana" | "dia";
 type Consulta = ConsultaComContexto;
@@ -92,7 +93,10 @@ export function AgendaCalendar({
   podeApagar = false,
   fechamentos = [],
   vinculos = [],
+  linksAgenda = [],
 }: {
+  /** Link de agendamento de cada profissional, para mandar daqui mesmo. */
+  linksAgenda?: LinkDaAgenda[];
   /** Horários fechados por profissional e serviço. */
   fechamentos?: Fechamento[];
   /** Que serviço cada profissional atende. */
@@ -262,9 +266,12 @@ export function AgendaCalendar({
             Suas consultas marcadas pela nossa equipe, em tempo real.
           </p>
         </div>
-        <Button variant="primary" onClick={() => abrirNova()}>
-          <Plus className="size-4" /> Nova consulta
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <AgendaLinks links={linksAgenda} />
+          <Button variant="primary" onClick={() => abrirNova()}>
+            <Plus className="size-4" /> Nova consulta
+          </Button>
+        </div>
       </header>
 
       {/* Filtros */}

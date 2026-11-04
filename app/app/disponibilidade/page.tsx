@@ -9,7 +9,7 @@ import {
   getServicosDosProfissionais,
 } from "@/lib/supabase/queries";
 import { exigirModulo } from "@/lib/acesso";
-import { getUsuarios } from "@/lib/supabase/usuarios";
+import { getEquipe } from "@/lib/supabase/usuarios";
 import { getPrecos } from "@/lib/supabase/financeiro-dados";
 import { catalogoServicos } from "@/lib/servicos";
 import { createAdminClient, adminDisponivel } from "@/lib/supabase/admin";
@@ -34,7 +34,7 @@ export default async function DisponibilidadePage({
   const orgId = organizacao?.id ?? null;
 
   const equipe = operacional
-    ? (await getUsuarios({ organizationId: orgId, ehSuperAdmin: role === "super_admin" })).filter(
+    ? (await getEquipe({ organizationId: orgId, ehSuperAdmin: role === "super_admin" })).filter(
         (u) => u.ativo && (u.role === "medico" || u.role === "gestor") && (!orgId || u.organization_id === orgId)
       )
     : [];

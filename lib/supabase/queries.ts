@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import type {
@@ -61,8 +62,13 @@ export type Sessao = {
   organizacao: Organization | null;
 };
 
-/** Retorna o usuário autenticado, o profile e a clínica dele (ou nulos). */
-export async function getSessao(): Promise<Sessao> {
+/**
+ * Retorna o usuário autenticado, o profile e a clínica dele (ou nulos).
+ *
+ * Uma vez por requisição: o layout e a página pedem a sessão, e sem o
+ * `cache` cada troca de tela ia três vezes a mais ao Supabase.
+ */
+export const getSessao = cache(async function getSessao(): Promise<Sessao> {
   // Modo demonstração: sessão fictícia conforme o papel gravado no cookie.
   // Vem antes do Supabase de propósito — é o cookie que decide.
   const papel = await papelDaDemo();
@@ -105,7 +111,7 @@ export async function getSessao(): Promise<Sessao> {
   }
 
   return { userId: user.id, profile: profile ?? null, organizacao };
-}
+});
 
 /** Consultas visíveis para o usuário logado dentro de um intervalo (ISO). */
 export async function getConsultas(
