@@ -87,7 +87,10 @@ export function AgendaCalendar({
   demo = false,
   servicos = [],
   limite: limiteBruto = null,
+  podeApagar = false,
 }: {
+  /** Gestor: apaga consultas marcadas por engano. */
+  podeApagar?: boolean;
   consultasIniciais: ConsultaComContexto[];
   /** Banco de pacientes: entra na busca da Nova consulta. */
   pacientes?: PacienteBasico[];
@@ -436,6 +439,7 @@ export function AgendaCalendar({
         servicos={servicos}
         profissionais={profissionais}
         consultas={consultasIniciais}
+        podeApagar={podeApagar}
         onOpenChange={(o) => !o && setSelecionada(null)}
       />
       <BotaoFlutuante acoes={[{ rotulo: "Nova consulta", icone: CalendarPlus, evento: "fab:nova-consulta" }]} />

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { comunicarConsulta } from "@/lib/comunicacao/consulta";
 import { comunicarOcupacao } from "@/lib/comunicacao/ocupacao";
+import { cancelarPendentes } from "@/lib/comunicacao/fila";
 import { lerVaga, recusarVaga, type RecusaVaga } from "@/lib/agenda-vaga";
 import { sincronizarReceita } from "@/lib/financeiro/agenda";
 import { programarPesquisa, suspenderPesquisa } from "@/lib/avaliacoes";
@@ -379,6 +380,55 @@ export async function trocarProfissional(
   });
 
   revalidatePath("/app/agenda");
+  revalidatePath("/app");
+  return { ok: true };
+}
+
+/**
+ * Apaga a consulta de vez — para o que foi marcado por engano (duplicada,
+ * paciente errado, teste). Diferente de cancelar: ninguém é avisado e
+ * nada fica no histórico. Por isso só o gestor apaga (a RLS também exige).
+ *
+ * Consulta com pagamento recebido não sai: o caixa daquele dia já fechou
+ * com ela, e o certo é cancelar. A receita só prevista sai junto, assim
+ * como as mensagens que ainda iam sair, os documentos e a confirmação.
+ */
+export async function apagarConsulta(id: string): Promise<ActionResult> {
+  if (await emModoDemo()) return { ok: false, erro: MSG_DEMO };
+  const { supabase, userId } = await getUserId();
+  if (!userId) return { ok: false, erro: "Sessão expirada." };
+
+  const [{ data: perfil }, { data: c }] = await Promise.all([
+    supabase.from("profiles").select("role").eq("id", userId).maybeSingle(),
+    supabase.from("consultas").select("id").eq("id", id).maybeSingle(),
+  ]);
+  if (perfil?.role !== "gestor" && perfil?.role !== "super_admin") {
+    return { ok: false, erro: "Só o gestor da clínica pode apagar consultas. Você pode cancelar." };
+  }
+  if (!c) return { ok: false, erro: "Consulta não encontrada." };
+
+  const admin = adminDisponivel() ? createAdminClient() : supabase;
+  const { data: lancs } = await admin.from("lancamentos").select("id,status").eq("consulta_id", id);
+  if ((lancs ?? []).some((l) => l.status === "recebido")) {
+    return {
+      ok: false,
+      erro: "Essa consulta já tem pagamento recebido. Cancele em vez de apagar, para o caixa continuar batendo.",
+    };
+  }
+
+  const { data: anexos } = await admin.from("anexos").select("caminho").eq("consulta_id", id);
+
+  await cancelarPendentes(id);
+  if (lancs?.length) await admin.from("lancamentos").delete().eq("consulta_id", id);
+
+  const { error } = await supabase.from("consultas").delete().eq("id", id);
+  if (error) return { ok: false, erro: "Não foi possível apagar a consulta." };
+
+  // Os arquivos ficam no Storage mesmo depois que a linha some
+  if (anexos?.length) await admin.storage.from("anexos").remove(anexos.map((a) => a.caminho));
+
+  revalidatePath("/app/agenda");
+  revalidatePath("/app/confirmacoes");
   revalidatePath("/app");
   return { ok: true };
 }

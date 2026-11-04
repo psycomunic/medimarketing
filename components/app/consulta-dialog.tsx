@@ -24,6 +24,7 @@ import {
   Save,
   Tag,
   UserRound,
+  Trash2,
 } from "lucide-react";
 import type { Consulta, PrecoProcedimento, StatusConsulta } from "@/lib/supabase/types";
 import { catalogoServicos, porCategoria, precoDoServico } from "@/lib/servicos";
@@ -47,7 +48,7 @@ import {
   calcularIdade,
   formatarValor,
 } from "@/lib/agenda";
-import { atualizarStatus, salvarObservacao, trocarProfissional, trocarServico } from "@/lib/actions/consultas";
+import { apagarConsulta, atualizarStatus, salvarObservacao, trocarProfissional, trocarServico } from "@/lib/actions/consultas";
 import { ocupacaoDoIntervalo } from "@/lib/agenda-capacidade";
 import { AnexosManager } from "@/components/app/anexos-manager";
 import { PagamentoConsulta } from "@/components/app/financeiro/pagamento-consulta";
@@ -64,8 +65,11 @@ export function ConsultaDialog({
   servicos = [],
   profissionais = [],
   consultas = [],
+  podeApagar = false,
   onOpenChange,
 }: {
+  /** Gestor: pode apagar a consulta de vez (a RLS também exige). */
+  podeApagar?: boolean;
   consulta: Consulta | null;
   /** Quem atende na clínica, para passar a consulta a outro profissional. */
   profissionais?: { id: string; nome: string; organization_id: string | null }[];
@@ -85,11 +89,13 @@ export function ConsultaDialog({
   const [salvandoObs, setSalvandoObs] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [cancelando, setCancelando] = useState(false);
+  const [apagando, setApagando] = useState(false);
 
   useEffect(() => {
     setObs(consulta?.observacao ?? "");
     setErro(null);
     setCancelando(false);
+    setApagando(false);
   }, [consulta]);
 
   if (!consulta) return null;
@@ -125,6 +131,21 @@ export function ConsultaDialog({
         router.refresh();
         onOpenChange(false);
       } else setErro(res.erro);
+    });
+  }
+
+  function apagar() {
+    if (!consulta) return;
+    setErro(null);
+    startTransition(async () => {
+      const res = await apagarConsulta(consulta.id);
+      if (res.ok) {
+        router.refresh();
+        onOpenChange(false);
+      } else {
+        setErro(res.erro);
+        setApagando(false);
+      }
     });
   }
 
@@ -298,14 +319,59 @@ export function ConsultaDialog({
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setCancelando(true)}
+              onClick={() => {
+                setApagando(false);
+                setCancelando(true);
+              }}
               disabled={pending}
               className="text-coral hover:bg-coral/10"
             >
               <XCircle className="size-4" /> Cancelar
             </Button>
           )}
+          {podeApagar && !apagando && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setCancelando(false);
+                setApagando(true);
+              }}
+              disabled={pending}
+              className="ml-auto text-cinza-suave hover:bg-coral/10 hover:text-coral"
+            >
+              <Trash2 className="size-4" /> Apagar
+            </Button>
+          )}
         </div>
+
+        {/* Apagar é sem volta: sempre pergunta antes */}
+        {apagando && (
+          <div role="alertdialog" aria-labelledby="apagar-titulo" className="rounded-lg border border-coral/40 bg-coral/5 p-4">
+            <p id="apagar-titulo" className="text-sm font-semibold text-azul-medico">
+              Tem certeza que quer apagar esta consulta?
+            </p>
+            <p className="mt-1 text-xs text-cinza-suave">
+              A consulta de <strong className="text-cinza-texto">{consulta.paciente_nome}</strong> em{" "}
+              {format(data, "dd/MM 'às' HH:mm")} some da agenda de vez, com os documentos e a confirmação. Não dá para
+              desfazer, e ninguém é avisado. Se o paciente precisa saber, use Cancelar.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                onClick={apagar}
+                disabled={pending}
+                className="bg-coral text-white hover:bg-coral/90"
+              >
+                {pending ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+                Sim, apagar de vez
+              </Button>
+              <Button variant="outline" size="sm" autoFocus onClick={() => setApagando(false)} disabled={pending}>
+                Não, voltar
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* O profissional é avisado sempre; o paciente, se a equipe quiser */}
         {cancelando && (

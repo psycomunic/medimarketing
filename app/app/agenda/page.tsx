@@ -75,6 +75,7 @@ export default async function AgendaPage() {
         demo={demo}
         servicos={servicos}
         limite={organizacao?.max_consultas_horario ?? null}
+        podeApagar={ehSuperAdmin || role === "gestor"}
       />
     </div>
   );
