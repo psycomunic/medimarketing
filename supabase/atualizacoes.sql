@@ -2609,3 +2609,11 @@ create policy "contas_anuncio_clinica" on public.contas_anuncio for select to au
 alter table public.leads add column if not exists campanha_id text;
 alter table public.leads add column if not exists campanha_nome text;
 create index if not exists idx_leads_campanha on public.leads (organization_id, campanha_id);
+
+-- =====================================================================
+-- Agenda com vários profissionais no mesmo horário: limite de consultas
+-- simultâneas da clínica (nulo = sem limite). Cada consulta continua com
+-- o seu profissional; o limite conta as não canceladas que se sobrepõem.
+-- =====================================================================
+alter table public.organizations add column if not exists max_consultas_horario integer default 5
+  check (max_consultas_horario is null or max_consultas_horario between 1 and 50);

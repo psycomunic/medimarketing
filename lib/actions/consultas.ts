@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { comunicarConsulta } from "@/lib/comunicacao/consulta";
+import { comunicarOcupacao } from "@/lib/comunicacao/ocupacao";
+import { lerVaga, recusarVaga, type RecusaVaga } from "@/lib/agenda-vaga";
 import { sincronizarReceita } from "@/lib/financeiro/agenda";
 import { programarPesquisa, suspenderPesquisa } from "@/lib/avaliacoes";
 import { createAdminClient, adminDisponivel } from "@/lib/supabase/admin";
@@ -69,6 +71,7 @@ export async function atualizarStatus(
         atorId: userId,
         avisarPaciente: opcoes.avisarPaciente ?? true,
       });
+      await comunicarOcupacao(id, { tipo: "saiu", atorId: userId });
     } else if (status === "confirmada") {
       // Confirmada por telefone ou no balcão: o lembrete não precisa sair
       if (adminDisponivel()) {
@@ -132,7 +135,9 @@ export async function criarConsulta(input: {
   organization_id?: string;
   /** Falso segura a mensagem de agendamento ao paciente. */
   avisar_paciente?: boolean;
-}): Promise<{ ok: true; id: string } | { ok: false; erro: string }> {
+  /** "Salvar mesmo assim": encaixe acima do limite ou sobre outra consulta do profissional. */
+  encaixe?: boolean;
+}): Promise<{ ok: true; id: string } | { ok: false; erro: string; codigo?: RecusaVaga["codigo"] }> {
   if (await emModoDemo()) return { ok: false, erro: MSG_DEMO };
   const { supabase, userId } = await getUserId();
   if (!userId) return { ok: false, erro: "Sessão expirada." };
@@ -186,7 +191,7 @@ export async function criarConsulta(input: {
   // clínica nenhuma, então ele nunca pode ficar como o profissional.
   const { data: alvo } = await supabase
     .from("profiles")
-    .select("organization_id")
+    .select("organization_id,nome")
     .eq("id", medicoId)
     .maybeSingle();
 
@@ -199,6 +204,17 @@ export async function criarConsulta(input: {
         : "Escolha o profissional que vai atender: sua conta não atende nesta clínica.",
     };
   }
+
+  // Vaga: o profissional livre e a clínica abaixo do limite do horário
+  const duracao = input.duracao_min ?? 30;
+  const vaga = await lerVaga({ organizationId, medicoId, dataHora: input.data_hora, duracaoMin: duracao });
+  const recusa = recusarVaga(vaga, {
+    gestor: ehSuperAdmin || perfil?.role === "gestor",
+    ehOProfissional: medicoId === userId,
+    encaixe: !!input.encaixe,
+    nomeProfissional: alvo.nome,
+  });
+  if (recusa) return recusa;
 
   // O serviço vem da tabela da própria clínica; o nome fica gravado na consulta
   let servico: { servico_id: string; servico_nome: string } | null = null;
@@ -222,7 +238,7 @@ export async function criarConsulta(input: {
       paciente_nascimento: input.paciente_nascimento || null,
       convenio: input.convenio || null,
       data_hora: input.data_hora,
-      duracao_min: input.duracao_min ?? 30,
+      duracao_min: duracao,
       tipo: input.tipo,
       status: "pendente" as StatusConsulta,
       motivo: input.motivo || null,
@@ -249,6 +265,8 @@ export async function criarConsulta(input: {
       atorId: userId,
       avisarPaciente: input.avisar_paciente !== false,
     });
+  // Com esta, o horário lotou ou passou do limite: gestor e recepção ficam sabendo
+  await comunicarOcupacao(criada.id, { tipo: "entrou", antes: vaga.simultaneas, limite: vaga.limite, atorId: userId });
 
   revalidatePath("/app/agenda");
   revalidatePath("/app");
@@ -290,6 +308,76 @@ export async function trocarServico(
   if (error) return { ok: false, erro: "Não foi possível trocar o serviço." };
 
   await sincronizarReceita(id);
+  revalidatePath("/app/agenda");
+  revalidatePath("/app");
+  return { ok: true };
+}
+
+/**
+ * Passa a consulta para outro profissional, no mesmo horário.
+ *
+ * Com vários profissionais atendendo ao mesmo tempo, é a troca mais comum
+ * do dia: o horário não muda, então o limite da clínica também não — só a
+ * agenda de quem entra precisa estar livre. Quem saiu, quem entrou e o
+ * paciente são avisados (ver comunicacao/consulta.ts, evento "trocado").
+ */
+export async function trocarProfissional(
+  id: string,
+  medicoId: string,
+  opcoes: { encaixe?: boolean; avisarPaciente?: boolean } = {},
+): Promise<ActionResult | RecusaVaga> {
+  if (await emModoDemo()) return { ok: false, erro: MSG_DEMO };
+  const { supabase, userId } = await getUserId();
+  if (!userId) return { ok: false, erro: "Sessão expirada." };
+
+  const [{ data: c }, { data: perfil }, { data: alvo }] = await Promise.all([
+    supabase
+      .from("consultas")
+      .select("id,organization_id,medico_id,data_hora,duracao_min,status")
+      .eq("id", id)
+      .maybeSingle(),
+    supabase.from("profiles").select("role").eq("id", userId).maybeSingle(),
+    supabase.from("profiles").select("organization_id,nome,ativo").eq("id", medicoId).maybeSingle(),
+  ]);
+  if (!c?.organization_id) return { ok: false, erro: "Consulta não encontrada." };
+  if (c.medico_id === medicoId) return { ok: true };
+  if (!alvo || !alvo.ativo || alvo.organization_id !== c.organization_id) {
+    return { ok: false, erro: "Esse profissional não é da clínica da consulta." };
+  }
+
+  if (c.status !== "cancelada") {
+    const vaga = await lerVaga({
+      organizationId: c.organization_id,
+      medicoId,
+      dataHora: c.data_hora,
+      duracaoMin: c.duracao_min ?? 30,
+      ignorarId: c.id,
+    });
+    // A própria consulta já ocupa o horário: o limite não muda com a troca
+    const recusa = recusarVaga(
+      { ...vaga, limite: null },
+      {
+        gestor: perfil?.role === "gestor" || perfil?.role === "super_admin",
+        ehOProfissional: medicoId === userId,
+        encaixe: !!opcoes.encaixe,
+        nomeProfissional: alvo.nome,
+      }
+    );
+    if (recusa) return recusa;
+  }
+
+  const { error } = await supabase.from("consultas").update({ medico_id: medicoId }).eq("id", id);
+  if (error) return { ok: false, erro: "Não foi possível trocar o profissional." };
+
+  // Repasse e receita seguem o profissional novo
+  await sincronizarReceita(id);
+  await comunicarConsulta(id, {
+    tipo: "trocado",
+    atorId: userId,
+    anteriorId: c.medico_id,
+    avisarPaciente: opcoes.avisarPaciente !== false,
+  });
+
   revalidatePath("/app/agenda");
   revalidatePath("/app");
   return { ok: true };

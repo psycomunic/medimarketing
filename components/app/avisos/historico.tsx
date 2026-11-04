@@ -21,6 +21,11 @@ const ROTULO_EVENTO: Record<string, string> = {
   agenda_do_dia: "Agenda do dia",
   pendentes_vespera: "Sem confirmação",
   envio_falhou: "Falha de envio",
+  profissional_trocado: "Troca de profissional",
+  horario_lotado: "Horário lotado",
+  encaixe_acima_limite: "Encaixe acima do limite",
+  vaga_aberta: "Vaga aberta",
+  agenda_da_clinica: "Agenda da clínica",
   teste: "Teste",
 };
 

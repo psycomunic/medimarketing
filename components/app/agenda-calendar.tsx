@@ -59,6 +59,13 @@ import {
   type FiltrosAgenda,
 } from "@/components/app/agenda-filtros";
 import { FaixaDias, SeletorData } from "@/components/app/agenda-navegacao";
+import {
+  coresDosProfissionais,
+  limiteValido,
+  lotado,
+  ocupacaoDoIntervalo,
+  type CorProfissional,
+} from "@/lib/agenda-capacidade";
 import { BotaoFlutuante, useAcaoFlutuante } from "@/components/app/botao-flutuante";
 
 type Visao = "mes" | "semana" | "dia";
@@ -79,6 +86,7 @@ export function AgendaCalendar({
   lembrete = null,
   demo = false,
   servicos = [],
+  limite: limiteBruto = null,
 }: {
   consultasIniciais: ConsultaComContexto[];
   /** Banco de pacientes: entra na busca da Nova consulta. */
@@ -97,6 +105,8 @@ export function AgendaCalendar({
   demo?: boolean;
   /** Tabela de preços: os serviços para escolher na consulta. */
   servicos?: PrecoProcedimento[];
+  /** Consultas ao mesmo tempo que a clínica aceita (nulo = sem limite). */
+  limite?: number | null;
 }) {
   // Abre sempre no dia de hoje: é a pergunta de quem entra na agenda
   const [visao, setVisao] = useState<Visao>("dia");
@@ -104,6 +114,10 @@ export function AgendaCalendar({
   const [selecionada, setSelecionada] = useState<Consulta | null>(null);
   const [novaAberta, setNovaAberta] = useState(false);
   const [dataNova, setDataNova] = useState<Date | null>(null);
+  const [medicoNova, setMedicoNova] = useState<string | null>(null);
+  const limite = limiteValido(limiteBruto);
+  // A mesma pessoa tem a mesma cor em todas as visões
+  const cores = useMemo(() => coresDosProfissionais(profissionais), [profissionais]);
   const [filtros, setFiltros] = useState<FiltrosAgenda>(FILTROS_VAZIOS);
 
   const consultas = useMemo(
@@ -183,8 +197,9 @@ export function AgendaCalendar({
 
   useAcaoFlutuante("fab:nova-consulta", () => abrirNova());
 
-  function abrirNova(d?: Date) {
+  function abrirNova(d?: Date, medicoId?: string) {
     setDataNova(d ?? cursor);
+    setMedicoNova(medicoId ?? null);
     setNovaAberta(true);
   }
 
@@ -368,8 +383,15 @@ export function AgendaCalendar({
             cursor={cursor}
             consultasDoDia={consultasDoDia}
             confirmacoes={confirmacoes}
+            cores={cores}
+            profissionais={profissionais}
+            limite={limite}
             onConsulta={setSelecionada}
             onNova={abrirNova}
+            onDia={(d) => {
+              setCursor(d);
+              setVisao("dia");
+            }}
           />
         )}
         {visao === "dia" && (
@@ -378,8 +400,11 @@ export function AgendaCalendar({
             consultas={consultasDoDia(cursor)}
             multiClinica={multiClinica}
             confirmacoes={confirmacoes}
+            profissionais={profissionais}
+            cores={cores}
+            limite={limite}
             onConsulta={setSelecionada}
-            onNova={() => abrirNova(cursor)}
+            onNova={(quando, medicoId) => abrirNova(quando ?? cursor, medicoId)}
           />
         )}
       </div>
@@ -409,6 +434,8 @@ export function AgendaCalendar({
         envioAutomatico={envioAutomatico}
         demo={demo}
         servicos={servicos}
+        profissionais={profissionais}
+        consultas={consultasIniciais}
         onOpenChange={(o) => !o && setSelecionada(null)}
       />
       <BotaoFlutuante acoes={[{ rotulo: "Nova consulta", icone: CalendarPlus, evento: "fab:nova-consulta" }]} />
@@ -428,6 +455,8 @@ export function AgendaCalendar({
         bloqueios={bloqueios}
         envioAutomatico={envioAutomatico}
         lembrete={lembrete}
+        limite={limite}
+        medicoInicial={medicoNova}
         onCriada={(quando) => {
           setCursor(quando);
           setVisao("dia");
@@ -646,6 +675,21 @@ function emColunas(consultas: Consulta[]): Map<string, { coluna: number; total: 
   return res;
 }
 
+/** A partir de quantas consultas lado a lado a semana agrupa o horário. */
+const DENSO = 3;
+
+/** Consultas agrupadas pelo minuto em que começam, em ordem. */
+function agruparPorInicio(consultas: Consulta[]): { inicio: Date; duracao: number; itens: Consulta[] }[] {
+  const mapa = new Map<string, { inicio: Date; duracao: number; itens: Consulta[] }>();
+  for (const c of consultas) {
+    const g = mapa.get(c.data_hora) ?? { inicio: new Date(c.data_hora), duracao: 0, itens: [] };
+    g.itens.push(c);
+    g.duracao = Math.max(g.duracao, c.duracao_min ?? 30);
+    mapa.set(c.data_hora, g);
+  }
+  return [...mapa.values()].sort((a, b) => a.inicio.getTime() - b.inicio.getTime());
+}
+
 /**
  * Grade de horários da semana.
  *
@@ -658,14 +702,23 @@ function WeekView({
   cursor,
   consultasDoDia,
   confirmacoes,
+  cores,
+  profissionais,
+  limite,
   onConsulta,
   onNova,
+  onDia,
 }: {
   cursor: Date;
   consultasDoDia: (d: Date) => Consulta[];
   confirmacoes: Record<string, ConfirmacaoDaConsulta>;
+  cores: Map<string, CorProfissional>;
+  profissionais: { id: string; nome: string }[];
+  limite: number | null;
   onConsulta: (c: Consulta) => void;
   onNova: (d: Date) => void;
+  /** Abre o dia: é onde um horário com muita gente cabe por inteiro. */
+  onDia: (d: Date) => void;
 }) {
   const agora = useAgora();
   const rolagem = useRef<HTMLDivElement>(null);
@@ -757,7 +810,12 @@ function WeekView({
               {/* Uma coluna por dia */}
               {dias.map((d) => {
                 const doDia = consultasDoDia(d);
-                const colunas = emColunas(doDia.filter((c) => c.status !== "cancelada"));
+                const ativasDia = doDia.filter((c) => c.status !== "cancelada");
+                const colunas = emColunas(ativasDia);
+                // Três ou mais ao mesmo tempo não cabem lado a lado num sétimo
+                // da tela: o grupo vira um bloco por horário, que abre o dia
+                const densas = ativasDia.filter((c) => (colunas.get(c.id)?.total ?? 1) >= DENSO);
+                const agregados = agruparPorInicio(densas);
                 const fimDeSemana = d.getDay() === 0 || d.getDay() === 6;
                 const hoje = isToday(d);
 
@@ -773,26 +831,86 @@ function WeekView({
                     {/* Linhas de hora e meia hora, que também servem de alvo para marcar */}
                     {faixa.map((h) => (
                       <div key={h} style={{ height: ALTURA }} className="border-t border-border/70">
-                        {[0, 30].map((m) => (
-                          <button
-                            key={m}
-                            onClick={() => {
-                              const alvo = new Date(d);
-                              alvo.setHours(h, m, 0, 0);
-                              onNova(alvo);
-                            }}
-                            style={{ height: ALTURA / 2 }}
-                            className={cn(
-                              "group/slot flex w-full items-center justify-center text-[10px] font-medium text-teal opacity-0 transition hover:bg-verde-menta/60 hover:opacity-100",
-                              m === 30 && "border-t border-dashed border-border/50"
-                            )}
-                            aria-label={`Marcar consulta ${format(d, "dd/MM")} às ${h}:${m === 0 ? "00" : "30"}`}
-                          >
-                            <Plus className="mr-0.5 size-3" /> {String(h).padStart(2, "0")}:{m === 0 ? "00" : "30"}
-                          </button>
-                        ))}
+                        {[0, 30].map((m) => {
+                          const alvo = new Date(d);
+                          alvo.setHours(h, m, 0, 0);
+                          const cheio = lotado(ocupacaoDoIntervalo(ativasDia, alvo, 30), limite);
+                          return cheio ? (
+                            <div
+                              key={m}
+                              style={{ height: ALTURA / 2 }}
+                              className={cn(
+                                "bg-[repeating-linear-gradient(135deg,transparent,transparent_6px,rgba(232,93,74,0.08)_6px,rgba(232,93,74,0.08)_12px)]",
+                                m === 30 && "border-t border-dashed border-border/50"
+                              )}
+                              title={`${String(h).padStart(2, "0")}:${m === 0 ? "00" : "30"} lotado`}
+                            />
+                          ) : (
+                            <button
+                              key={m}
+                              onClick={() => onNova(alvo)}
+                              style={{ height: ALTURA / 2 }}
+                              className={cn(
+                                "group/slot flex w-full items-center justify-center text-[10px] font-medium text-teal opacity-0 transition hover:bg-verde-menta/60 hover:opacity-100",
+                                m === 30 && "border-t border-dashed border-border/50"
+                              )}
+                              aria-label={`Marcar consulta ${format(d, "dd/MM")} às ${h}:${m === 0 ? "00" : "30"}`}
+                            >
+                              <Plus className="mr-0.5 size-3" /> {String(h).padStart(2, "0")}:{m === 0 ? "00" : "30"}
+                            </button>
+                          );
+                        })}
                       </div>
                     ))}
+
+                    {/* Horários com muita gente: um bloco por horário */}
+                    {agregados.map((g, gi) => {
+                      const minutos = (g.inicio.getHours() - primeira) * 60 + g.inicio.getMinutes();
+                      const proximo = agregados[gi + 1];
+                      const ate = proximo ? (proximo.inicio.getTime() - g.inicio.getTime()) / 60000 : g.duracao;
+                      const altura = Math.max((Math.min(g.duracao, ate) / 60) * ALTURA - 3, 30);
+                      const oc = ocupacaoDoIntervalo(ativasDia, g.inicio, 30);
+                      const cheio = lotado(oc, limite);
+                      return (
+                        <button
+                          key={g.inicio.toISOString()}
+                          onClick={() => onDia(d)}
+                          style={{ top: (minutos / 60) * ALTURA + 1, height: altura }}
+                          className={cn(
+                            "absolute inset-x-1 z-10 flex flex-col overflow-hidden rounded-lg border bg-white px-2 py-1 text-left shadow-[0_1px_2px_rgba(15,58,82,0.08)] transition-all hover:z-30 hover:-translate-y-px hover:shadow-card",
+                            cheio ? "border-coral/50" : "border-teal/40"
+                          )}
+                          title={g.itens.map((c) => `${format(new Date(c.data_hora), "HH:mm")} ${c.paciente_nome} · ${c.medico_nome ?? ""}`).join("\n")}
+                        >
+                          <span className="flex items-center gap-1">
+                            <span className="text-[11px] font-semibold tabular-nums text-azul-medico">
+                              {format(g.inicio, "HH:mm")}
+                            </span>
+                            <span
+                              className={cn(
+                                "rounded-full px-1.5 text-[10px] font-semibold",
+                                cheio ? "bg-coral/15 text-coral" : "bg-verde-menta text-teal"
+                              )}
+                            >
+                              {limite !== null ? `${oc.simultaneas}/${limite}` : `${g.itens.length}`}
+                            </span>
+                          </span>
+                          <span className="mt-0.5 flex flex-wrap gap-0.5">
+                            {g.itens.map((c) => (
+                              <span
+                                key={c.id}
+                                className={cn("size-2 rounded-full", cores.get(c.medico_id)?.ponto ?? "bg-teal")}
+                              />
+                            ))}
+                          </span>
+                          {altura >= 52 && (
+                            <span className="mt-0.5 truncate text-[10px] text-cinza-suave">
+                              {g.itens.length} consultas · ver o dia
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
 
                     {/* Linha do agora */}
                     {hoje && agoraVisivel && (
@@ -806,7 +924,7 @@ function WeekView({
                     )}
 
                     {/* Consultas posicionadas pelo horário */}
-                    {doDia.map((c) => {
+                    {doDia.filter((c) => !densas.includes(c)).map((c) => {
                       const d0 = new Date(c.data_hora);
                       const minutos = (d0.getHours() - primeira) * 60 + d0.getMinutes();
                       const duracao = c.duracao_min ?? 30;
@@ -909,8 +1027,21 @@ function WeekView({
 
       <p className="border-t border-border px-4 py-2 text-[11px] text-cinza-suave">
         Clique num horário vazio para marcar. Contorno vermelho = paciente pediu para reagendar.
-        O ponto no canto mostra a confirmação do paciente.
+        O ponto no canto mostra a confirmação do paciente. Três ou mais consultas no mesmo horário viram um
+        bloco com uma bolinha por profissional: clique para abrir o dia.
       </p>
+      {profissionais.length > 1 && (
+        <div className="flex flex-wrap gap-x-4 gap-y-1.5 border-t border-border px-4 py-2 text-[11px] text-cinza-suave">
+          {[...profissionais]
+            .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"))
+            .map((p) => (
+              <span key={p.id} className="flex items-center gap-1.5">
+                <span className={cn("size-2.5 rounded-full", cores.get(p.id)?.ponto ?? "bg-teal")} />
+                {p.nome}
+              </span>
+            ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -948,11 +1079,32 @@ function SeloConfirmacao({
 }
 
 /* ------------------------- Visão de dia ------------------------- */
+
+type ProfissionalDia = { id: string; nome: string; organization_id: string | null };
+
+/** Início do bloco de meia hora em que o horário cai, em minutos do dia. */
+function blocoDe(d: Date): number {
+  const m = d.getHours() * 60 + d.getMinutes();
+  return m - (m % 30);
+}
+
+/**
+ * O dia de uma clínica com vários profissionais.
+ *
+ * Duas leituras do mesmo dia: por profissional (colunas lado a lado, uma
+ * por pessoa, com as horas nas linhas: às 10:30 aparecem os cinco
+ * atendimentos juntos, cada um embaixo de quem atende) e em lista, por
+ * horário. No celular as colunas não cabem, então vale a lista agrupada,
+ * que mostra a mesma ocupação ("10:30 · 4 de 5").
+ */
 function DayView({
   cursor,
   consultas,
   multiClinica,
   confirmacoes,
+  profissionais,
+  cores,
+  limite,
   onConsulta,
   onNova,
 }: {
@@ -960,13 +1112,36 @@ function DayView({
   consultas: Consulta[];
   multiClinica: boolean;
   confirmacoes: Record<string, ConfirmacaoDaConsulta>;
+  profissionais: ProfissionalDia[];
+  cores: Map<string, CorProfissional>;
+  limite: number | null;
   onConsulta: (c: Consulta) => void;
-  onNova: () => void;
+  /** Sem argumentos: o dia. Com horário e profissional: já preenchidos. */
+  onNova: (quando?: Date, medicoId?: string) => void;
 }) {
   // Pequeno resumo por status
   const confirmadas = consultas.filter(
     (c) => c.status === "confirmada" || c.status === "realizada"
   ).length;
+
+  // Colunas: quem atende nas clínicas do dia (ou em todas, num dia vazio),
+  // mais quem tem consulta e não está mais na lista da equipe
+  const colunas = useMemo(() => {
+    const orgs = new Set(consultas.map((c) => c.organization_id).filter(Boolean));
+    const lista: ProfissionalDia[] = profissionais.filter(
+      (p) => (orgs.size === 0 && !multiClinica) || orgs.has(p.organization_id ?? "")
+    );
+    for (const c of consultas) {
+      if (!lista.some((p) => p.id === c.medico_id)) {
+        lista.push({ id: c.medico_id, nome: c.medico_nome ?? "Profissional", organization_id: c.organization_id });
+      }
+    }
+    return lista.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  }, [consultas, profissionais, multiClinica]);
+
+  const variosProfissionais = colunas.length > 1;
+  const [modo, setModo] = useState<"profissional" | "lista">("profissional");
+  const porProfissional = variosProfissionais && modo === "profissional";
 
   return (
     <div className="rounded-xl border border-border bg-white shadow-soft">
@@ -974,7 +1149,7 @@ function DayView({
         <p className="font-heading font-semibold text-azul-medico">
           {capitalizar(format(cursor, "EEEE, dd 'de' MMMM", { locale: ptBR }))}
         </p>
-        <div className="flex items-center gap-3 text-sm text-cinza-suave">
+        <div className="flex flex-wrap items-center gap-3 text-sm text-cinza-suave">
           <span>
             <strong className="text-azul-medico">{consultas.length}</strong>{" "}
             consulta{consultas.length === 1 ? "" : "s"}
@@ -985,156 +1160,507 @@ function DayView({
               {confirmadas} confirmada{confirmadas === 1 ? "" : "s"}
             </span>
           )}
+          {limite !== null && (
+            <span className="text-xs">até {limite} por horário</span>
+          )}
+          {variosProfissionais && (
+            <div className="hidden rounded-lg bg-branco-clinico p-0.5 md:flex">
+              {(
+                [
+                  ["profissional", "Por profissional"],
+                  ["lista", "Lista"],
+                ] as const
+              ).map(([m, rotulo]) => (
+                <button
+                  key={m}
+                  onClick={() => setModo(m)}
+                  className={cn(
+                    "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                    modo === m ? "bg-white text-azul-medico shadow-sm" : "text-cinza-suave hover:text-azul-medico"
+                  )}
+                >
+                  {rotulo}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
-      {consultas.length === 0 ? (
-        <div className="px-5 py-16 text-center text-cinza-suave">
-          <CalendarDays className="mx-auto mb-3 size-10 text-teal-claro" />
-          <p>Nenhuma consulta neste dia.</p>
-          <Button variant="outline" size="sm" className="mt-4" onClick={onNova}>
-            <Plus className="size-4" /> Adicionar consulta
-          </Button>
+      {porProfissional && (
+        <div className="hidden md:block">
+          <GradeProfissionais
+            cursor={cursor}
+            consultas={consultas}
+            colunas={colunas}
+            cores={cores}
+            limite={limite}
+            confirmacoes={confirmacoes}
+            onConsulta={onConsulta}
+            onNova={onNova}
+          />
         </div>
-      ) : (
-        <ul className="space-y-2.5 p-3 sm:p-4">
-          {consultas.map((c, i) => {
-            const inicio = new Date(c.data_hora);
-            // Divisória do agora antes da primeira consulta que ainda vem
-            const agoraAqui =
-              isToday(cursor) &&
-              inicio.getTime() > Date.now() &&
-              (i === 0 || new Date(consultas[i - 1].data_hora).getTime() <= Date.now());
-            const fim = c.duracao_min
-              ? new Date(inicio.getTime() + c.duracao_min * 60000)
-              : null;
-            const cancelada = c.status === "cancelada";
-            const conf = confirmacoes[c.id];
-            return (
-              <li key={c.id}>
-                {agoraAqui && (
-                  <div className="mb-2.5 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-coral">
-                    <span className="size-2.5 rounded-full bg-coral" />
-                    Agora · {format(new Date(), "HH:mm")}
-                    <span className="h-px flex-1 bg-coral/60" />
-                  </div>
-                )}
-                {/* Linha em div, e não em button: o atalho do WhatsApp é um
-                    link, e link dentro de botão é HTML inválido. */}
-                <div
-                  className={cn(
-                    "group flex w-full overflow-hidden rounded-xl border bg-white text-left transition-all hover:shadow-soft",
-                    conf?.status === "reagendar"
-                      ? "border-alerta/50"
-                      : "border-border hover:border-teal-claro",
-                    cancelada && "opacity-70"
-                  )}
-                >
-                  {/* Barra de status */}
-                  <span className={cn("w-1.5 shrink-0", corStatus[c.status])} />
-
-                  <button
-                    onClick={() => onConsulta(c)}
-                    className="flex min-w-0 flex-1 text-left"
-                  >
-
-                  {/* Faixa de horário */}
-                  <div className="flex w-[4.5rem] shrink-0 flex-col items-center justify-center border-r border-border bg-branco-clinico py-3">
-                    <span className="font-heading text-base font-bold text-azul-medico">
-                      {format(inicio, "HH:mm")}
-                    </span>
-                    {fim && (
-                      <span className="text-[11px] text-cinza-suave">
-                        {format(fim, "HH:mm")}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Conteúdo */}
-                  <div className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3">
-                    <div className="min-w-0 flex-1">
-                      <p
-                        className={cn(
-                          "truncate font-semibold text-cinza-texto",
-                          cancelada && "line-through"
-                        )}
-                      >
-                        {c.paciente_nome}
-                      </p>
-                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-cinza-suave">
-                        {multiClinica && c.organizacao_nome && (
-                          <span className="flex items-center gap-1 font-medium text-azul-medico">
-                            <Building2 className="size-3.5 text-teal" />
-                            {c.organizacao_nome}
-                          </span>
-                        )}
-                        {c.medico_nome && (
-                          <span className="flex items-center gap-1">
-                            <UserRound className="size-3.5 text-teal" />
-                            {c.medico_nome}
-                          </span>
-                        )}
-                        <span className="flex items-center gap-1">
-                          <Stethoscope className="size-3.5 text-teal" />
-                          {c.servico_nome ? `${c.servico_nome} · ${rotuloTipo[c.tipo]}` : rotuloTipo[c.tipo]}
-                        </span>
-                        {c.convenio && (
-                          <span className="flex items-center gap-1">
-                            <ShieldCheck className="size-3.5 text-teal" />
-                            {c.convenio}
-                          </span>
-                        )}
-                        {c.paciente_telefone && (
-                          <span className="hidden items-center gap-1 sm:flex">
-                            <Phone className="size-3.5 text-teal" />
-                            {c.paciente_telefone}
-                          </span>
-                        )}
-                      </div>
-                      {c.motivo && (
-                        <p className="mt-1 truncate text-xs text-cinza-suave/80">
-                          {c.motivo}
-                        </p>
-                      )}
-                    </div>
-
-                      <Badge variant={c.status}>{rotuloStatus[c.status]}</Badge>
-                    </div>
-                  </button>
-
-                  {/* Confirmação à vista, sem precisar abrir a ficha */}
-                  <div className="flex shrink-0 items-center gap-1.5 border-l border-border px-3">
-                    <SeloConfirmacao confirmacao={conf} />
-                    {conf && c.paciente_telefone && (
-                      <a
-                        href={linkWhatsApp(c.paciente_telefone, conf.mensagem)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className={cn(
-                          "grid size-9 place-items-center rounded-md transition-colors",
-                          conf.status === "pendente"
-                            ? "bg-sucesso/12 text-sucesso hover:bg-sucesso/20"
-                            : "text-cinza-suave hover:bg-verde-menta hover:text-teal"
-                        )}
-                        title={
-                          conf.status === "pendente"
-                            ? "Enviar confirmação pelo WhatsApp"
-                            : "Reenviar pelo WhatsApp"
-                        }
-                        aria-label={`Enviar confirmação para ${c.paciente_nome} no WhatsApp`}
-                      >
-                        <MessageCircle className="size-4" />
-                      </a>
-                    )}
-                    <ChevronRight className="size-4 shrink-0 text-cinza-suave/40 transition-colors group-hover:text-teal" />
-                  </div>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
       )}
+
+      <div className={cn(porProfissional && "md:hidden")}>
+        {consultas.length === 0 ? (
+          <div className="px-5 py-16 text-center text-cinza-suave">
+            <CalendarDays className="mx-auto mb-3 size-10 text-teal-claro" />
+            <p>Nenhuma consulta neste dia.</p>
+            <Button variant="outline" size="sm" className="mt-4" onClick={() => onNova()}>
+              <Plus className="size-4" /> Adicionar consulta
+            </Button>
+          </div>
+        ) : (
+          <ListaPorHorario
+            cursor={cursor}
+            consultas={consultas}
+            multiClinica={multiClinica}
+            confirmacoes={confirmacoes}
+            cores={variosProfissionais ? cores : null}
+            limite={limite}
+            onConsulta={onConsulta}
+          />
+        )}
+      </div>
     </div>
   );
+}
+
+/**
+ * Grade do dia por profissional: colunas = quem atende, linhas = blocos
+ * de 30 minutos. Cada consulta fica na linha em que começa; nas linhas
+ * seguintes que ela ainda ocupa, a coluna mostra uma faixa de
+ * continuação, para o vazio e o ocupado se lerem de longe.
+ */
+function GradeProfissionais({
+  cursor,
+  consultas,
+  colunas,
+  cores,
+  limite,
+  confirmacoes,
+  onConsulta,
+  onNova,
+}: {
+  cursor: Date;
+  consultas: Consulta[];
+  colunas: ProfissionalDia[];
+  cores: Map<string, CorProfissional>;
+  limite: number | null;
+  confirmacoes: Record<string, ConfirmacaoDaConsulta>;
+  onConsulta: (c: Consulta) => void;
+  onNova: (quando?: Date, medicoId?: string) => void;
+}) {
+  const agora = useAgora();
+  const ativas = consultas.filter((c) => c.status !== "cancelada");
+
+  // Faixa de horas: das 8h às 18h, esticando para o que existir no dia
+  const inicios = consultas.map((c) => blocoDe(new Date(c.data_hora)));
+  const fins = consultas.map((c) => {
+    const d = new Date(c.data_hora);
+    return d.getHours() * 60 + d.getMinutes() + (c.duracao_min ?? 30);
+  });
+  const primeiro = Math.min(8 * 60, ...inicios);
+  const ultimo = Math.max(18 * 60, ...fins.map((f) => Math.ceil(f / 30) * 30));
+  const blocos = Array.from({ length: (ultimo - primeiro) / 30 }, (_, i) => primeiro + i * 30);
+
+  const hoje = isToday(cursor);
+  const blocoAgora = hoje ? blocoDe(agora) : -1;
+  const largura = `minmax(${colunas.length > 4 ? "9.5rem" : "11rem"}, 1fr)`;
+
+  const emData = (m: number) => {
+    const d = new Date(cursor);
+    d.setHours(Math.floor(m / 60), m % 60, 0, 0);
+    return d;
+  };
+
+  return (
+    <div className="overflow-x-auto">
+      <div style={{ minWidth: `${5.5 + colunas.length * 9.5}rem` }}>
+        {/* Cabeçalho: um profissional por coluna, com a cor dele */}
+        <div
+          className="sticky top-0 z-20 grid border-b border-border bg-branco-clinico"
+          style={{ gridTemplateColumns: `5.5rem repeat(${colunas.length}, ${largura})` }}
+        >
+          <div className="px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-cinza-suave">
+            Horário
+          </div>
+          {colunas.map((p) => {
+            const cor = cores.get(p.id);
+            const n = ativas.filter((c) => c.medico_id === p.id).length;
+            return (
+              <div key={p.id} className="flex min-w-0 items-center gap-2 border-l border-border px-3 py-2.5">
+                <span className={cn("size-2.5 shrink-0 rounded-full", cor?.ponto ?? "bg-teal")} />
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-semibold text-azul-medico">{p.nome}</span>
+                  <span className="block text-[11px] text-cinza-suave">
+                    {n ? `${n} consulta${n === 1 ? "" : "s"}` : "agenda livre"}
+                  </span>
+                </span>
+              </div>
+            );
+          })}
+        </div>
+
+        {blocos.map((m) => {
+          const quando = emData(m);
+          const oc = ocupacaoDoIntervalo(ativas, quando, 30);
+          const cheio = lotado(oc, limite);
+          const passou = quando.getTime() + 30 * 60000 <= agora.getTime();
+
+          return (
+            <div
+              key={m}
+              className={cn(
+                "grid border-b border-border/70",
+                m % 60 === 30 && "border-dashed",
+                cheio && "bg-coral/[0.04]"
+              )}
+              style={{ gridTemplateColumns: `5.5rem repeat(${colunas.length}, ${largura})` }}
+            >
+              {/* Hora e ocupação do bloco */}
+              <div className={cn("flex flex-col justify-center px-3 py-2", m === blocoAgora && "bg-coral/10")}>
+                <span
+                  className={cn(
+                    "text-sm font-semibold tabular-nums",
+                    m === blocoAgora ? "text-coral" : passou ? "text-cinza-suave" : "text-azul-medico"
+                  )}
+                >
+                  {hhmm(m)}
+                </span>
+                {oc.simultaneas > 0 && (
+                  <span
+                    className={cn(
+                      "mt-0.5 w-fit rounded-full px-1.5 text-[10px] font-semibold tabular-nums",
+                      cheio ? "bg-coral/15 text-coral" : "bg-verde-menta text-teal"
+                    )}
+                    title={limite !== null ? `${oc.simultaneas} de ${limite} consultas neste horário` : undefined}
+                  >
+                    {limite !== null ? `${oc.simultaneas}/${limite}` : oc.simultaneas}
+                  </span>
+                )}
+                {cheio && <span className="mt-0.5 text-[10px] font-semibold text-coral">lotado</span>}
+              </div>
+
+              {colunas.map((p) => {
+                const cor = cores.get(p.id);
+                const aqui = consultas.filter(
+                  (c) => c.medico_id === p.id && blocoDe(new Date(c.data_hora)) === m
+                );
+                // Consulta que começou antes e ainda ocupa este bloco
+                const continua =
+                  aqui.length === 0 &&
+                  ativas.some((c) => {
+                    const ini = new Date(c.data_hora);
+                    const a = ini.getHours() * 60 + ini.getMinutes();
+                    return c.medico_id === p.id && a < m && a + (c.duracao_min ?? 30) > m;
+                  });
+
+                return (
+                  <div key={p.id} className="min-h-[3.25rem] border-l border-border p-1">
+                    {aqui.length > 0 ? (
+                      <div className="flex flex-col gap-1">
+                        {aqui.map((c) => (
+                          <CartaoGrade
+                            key={c.id}
+                            consulta={c}
+                            cor={cor}
+                            confirmacao={confirmacoes[c.id]}
+                            onClick={() => onConsulta(c)}
+                          />
+                        ))}
+                      </div>
+                    ) : continua ? (
+                      <div className={cn("h-full min-h-[2.75rem] rounded-md border-l-[3px]", cor?.fundo, cor?.borda)} />
+                    ) : cheio || passou ? (
+                      <div
+                        className={cn("h-full min-h-[2.75rem] rounded-md", cheio && "bg-[repeating-linear-gradient(135deg,transparent,transparent_6px,rgba(232,93,74,0.07)_6px,rgba(232,93,74,0.07)_12px)]")}
+                        title={cheio ? "Horário lotado" : undefined}
+                      />
+                    ) : (
+                      <button
+                        onClick={() => onNova(quando, p.id)}
+                        className="flex h-full min-h-[2.75rem] w-full items-center justify-center rounded-md text-[11px] font-medium text-teal opacity-0 transition hover:bg-verde-menta/60 hover:opacity-100 focus-visible:opacity-100"
+                        aria-label={`Marcar consulta com ${p.nome} às ${hhmm(m)}`}
+                      >
+                        <Plus className="mr-0.5 size-3" /> {hhmm(m)}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+
+      <p className="border-t border-border px-4 py-2 text-[11px] text-cinza-suave">
+        Clique num espaço vazio para marcar com aquele profissional, já no horário. Faixa colorida = consulta
+        que continua do horário anterior. Listras = horário lotado.
+      </p>
+    </div>
+  );
+}
+
+/** Consulta dentro da célula do profissional: nome, horário e serviço. */
+function CartaoGrade({
+  consulta: c,
+  cor,
+  confirmacao,
+  onClick,
+}: {
+  consulta: Consulta;
+  cor?: CorProfissional;
+  confirmacao?: ConfirmacaoDaConsulta;
+  onClick: () => void;
+}) {
+  const ini = new Date(c.data_hora);
+  const fim = new Date(ini.getTime() + (c.duracao_min ?? 30) * 60000);
+  const cancelada = c.status === "cancelada";
+  const tom = tomStatus[c.status];
+
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "flex w-full overflow-hidden rounded-md text-left shadow-[0_1px_2px_rgba(15,58,82,0.08)] ring-1 ring-inset ring-black/[0.04] transition-all hover:-translate-y-px hover:shadow-card",
+        tom.fundo,
+        cancelada && "opacity-60",
+        confirmacao?.status === "reagendar" && "ring-2 ring-coral/70"
+      )}
+      title={`${format(ini, "HH:mm")}–${format(fim, "HH:mm")} · ${c.paciente_nome}${c.medico_nome ? ` · ${c.medico_nome}` : ""}`}
+    >
+      <span className={cn("w-1 shrink-0", corStatus[c.status])} />
+      <span className="min-w-0 flex-1 px-2 py-1.5">
+        <span className="flex items-center gap-1">
+          <span className={cn("min-w-0 truncate text-xs font-semibold text-azul-medico", cancelada && "line-through")}>
+            {c.paciente_nome}
+          </span>
+          {c.tipo === "teleconsulta" && <Video className="size-3 shrink-0 text-cinza-suave" />}
+        </span>
+        <span className={cn("block truncate text-[11px] font-medium tabular-nums", tom.texto)}>
+          {format(ini, "HH:mm")} – {format(fim, "HH:mm")}
+        </span>
+        {c.servico_nome && (
+          <span className={cn("block truncate text-[10px] font-medium", cor?.texto ?? "text-cinza-suave")}>
+            {c.servico_nome}
+          </span>
+        )}
+      </span>
+      {confirmacao && (
+        <span
+          className={cn("mr-1.5 mt-1.5 size-2 shrink-0 rounded-full ring-2 ring-white", corConfirmacao[confirmacao.status])}
+          title={`Confirmação: ${confirmacao.status}`}
+        />
+      )}
+    </button>
+  );
+}
+
+/**
+ * Lista do dia agrupada por horário: cada grupo diz quantas consultas há
+ * naquele horário e, com limite, quantas cabem. É a leitura do celular e
+ * a de quem prefere lista no computador.
+ */
+function ListaPorHorario({
+  cursor,
+  consultas,
+  multiClinica,
+  confirmacoes,
+  cores,
+  limite,
+  onConsulta,
+}: {
+  cursor: Date;
+  consultas: Consulta[];
+  multiClinica: boolean;
+  confirmacoes: Record<string, ConfirmacaoDaConsulta>;
+  /** Nulo com um profissional só: a cor não diria nada. */
+  cores: Map<string, CorProfissional> | null;
+  limite: number | null;
+  onConsulta: (c: Consulta) => void;
+}) {
+  const ativas = consultas.filter((c) => c.status !== "cancelada");
+  const grupos: { hora: string; inicio: Date; itens: Consulta[] }[] = [];
+  for (const c of consultas) {
+    const d = new Date(c.data_hora);
+    const hora = format(d, "HH:mm");
+    const g = grupos.find((x) => x.hora === hora);
+    if (g) g.itens.push(c);
+    else grupos.push({ hora, inicio: d, itens: [c] });
+  }
+  const agrupar = grupos.some((g) => g.itens.length > 1) || limite !== null;
+
+  return (
+    <div className="space-y-4 p-3 sm:p-4">
+      {grupos.map((g, i) => {
+        // Divisória do agora antes do primeiro horário que ainda vem
+        const agoraAqui =
+          isToday(cursor) &&
+          g.inicio.getTime() > Date.now() &&
+          (i === 0 || grupos[i - 1].inicio.getTime() <= Date.now());
+        const oc = ocupacaoDoIntervalo(ativas, g.inicio, 30);
+        const cheio = lotado(oc, limite);
+
+        return (
+          <section key={g.hora}>
+            {agoraAqui && (
+              <div className="mb-2.5 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-coral">
+                <span className="size-2.5 rounded-full bg-coral" />
+                Agora · {format(new Date(), "HH:mm")}
+                <span className="h-px flex-1 bg-coral/60" />
+              </div>
+            )}
+            {agrupar && (
+              <div className="mb-2 flex items-center gap-2">
+                <span className="font-heading text-sm font-bold tabular-nums text-azul-medico">{g.hora}</span>
+                <span
+                  className={cn(
+                    "rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                    cheio ? "bg-coral/12 text-coral" : "bg-verde-menta text-teal"
+                  )}
+                >
+                  {limite !== null
+                    ? `${oc.simultaneas} de ${limite}${cheio ? " · lotado" : ""}`
+                    : `${g.itens.length} consulta${g.itens.length === 1 ? "" : "s"}`}
+                </span>
+                <span className="h-px flex-1 bg-border" />
+              </div>
+            )}
+            <ul className="space-y-2.5">
+              {g.itens.map((c) => (
+                <LinhaConsulta
+                  key={c.id}
+                  consulta={c}
+                  multiClinica={multiClinica}
+                  confirmacao={confirmacoes[c.id]}
+                  cor={cores?.get(c.medico_id) ?? null}
+                  onConsulta={onConsulta}
+                />
+              ))}
+            </ul>
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
+function LinhaConsulta({
+  consulta: c,
+  multiClinica,
+  confirmacao: conf,
+  cor,
+  onConsulta,
+}: {
+  consulta: Consulta;
+  multiClinica: boolean;
+  confirmacao?: ConfirmacaoDaConsulta;
+  cor: CorProfissional | null;
+  onConsulta: (c: Consulta) => void;
+}) {
+  const inicio = new Date(c.data_hora);
+  const fim = c.duracao_min ? new Date(inicio.getTime() + c.duracao_min * 60000) : null;
+  const cancelada = c.status === "cancelada";
+
+  return (
+    <li>
+      {/* Linha em div, e não em button: o atalho do WhatsApp é um
+          link, e link dentro de botão é HTML inválido. */}
+      <div
+        className={cn(
+          "group flex w-full overflow-hidden rounded-xl border bg-white text-left transition-all hover:shadow-soft",
+          conf?.status === "reagendar" ? "border-alerta/50" : "border-border hover:border-teal-claro",
+          cancelada && "opacity-70"
+        )}
+      >
+        {/* Barra de status */}
+        <span className={cn("w-1.5 shrink-0", corStatus[c.status])} />
+
+        <button onClick={() => onConsulta(c)} className="flex min-w-0 flex-1 text-left">
+          {/* Faixa de horário */}
+          <div className="flex w-[4.5rem] shrink-0 flex-col items-center justify-center border-r border-border bg-branco-clinico py-3">
+            <span className="font-heading text-base font-bold text-azul-medico">{format(inicio, "HH:mm")}</span>
+            {fim && <span className="text-[11px] text-cinza-suave">{format(fim, "HH:mm")}</span>}
+          </div>
+
+          {/* Conteúdo */}
+          <div className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3">
+            <div className="min-w-0 flex-1">
+              <p className={cn("truncate font-semibold text-cinza-texto", cancelada && "line-through")}>
+                {c.paciente_nome}
+              </p>
+              <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-cinza-suave">
+                {multiClinica && c.organizacao_nome && (
+                  <span className="flex items-center gap-1 font-medium text-azul-medico">
+                    <Building2 className="size-3.5 text-teal" />
+                    {c.organizacao_nome}
+                  </span>
+                )}
+                {c.medico_nome && (
+                  <span className={cn("flex items-center gap-1", cor && "font-semibold", cor?.texto)}>
+                    {cor ? (
+                      <span className={cn("size-2.5 rounded-full", cor.ponto)} />
+                    ) : (
+                      <UserRound className="size-3.5 text-teal" />
+                    )}
+                    {c.medico_nome}
+                  </span>
+                )}
+                <span className="flex items-center gap-1">
+                  <Stethoscope className="size-3.5 text-teal" />
+                  {c.servico_nome ? `${c.servico_nome} · ${rotuloTipo[c.tipo]}` : rotuloTipo[c.tipo]}
+                </span>
+                {c.convenio && (
+                  <span className="flex items-center gap-1">
+                    <ShieldCheck className="size-3.5 text-teal" />
+                    {c.convenio}
+                  </span>
+                )}
+                {c.paciente_telefone && (
+                  <span className="hidden items-center gap-1 sm:flex">
+                    <Phone className="size-3.5 text-teal" />
+                    {c.paciente_telefone}
+                  </span>
+                )}
+              </div>
+              {c.motivo && <p className="mt-1 truncate text-xs text-cinza-suave/80">{c.motivo}</p>}
+            </div>
+
+            <Badge variant={c.status}>{rotuloStatus[c.status]}</Badge>
+          </div>
+        </button>
+
+        {/* Confirmação à vista, sem precisar abrir a ficha */}
+        <div className="flex shrink-0 items-center gap-1.5 border-l border-border px-3">
+          <SeloConfirmacao confirmacao={conf} />
+          {conf && c.paciente_telefone && (
+            <a
+              href={linkWhatsApp(c.paciente_telefone, conf.mensagem)}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className={cn(
+                "grid size-9 place-items-center rounded-md transition-colors",
+                conf.status === "pendente"
+                  ? "bg-sucesso/12 text-sucesso hover:bg-sucesso/20"
+                  : "text-cinza-suave hover:bg-verde-menta hover:text-teal"
+              )}
+              title={conf.status === "pendente" ? "Enviar confirmação pelo WhatsApp" : "Reenviar pelo WhatsApp"}
+              aria-label={`Enviar confirmação para ${c.paciente_nome} no WhatsApp`}
+            >
+              <MessageCircle className="size-4" />
+            </a>
+          )}
+          <ChevronRight className="size-4 shrink-0 text-cinza-suave/40 transition-colors group-hover:text-teal" />
+        </div>
+      </div>
+    </li>
+  );
+}
+
+/** "10:30" a partir dos minutos do dia. */
+function hhmm(m: number): string {
+  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 }

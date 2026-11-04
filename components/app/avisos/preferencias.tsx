@@ -176,7 +176,7 @@ export function PreferenciasAviso({
         </ul>
       </div>
 
-      {eventos.includes("agenda_do_dia") && (
+      {(eventos.includes("agenda_do_dia") || eventos.includes("agenda_da_clinica")) && (
         <div className="mt-4 grid gap-1.5 sm:max-w-xs">
           <Label htmlFor={`resumo-${usuarioId}`}>Horário do resumo da agenda</Label>
           <Select

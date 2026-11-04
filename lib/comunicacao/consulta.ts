@@ -11,8 +11,10 @@ import {
   emailPacienteAgendada,
   emailPacienteCancelada,
   emailPacienteConfirmou,
+  emailPacienteProfissionalTrocado,
   emailPacienteRemarcada,
   type MarcaEmail,
+  type Modelo,
 } from "@/lib/email-modelos";
 import {
   msgAgendada,
@@ -23,6 +25,7 @@ import {
   msgEquipeNovaConsulta,
   msgEquipeReagendar,
   msgEquipeRemarcada,
+  msgProfissionalTrocado,
   msgReagendada,
   type AvisoEquipe,
 } from "@/lib/mensagens";
@@ -63,6 +66,8 @@ export type EventoConsulta =
   | { tipo: "nova"; atorId: string | null; avisarPaciente?: boolean }
   | { tipo: "cancelada"; atorId: string | null; avisarPaciente: boolean }
   | { tipo: "remarcada"; atorId: string | null; anterior: string; token?: string | null }
+  /** Mesmo horário, outro profissional: `anteriorId` é quem saiu. */
+  | { tipo: "trocado"; atorId: string | null; anteriorId: string; avisarPaciente: boolean }
   | {
       tipo: "resposta";
       resposta: "confirmado" | "reagendar" | "recusado";
@@ -86,13 +91,13 @@ async function comunicar(consultaId: string, ev: EventoConsulta): Promise<void> 
   const { data: c } = await admin
     .from("consultas")
     .select(
-      "id,organization_id,medico_id,paciente_nome,paciente_telefone,paciente_email,data_hora,tipo,convenio,status"
+      "id,organization_id,medico_id,paciente_nome,paciente_telefone,paciente_email,data_hora,tipo,convenio,status,servico_nome"
     )
     .eq("id", consultaId)
     .maybeSingle();
   if (!c?.organization_id) return;
 
-  const [clinica, { data: org }, { data: medico }, { data: ator }] = await Promise.all([
+  const [clinica, { data: org }, { data: medico }, { data: ator }, { data: anterior }] = await Promise.all([
     clinicaParaEnvio(c.organization_id),
     admin
       .from("organizations")
@@ -102,6 +107,9 @@ async function comunicar(consultaId: string, ev: EventoConsulta): Promise<void> 
     admin.from("profiles").select("nome").eq("id", c.medico_id).maybeSingle(),
     ev.atorId
       ? admin.from("profiles").select("nome").eq("id", ev.atorId).maybeSingle()
+      : Promise.resolve({ data: null }),
+    ev.tipo === "trocado"
+      ? admin.from("profiles").select("nome").eq("id", ev.anteriorId).maybeSingle()
       : Promise.resolve({ data: null }),
   ]);
   if (!clinica) return;
@@ -120,6 +128,7 @@ async function comunicar(consultaId: string, ev: EventoConsulta): Promise<void> 
     hora: formatarHora(c.data_hora),
     diaSemana: diaDaSemana(c.data_hora),
     medico: medico?.nome ?? null,
+    servico: c.servico_nome ?? null,
   };
   const painelAgenda = urlPainel("/app/agenda");
   const aviso: AvisoEquipe = { ...base, telefone: c.paciente_telefone, painel: painelAgenda };
@@ -215,6 +224,7 @@ async function comunicar(consultaId: string, ev: EventoConsulta): Promise<void> 
         dados: [
           ["Data", `${base.data} (${base.diaSemana})`],
           ["Horário", base.hora],
+          ["Serviço", base.servico],
           ["Profissional", base.medico],
           ["Tipo", rotuloTipoConsulta(c.tipo)],
           ["Convênio", c.convenio],
@@ -320,6 +330,71 @@ async function comunicar(consultaId: string, ev: EventoConsulta): Promise<void> 
     };
   }
 
+  /* ------------------------- Trocou de profissional ------------------------- */
+  // Quem entrou recebe como "consulta dele" e a gestão no painel; quem
+  // saiu recebe a sua versão à parte, para não ler que ganhou um paciente.
+  let saiu: { id: string; titulo: string; descricao: string; whatsapp: string; email: Modelo } | null = null;
+  if (ev.tipo === "trocado") {
+    const nomeAnterior = anterior?.nome ?? null;
+    const quandoTxt = `${base.data} às ${base.hora}`;
+
+    if (ev.avisarPaciente && c.status !== "cancelada") {
+      if (whatsappPaciente) {
+        doPaciente(
+          "whatsapp",
+          { evento: "profissional_trocado", conteudo: msgProfissionalTrocado({ ...base, clinica: clinica.nome, endereco }) },
+          `trocado:${c.id}:${c.medico_id}:paciente:whatsapp`
+        );
+      }
+      if (emailPaciente) {
+        const m = emailPacienteProfissionalTrocado(marca, { ...base, endereco, anterior: nomeAnterior });
+        doPaciente(
+          "email",
+          { evento: "profissional_trocado", assunto: m.assunto, conteudo: m.texto, payload: { html: m.html } },
+          `trocado:${c.id}:${c.medico_id}:paciente:email`
+        );
+      }
+    }
+
+    const dados: [string, string | null][] = [
+      ["Data", `${base.data} (${base.diaSemana})`],
+      ["Horário", base.hora],
+      ["Serviço", base.servico],
+      ["Telefone", c.paciente_telefone],
+    ];
+    equipe = {
+      evento: "profissional_trocado",
+      tipoPainel: "consulta_remarcada",
+      prioridade: quando === "hoje" || quando === "amanhã" ? "alta" : "normal",
+      titulo: `${c.paciente_nome} agora com ${base.medico ?? "outro profissional"}`,
+      descricao: `${capitalizar(quando)}, ${quandoTxt}${nomeAnterior ? ` (antes com ${nomeAnterior})` : ""}${nomeAtor ? `. Por ${nomeAtor}` : ""}.`,
+      href: "/app/agenda",
+      whatsapp: `Consulta na sua agenda: ${c.paciente_nome}, ${quandoTxt}${base.servico ? ` (${base.servico})` : ""}${nomeAnterior ? `. Passou de ${nomeAnterior} para você` : ""}.
+${painelAgenda}`,
+      email: emailEquipe(marca, {
+        assunto: `Consulta para você: ${c.paciente_nome}, ${quandoTxt}`,
+        faixa: { texto: "Consulta passou para a sua agenda" },
+        frase: `${c.paciente_nome} agora é atendido(a) por ${base.medico ?? "você"}${nomeAnterior ? `, no lugar de ${nomeAnterior}` : ""}${nomeAtor ? `. Troca feita por ${nomeAtor}` : ""}.`,
+        dados: [...dados, ["Profissional", base.medico]],
+        botao: { texto: "Ver na agenda", url: painelAgenda },
+      }),
+    };
+    saiu = {
+      id: ev.anteriorId,
+      titulo: `${c.paciente_nome} saiu da sua agenda`,
+      descricao: `${capitalizar(quando)}, ${quandoTxt}: passou para ${base.medico ?? "outro profissional"}${nomeAtor ? `. Por ${nomeAtor}` : ""}.`,
+      whatsapp: `${c.paciente_nome} saiu da sua agenda (${quandoTxt}): passou para ${base.medico ?? "outro profissional"}. O horário ficou livre para você.
+${painelAgenda}`,
+      email: emailEquipe(marca, {
+        assunto: `Saiu da sua agenda: ${c.paciente_nome}, ${quandoTxt}`,
+        faixa: { texto: "Consulta saiu da sua agenda", cor: "#B45309", fundo: "#FEF3C7" },
+        frase: `A consulta de ${c.paciente_nome} passou para ${base.medico ?? "outro profissional"}${nomeAtor ? ` (${nomeAtor})` : ""}. Esse horário ficou livre na sua agenda.`,
+        dados,
+        botao: { texto: "Ver a agenda", url: painelAgenda },
+      }),
+    };
+  }
+
   /* ------------------------ Resposta do paciente ----------------------- */
   if (ev.tipo === "resposta") {
     const pelaEquipe = !!ev.atorId;
@@ -404,6 +479,26 @@ async function comunicar(consultaId: string, ev: EventoConsulta): Promise<void> 
       whatsapp: equipe.whatsapp,
       email: equipe.email,
       copiaCaixaClinica: equipe.copiaCaixaClinica,
+      clinica: clinica as ClinicaEnvio,
+      exceto: saiu ? [saiu.id] : undefined,
+    });
+  }
+
+  if (saiu) {
+    await avisarEquipe({
+      organizationId: c.organization_id,
+      evento: "profissional_trocado",
+      chave: `profissional_trocado:${c.id}:${momento}:saiu`,
+      consultaId: c.id,
+      medicoId: saiu.id,
+      somente: [saiu.id],
+      atorId: ev.atorId,
+      titulo: saiu.titulo,
+      descricao: saiu.descricao,
+      href: "/app/agenda",
+      tipoPainel: "consulta_remarcada",
+      whatsapp: saiu.whatsapp,
+      email: saiu.email,
       clinica: clinica as ClinicaEnvio,
     });
   }

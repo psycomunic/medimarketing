@@ -23,6 +23,7 @@ import {
   Loader2,
   Save,
   Tag,
+  UserRound,
 } from "lucide-react";
 import type { Consulta, PrecoProcedimento, StatusConsulta } from "@/lib/supabase/types";
 import { catalogoServicos, porCategoria, precoDoServico } from "@/lib/servicos";
@@ -46,7 +47,8 @@ import {
   calcularIdade,
   formatarValor,
 } from "@/lib/agenda";
-import { atualizarStatus, salvarObservacao, trocarServico } from "@/lib/actions/consultas";
+import { atualizarStatus, salvarObservacao, trocarProfissional, trocarServico } from "@/lib/actions/consultas";
+import { ocupacaoDoIntervalo } from "@/lib/agenda-capacidade";
 import { AnexosManager } from "@/components/app/anexos-manager";
 import { PagamentoConsulta } from "@/components/app/financeiro/pagamento-consulta";
 import {
@@ -60,9 +62,15 @@ export function ConsultaDialog({
   envioAutomatico = false,
   demo = false,
   servicos = [],
+  profissionais = [],
+  consultas = [],
   onOpenChange,
 }: {
   consulta: Consulta | null;
+  /** Quem atende na clínica, para passar a consulta a outro profissional. */
+  profissionais?: { id: string; nome: string; organization_id: string | null }[];
+  /** Consultas carregadas: dizem quem está livre no horário. */
+  consultas?: Consulta[];
   /** Tabela de preços, para trocar o serviço da consulta. */
   servicos?: PrecoProcedimento[];
   /** Estado da confirmação desta consulta, se já existir uma. */
@@ -180,6 +188,13 @@ export function ConsultaDialog({
               valor={consulta.duracao_min ? `${consulta.duracao_min} min` : null}
             />
             <ServicoDaConsulta key={consulta.id} consulta={consulta} servicos={servicos} demo={demo} />
+            <ProfissionalDaConsulta
+              key={`p-${consulta.id}`}
+              consulta={consulta}
+              profissionais={profissionais}
+              consultas={consultas}
+              demo={demo}
+            />
             <Item icon={CalendarCheck} label="Tipo" valor={rotuloTipo[consulta.tipo]} />
             <Item icon={Stethoscope} label="Motivo" valor={consulta.motivo} />
             <Item icon={DollarSign} label="Valor" valor={formatarValor(consulta.valor)} />
@@ -342,6 +357,104 @@ function Bloco({
         {titulo}
       </p>
       <div className="grid grid-cols-[minmax(0,1fr)] gap-2 text-sm">{children}</div>
+    </div>
+  );
+}
+
+/**
+ * Profissional da consulta, com troca no mesmo horário. A lista diz quem
+ * está livre: num horário com vários atendimentos, é isso que a recepção
+ * precisa ver para trocar sem criar conflito.
+ */
+function ProfissionalDaConsulta({
+  consulta,
+  profissionais,
+  consultas,
+  demo,
+}: {
+  consulta: Consulta;
+  profissionais: { id: string; nome: string; organization_id: string | null }[];
+  consultas: Consulta[];
+  demo: boolean;
+}) {
+  const router = useRouter();
+  const [trocando, setTrocando] = useState(false);
+  // A agenda manda a consulta com o nome do profissional; a ficha do paciente, sem
+  const [nome, setNome] = useState(
+    (consulta as Consulta & { medico_nome?: string | null }).medico_nome ??
+      profissionais.find((p) => p.id === consulta.medico_id)?.nome ??
+      null
+  );
+  const [erro, setErro] = useState<{ texto: string; encaixe: string | null } | null>(null);
+  const [pending, startTransition] = useTransition();
+  const daClinica = profissionais.filter((p) => p.organization_id === consulta.organization_id);
+  const podeTrocar = daClinica.length > 1 && consulta.status !== "realizada" && consulta.status !== "cancelada" && !demo;
+  const ocupados = ocupacaoDoIntervalo(consultas, new Date(consulta.data_hora), consulta.duracao_min ?? 30, consulta.id).ocupados;
+
+  function trocar(id: string, encaixe = false) {
+    if (!id || id === consulta.medico_id) return setTrocando(false);
+    setErro(null);
+    startTransition(async () => {
+      const r = await trocarProfissional(consulta.id, id, { encaixe });
+      if (!r.ok) {
+        const podeEncaixar = "codigo" in r && r.erro.includes("Confirme o encaixe");
+        return setErro({ texto: r.erro, encaixe: podeEncaixar ? id : null });
+      }
+      setNome(daClinica.find((p) => p.id === id)?.nome ?? null);
+      setTrocando(false);
+      router.refresh();
+    });
+  }
+
+  return (
+    <div className="flex items-start gap-2">
+      <UserRound className="mt-0.5 size-4 shrink-0 text-teal" />
+      <span className="w-20 shrink-0 text-cinza-suave">Profissional</span>
+      <div className="min-w-0 flex-1">
+        {trocando ? (
+          <select
+            autoFocus
+            disabled={pending}
+            defaultValue={consulta.medico_id}
+            onChange={(e) => trocar(e.target.value)}
+            className="h-9 w-full rounded-md border border-input bg-white px-2 text-sm text-cinza-texto"
+          >
+            {daClinica.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.nome}
+                {p.id !== consulta.medico_id && ocupados.has(p.id) ? " (ocupado nesse horário)" : ""}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <span className="font-medium text-cinza-texto [overflow-wrap:anywhere]">
+            {nome || <span className="text-cinza-suave/60">—</span>}
+            {podeTrocar && (
+              <button type="button" onClick={() => setTrocando(true)} className="ml-2 text-xs font-semibold text-teal hover:underline">
+                Trocar
+              </button>
+            )}
+          </span>
+        )}
+        {pending && <Loader2 className="mt-1 size-3.5 animate-spin text-cinza-suave" />}
+        {erro && (
+          <p className="mt-1 text-xs text-coral">
+            {erro.texto}
+            {erro.encaixe && (
+              <button
+                type="button"
+                onClick={() => trocar(erro.encaixe!, true)}
+                className="ml-1.5 font-semibold text-teal hover:underline"
+              >
+                Encaixar mesmo assim
+              </button>
+            )}
+          </p>
+        )}
+        {trocando && !pending && (
+          <p className="mt-1 text-[11px] text-cinza-suave">O paciente e os dois profissionais são avisados da troca.</p>
+        )}
+      </div>
     </div>
   );
 }

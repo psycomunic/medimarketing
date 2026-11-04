@@ -274,9 +274,11 @@ function FormClinica({
     lembreteHora: String(o.lembrete_hora ?? 9),
     pesquisaAtiva: o.pesquisa_ativa ?? false,
     linkAvaliacao: o.link_avaliacao ?? "",
+    maxConsultasHorario: o.max_consultas_horario == null ? "" : String(o.max_consultas_horario),
   });
   // As colunas da pesquisa só existem depois do SQL: sem elas, nem envia
   const temPesquisa = o.pesquisa_ativa !== undefined;
+  const temLimite = o.max_consultas_horario !== undefined;
   const [erro, setErro] = useState<string | null>(null);
   const [salvo, setSalvo] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -290,6 +292,7 @@ function FormClinica({
         ...v,
         pesquisaAtiva: temPesquisa ? v.pesquisaAtiva : undefined,
         linkAvaliacao: temPesquisa ? v.linkAvaliacao : undefined,
+        maxConsultasHorario: temLimite ? (v.maxConsultasHorario.trim() ? Number(v.maxConsultasHorario) : null) : undefined,
         lembreteDiasUteis: Number(v.lembreteDiasUteis || 1),
         lembreteHora: Number(v.lembreteHora || 9),
       });
@@ -444,6 +447,29 @@ function FormClinica({
           </label>
         </div>
       </section>
+
+      {temLimite && (
+        <section className="rounded-lg border border-border bg-white p-6 shadow-soft">
+          <h2 className="font-heading text-lg font-semibold text-azul-medico">Agenda</h2>
+          <p className="mt-1 text-sm text-cinza-suave">
+            Quantas consultas a clínica atende no mesmo horário, cada uma com o seu profissional. Ao chegar no
+            limite, o horário aparece como lotado na agenda; só o gestor consegue encaixar acima dele.
+          </p>
+          <div className="mt-5 grid max-w-xs gap-1.5">
+            <Label htmlFor="max-horario">Máximo de consultas no mesmo horário</Label>
+            <Input
+              id="max-horario"
+              type="number"
+              min={1}
+              max={50}
+              value={v.maxConsultasHorario}
+              onChange={(e) => setV({ ...v, maxConsultasHorario: e.target.value })}
+              placeholder="Sem limite"
+            />
+            <p className="text-xs text-cinza-suave">Em branco, a clínica fica sem limite.</p>
+          </div>
+        </section>
+      )}
 
       {temPesquisa && (
         <section className="rounded-lg border border-border bg-white p-6 shadow-soft">

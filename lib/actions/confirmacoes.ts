@@ -16,6 +16,8 @@ import { enviarWhatsApp, envioAutomatico } from "@/lib/envio";
 import { mergeConfigurado } from "@/lib/merge";
 import type { Confirmacao, StatusConfirmacao } from "@/lib/supabase/types";
 import { comunicarConsulta } from "@/lib/comunicacao/consulta";
+import { comunicarOcupacao } from "@/lib/comunicacao/ocupacao";
+import { lerVaga, recusarVaga, type RecusaVaga } from "@/lib/agenda-vaga";
 import { cancelarPendentes } from "@/lib/comunicacao/fila";
 
 function revalidar() {
@@ -237,6 +239,7 @@ export async function registrarResposta(
       resposta: status as "confirmado" | "reagendar" | "recusado",
       atorId: r.ctx.profile.id,
     });
+    if (status === "recusado") await comunicarOcupacao(r.conf.consulta_id, { tipo: "saiu", atorId: r.ctx.profile.id });
   }
 
   revalidar();
@@ -253,8 +256,9 @@ export async function registrarResposta(
  */
 export async function reagendarConsulta(
   confirmacaoId: string,
-  novaDataHora: string
-): Promise<ActionResult> {
+  novaDataHora: string,
+  opcoes: { encaixe?: boolean } = {}
+): Promise<ActionResult | RecusaVaga> {
   const r = await autorizar(confirmacaoId);
   if ("erro" in r) return r.erro;
 
@@ -268,9 +272,28 @@ export async function reagendarConsulta(
 
   const { data: antes } = await r.admin
     .from("consultas")
-    .select("data_hora")
+    .select("data_hora,medico_id,duracao_min,organization_id")
     .eq("id", r.conf.consulta_id)
     .maybeSingle();
+
+  // O horário novo também respeita o limite da clínica e a agenda do profissional
+  const vaga = antes?.organization_id
+    ? await lerVaga({
+        organizationId: antes.organization_id,
+        medicoId: antes.medico_id,
+        dataHora: quando.toISOString(),
+        duracaoMin: antes.duracao_min ?? 30,
+        ignorarId: r.conf.consulta_id,
+      })
+    : null;
+  if (vaga) {
+    const recusa = recusarVaga(vaga, {
+      gestor: r.ctx.profile.role === "gestor" || r.ctx.profile.role === "super_admin",
+      ehOProfissional: antes?.medico_id === r.ctx.profile.id,
+      encaixe: !!opcoes.encaixe,
+    });
+    if (recusa) return recusa;
+  }
 
   const { error: erroConsulta } = await r.admin
     .from("consultas")
@@ -326,6 +349,9 @@ export async function reagendarConsulta(
     anterior: antes?.data_hora ?? quando.toISOString(),
     token: r.conf.token,
   });
+  // O horário antigo pode ter reaberto; o novo, lotado
+  if (antes?.data_hora) await comunicarOcupacao(r.conf.consulta_id, { tipo: "saiu", dataHora: antes.data_hora, atorId: r.ctx.profile.id });
+  if (vaga) await comunicarOcupacao(r.conf.consulta_id, { tipo: "entrou", antes: vaga.simultaneas, limite: vaga.limite, atorId: r.ctx.profile.id });
 
   revalidar();
   revalidatePath("/app/notificacoes");

@@ -39,6 +39,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { rotuloTipo } from "@/lib/agenda";
+import { limiteValido, lotado, ocupacaoDoIntervalo } from "@/lib/agenda-capacidade";
 import { criarConsulta } from "@/lib/actions/consultas";
 import { salvarAnexo } from "@/lib/actions/anexos";
 import { calcularDisparo } from "@/lib/lembretes";
@@ -192,6 +193,8 @@ export function NovaConsultaDialog({
   envioAutomatico = false,
   lembrete = null,
   servicos = [],
+  limite = null,
+  medicoInicial = null,
 }: {
   aberto: boolean;
   data: Date | null;
@@ -221,10 +224,16 @@ export function NovaConsultaDialog({
   onCriada?: (quando: Date) => void;
   /** Tabela de preços: os serviços que a clínica oferece. */
   servicos?: PrecoProcedimento[];
+  /** Consultas ao mesmo tempo que a clínica aceita (nulo = sem limite). */
+  limite?: number | null;
+  /** Profissional já escolhido (ex.: clique na coluna dele na agenda). */
+  medicoInicial?: string | null;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [erro, setErro] = useState<string | null>(null);
+  // O servidor recusou por lotação ou conflito, e quem marca pode encaixar
+  const [podeEncaixar, setPodeEncaixar] = useState(false);
 
   // --- Campos do formulário ---
   const [nome, setNome] = useState("");
@@ -304,9 +313,13 @@ export function NovaConsultaDialog({
     if (aberto) {
       const base = data ?? new Date();
       setDia(format(base, "yyyy-MM-dd"));
+      // Clique num horário da grade: já vem com a hora
+      if (data && (data.getHours() || data.getMinutes())) setHora(format(data, "HH:mm"));
+      if (medicoInicial) setMedicoId(medicoInicial);
       setErro(null);
+      setPodeEncaixar(false);
     }
-  }, [aberto, data]);
+  }, [aberto, data, medicoInicial]);
 
   function limpar() {
     setNome("");
@@ -441,6 +454,18 @@ export function NovaConsultaDialog({
       });
   }, [consultas, medicoId, dia]);
 
+  // A clínica inteira nesse dia: é o que conta para o limite do horário
+  const daClinicaNoDia = useMemo(() => {
+    if (!dia) return [];
+    return consultas.filter(
+      (c) =>
+        (!clinicaId || c.organization_id === clinicaId) &&
+        c.status !== "cancelada" &&
+        format(new Date(c.data_hora), "yyyy-MM-dd") === dia
+    );
+  }, [consultas, clinicaId, dia]);
+  const limiteHorario = limiteValido(limite);
+
   const janelas = useMemo(() => {
     if (!dia || !medicoId) return [];
     const semana = new Date(`${dia}T12:00:00`).getDay();
@@ -473,21 +498,46 @@ export function NovaConsultaDialog({
     const agora = new Date();
     const ehHoje = dia === format(agora, "yyyy-MM-dd");
     const agoraMin = agora.getHours() * 60 + agora.getMinutes();
-    const lista: { hora: string; livre: boolean; motivo?: string }[] = [];
+    const lista: { hora: string; livre: boolean; motivo?: string; ocupacao: number; cheio: boolean }[] = [];
     for (const j of base) {
       for (let m = j.ini; m + duracao <= j.fim; m += passo) {
         const conflito = ocupadas.find((o) => m < o.fim && m + duracao > o.ini);
         const folga = bloqueado.some((b) => m < b.fim && m + duracao > b.ini);
         const passou = ehHoje && m < agoraMin;
+        const oc = ocupacaoDoIntervalo(daClinicaNoDia, new Date(`${dia}T${hhmm(m)}:00`), duracao);
+        const cheio = lotado(oc, limiteHorario);
         lista.push({
           hora: hhmm(m),
-          livre: !conflito && !folga && !passou,
-          motivo: conflito ? conflito.paciente : folga ? "Bloqueado" : passou ? "Já passou" : undefined,
+          livre: !conflito && !folga && !passou && !cheio,
+          motivo: conflito
+            ? conflito.paciente
+            : folga
+              ? "Bloqueado"
+              : passou
+                ? "Já passou"
+                : cheio
+                  ? `Lotado (${oc.simultaneas}/${limiteHorario})`
+                  : undefined,
+          ocupacao: oc.simultaneas,
+          cheio,
         });
       }
     }
     return lista;
-  }, [dia, duracao, janelas, semExpediente, ocupadas, bloqueado]);
+  }, [dia, duracao, janelas, semExpediente, ocupadas, bloqueado, daClinicaNoDia, limiteHorario]);
+
+  // O horário escolhido na clínica: quantas já estão nele e quem está livre
+  const noHorario = useMemo(() => {
+    if (!dia || !hora) return null;
+    const quando = new Date(`${dia}T${hora}:00`);
+    if (!isValid(quando)) return null;
+    const oc = ocupacaoDoIntervalo(daClinicaNoDia, quando, duracao);
+    return {
+      ...oc,
+      cheio: lotado(oc, limiteHorario),
+      livres: daClinica.filter((p) => !oc.ocupados.has(p.id)),
+    };
+  }, [daClinicaNoDia, dia, hora, duracao, limiteHorario, daClinica]);
 
   const livres = horarios.filter((h) => h.livre).length;
   const inicioEscolhido = minutos(hora || "00:00");
@@ -544,7 +594,12 @@ export function NovaConsultaDialog({
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    salvar(false);
+  }
+
+  function salvar(encaixe: boolean) {
     setErro(null);
+    setPodeEncaixar(false);
     if (!nome.trim()) {
       setErro("Informe o nome do paciente.");
       return;
@@ -585,10 +640,12 @@ export function NovaConsultaDialog({
         medico_id: medicoId || undefined,
         organization_id: clinicaId || undefined,
         avisar_paciente: avisarPaciente,
+        encaixe,
       });
       if (!res.ok) {
         setEtapa(null);
         setErro(res.erro);
+        setPodeEncaixar(!!res.codigo && res.erro.includes("Confirme o encaixe"));
         return;
       }
 
@@ -698,6 +755,7 @@ export function NovaConsultaDialog({
                           <option key={p.id} value={p.id}>
                             {p.nome}
                             {p.id === usuarioId ? " (você)" : ""}
+                            {noHorario?.ocupados.has(p.id) ? ` (ocupado às ${hora})` : ""}
                           </option>
                         ))}
                       </select>
@@ -1029,10 +1087,61 @@ export function NovaConsultaDialog({
                                 : "cursor-not-allowed border-transparent bg-cinza-suave/10 text-cinza-suave/60 line-through"
                           )}
                         >
-                          {h.hora}
+                          <span className="block">{h.hora}</span>
+                          {limiteHorario !== null && h.ocupacao > 0 && (
+                            <span
+                              className={cn(
+                                "block text-[9px] font-semibold leading-tight",
+                                hora === h.hora ? "text-white/80" : h.cheio ? "text-coral" : "text-cinza-suave"
+                              )}
+                            >
+                              {h.cheio ? "lotado" : `${h.ocupacao}/${limiteHorario}`}
+                            </span>
+                          )}
                         </button>
                       ))}
                     </div>
+                  </div>
+                )}
+
+                {/* O horário na clínica: quantos já estão nele e quem ainda atende */}
+                {noHorario && dataValida && daClinica.length > 1 && (
+                  <div
+                    className={cn(
+                      "mt-3 rounded-md border px-3 py-2.5 text-xs",
+                      noHorario.cheio ? "border-coral/40 bg-coral/5" : "border-border bg-branco-clinico"
+                    )}
+                  >
+                    <p className="text-cinza-texto">
+                      <strong className="text-azul-medico">Às {hora}:</strong>{" "}
+                      {noHorario.simultaneas === 0
+                        ? "nenhuma consulta ainda"
+                        : `${noHorario.simultaneas} consulta${noHorario.simultaneas === 1 ? "" : "s"}`}
+                      {limiteHorario !== null && ` de ${limiteHorario} possíveis`}
+                      {noHorario.cheio && <span className="font-semibold text-coral"> · horário lotado</span>}
+                    </p>
+                    {noHorario.livres.length > 0 ? (
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                        <span className="text-cinza-suave">Livres:</span>
+                        {noHorario.livres.map((p) => (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => setMedicoId(p.id)}
+                            className={cn(
+                              "rounded-full border px-2.5 py-1 font-medium transition-colors",
+                              p.id === medicoId
+                                ? "border-teal bg-teal text-white"
+                                : "border-border bg-white text-cinza-texto hover:border-teal hover:text-teal"
+                            )}
+                          >
+                            {p.nome}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="mt-1 text-cinza-suave">Todos os profissionais já têm consulta nesse horário.</p>
+                    )}
                   </div>
                 )}
 
@@ -1040,7 +1149,7 @@ export function NovaConsultaDialog({
                   <p className="mt-3 flex items-start gap-2 rounded-md border border-alerta/40 bg-alerta/8 px-3 py-2 text-xs text-cinza-texto">
                     <TriangleAlert className="mt-0.5 size-4 shrink-0 text-alerta" />
                     {conflitoEscolhido
-                      ? `Esse horário encosta na consulta de ${conflitoEscolhido.paciente} (${hhmm(conflitoEscolhido.ini)}). Dá para salvar como encaixe.`
+                      ? `Esse horário encosta na consulta de ${conflitoEscolhido.paciente} (${hhmm(conflitoEscolhido.ini)}). Escolha um profissional livre ou outro horário; o gestor pode salvar como encaixe.`
                       : "O médico tem um bloqueio (folga ou férias) nesse horário."}
                   </p>
                 )}
@@ -1281,7 +1390,19 @@ export function NovaConsultaDialog({
 
           <div className="sticky bottom-0 z-10 flex flex-col-reverse gap-3 border-t border-border bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
             {erro ? (
-              <p className="rounded-md bg-coral/10 px-3 py-2 text-sm text-coral">{erro}</p>
+              <div className="rounded-md bg-coral/10 px-3 py-2 text-sm text-coral">
+                {erro}
+                {podeEncaixar && (
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => salvar(true)}
+                    className="ml-2 font-semibold text-teal underline-offset-2 hover:underline"
+                  >
+                    Encaixar mesmo assim
+                  </button>
+                )}
+              </div>
             ) : etapa ? (
               <p className="flex items-center gap-2 text-sm text-cinza-suave">
                 <Loader2 className="size-4 animate-spin text-teal" /> {etapa}

@@ -49,6 +49,8 @@ const clinicaSchema = z.object({
   /** Ausentes enquanto o SQL da pesquisa não rodou: aí não entram no update. */
   pesquisaAtiva: z.boolean().optional(),
   linkAvaliacao: z.string().trim().url("Link de avaliação inválido.").optional().or(z.literal("")),
+  /** Consultas no mesmo horário. Nulo = sem limite; ausente = coluna ainda não existe. */
+  maxConsultasHorario: z.number().int().min(1, "O limite mínimo é 1 consulta.").max(50, "O limite máximo é 50.").nullable().optional(),
   /** Só a equipe Medi Marketing muda o plano; para os demais é ignorado. */
   plano: z.enum(["essencial", "performance", "full"]).optional(),
 });
@@ -88,6 +90,7 @@ export async function salvarClinica(input: ClinicaInput): Promise<ActionResult> 
       lembrete_hora: d.lembreteHora,
       ...(d.pesquisaAtiva !== undefined ? { pesquisa_ativa: d.pesquisaAtiva } : {}),
       ...(d.linkAvaliacao !== undefined ? { link_avaliacao: d.linkAvaliacao || null } : {}),
+      ...(d.maxConsultasHorario !== undefined ? { max_consultas_horario: d.maxConsultasHorario } : {}),
       ...(d.plano && ctx.profile.role === "super_admin" ? { plano: d.plano } : {}),
     })
     .eq("id", orgId);

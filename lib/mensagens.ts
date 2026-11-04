@@ -60,6 +60,7 @@ export type DadosConsulta = {
   hora: string;
   diaSemana: string;
   medico?: string | null;
+  servico?: string | null;
   endereco?: string | null;
   telefoneClinica?: string | null;
   link?: string | null;
@@ -89,6 +90,7 @@ function blocoConsulta(d: DadosConsulta): string[] {
   return [
     `Data: ${d.data} (${d.diaSemana})`,
     `Horário: ${d.hora}`,
+    d.servico ? `Serviço: ${d.servico}` : null,
     d.medico ? `Profissional: ${d.medico}` : null,
     d.endereco ? `Local: ${d.endereco}` : null,
   ].filter((l): l is string => l !== null);
@@ -177,6 +179,21 @@ export function msgReagendada(d: DadosConsulta): string {
     d.link ? d.link : null,
     d.link ? "" : null,
     "Caso ainda não seja o melhor dia, me diga qual período prefere que eu procuro outra opção.",
+    "",
+    d.clinica,
+  ]);
+}
+
+/** Mesmo horário, outro profissional. */
+export function msgProfissionalTrocado(d: DadosConsulta): string {
+  return montar([
+    `Olá, ${primeiroNome(d.paciente)}! Aqui é da ${d.clinica}.`,
+    "",
+    `Sua consulta continua no mesmo dia e horário, agora com ${d.medico ?? "outro profissional"}:`,
+    "",
+    ...blocoConsulta(d),
+    "",
+    "Você não precisa fazer nada. Se preferir outro horário, é só me chamar por aqui.",
     "",
     d.clinica,
   ]);

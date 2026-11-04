@@ -112,6 +112,8 @@ export type AvisoEquipeInput = {
   clinica?: ClinicaEnvio | null;
   /** Restringe a estas pessoas (ex.: o resumo do dia de um médico). */
   somente?: string[];
+  /** Tira estas pessoas (ex.: quem recebe uma versão própria do aviso). */
+  exceto?: string[];
   agendadoPara?: Date;
 };
 
@@ -140,6 +142,7 @@ export async function avisarEquipe(a: AvisoEquipeInput): Promise<number> {
   for (const m of membros) {
     if (a.atorId && m.id === a.atorId) continue;
     if (a.somente && !a.somente.includes(m.id)) continue;
+    if (a.exceto?.includes(m.id)) continue;
 
     const canais = canaisEfetivos(a.evento, m.role, m.id === a.medicoId, m.canais);
 

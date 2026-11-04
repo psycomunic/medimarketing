@@ -70,6 +70,11 @@ export type Organization = {
   /** Hora do dia (0–23) em que o disparo acontece. */
   lembrete_hora: number;
   lembrete_ativo: boolean;
+  /**
+   * Quantas consultas a clínica atende ao mesmo tempo (cada uma com o seu
+   * profissional). Nulo = sem limite; ausente enquanto o SQL não rodou.
+   */
+  max_consultas_horario?: number | null;
   /** Pesquisa de satisfação automática após a consulta (opcional até o SQL rodar). */
   pesquisa_ativa?: boolean;
   /** Link para o paciente avaliar a clínica no Google. */

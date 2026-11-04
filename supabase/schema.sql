@@ -985,6 +985,9 @@ alter table public.organizations add column if not exists lembrete_dias_uteis in
 alter table public.organizations add column if not exists lembrete_hora       integer not null default 9
   check (lembrete_hora between 0 and 23);
 alter table public.organizations add column if not exists lembrete_ativo      boolean not null default true;
+-- Consultas simultâneas permitidas na clínica (nulo = sem limite)
+alter table public.organizations add column if not exists max_consultas_horario integer default 5
+  check (max_consultas_horario is null or max_consultas_horario between 1 and 50);
 
 create table if not exists public.confirmacoes (
   id              uuid primary key default uuid_generate_v4(),

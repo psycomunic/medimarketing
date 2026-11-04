@@ -32,7 +32,7 @@ function gerador(semente: number) {
 const iso = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
-const MEDICOS = ["00000000-0000-0000-0000-000000000000", "med-vd-2"];
+const MEDICOS = ["00000000-0000-0000-0000-000000000000", "00000000-0000-0000-0000-000000000002"];
 
 const PROCEDIMENTOS: [string, string, number, number][] = [
   ["Consulta dermatológica", "Consultas", 380, 0],

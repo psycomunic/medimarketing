@@ -77,14 +77,18 @@ export function BlocoConfirmacao({
   const [erro, setErro] = useState<string | null>(null);
   const [copiado, setCopiado] = useState(false);
   const [novoHorario, setNovoHorario] = useState("");
+  // Horário lotado ou profissional ocupado: quem pode, confirma o encaixe
+  const [podeEncaixar, setPodeEncaixar] = useState(false);
   const [pending, startTransition] = useTransition();
 
-  function agir(fn: () => Promise<{ ok: boolean; erro?: string }>) {
+  function agir(fn: () => Promise<{ ok: boolean; erro?: string; codigo?: string }>) {
     setErro(null);
+    setPodeEncaixar(false);
     startTransition(async () => {
       const res = await fn();
       if (!res.ok) {
         setErro(res.erro ?? "Não foi possível concluir.");
+        setPodeEncaixar(!!res.codigo && !!res.erro?.includes("Confirme o encaixe"));
         return;
       }
       router.refresh();
@@ -230,6 +234,16 @@ export function BlocoConfirmacao({
                 {pending && <Loader2 className="size-4 animate-spin" />}
                 Reagendar
               </Button>
+              {podeEncaixar && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={pending || demo || !novoHorario}
+                  onClick={() => agir(() => reagendarConsulta(confirmacao.id, novoHorario, { encaixe: true }))}
+                >
+                  Encaixar mesmo assim
+                </Button>
+              )}
             </div>
             <p className="mt-1.5 text-xs text-cinza-suave">
               Muda o horário da consulta e reprograma o lembrete. O paciente

@@ -64,6 +64,8 @@ function org(
     lembrete_dias_uteis: 1,
     lembrete_hora: 9,
     lembrete_ativo: true,
+    // Vários profissionais atendem ao mesmo tempo, até cinco por horário
+    max_consultas_horario: 5,
     pesquisa_ativa: true,
     link_avaliacao: "https://g.page/r/clinica-vida-derma/review",
     // Na demonstração nada sai de verdade: sem conexão, o painel mostra
@@ -127,7 +129,10 @@ export const DEMO_MEDICOS: readonly {
   especialidade: string;
 }[] = [
   { id: "00000000-0000-0000-0000-000000000000", nome: "Dra. Marina Alves", organization_id: DEMO_ORG_ID, especialidade: "Dermatologia" },
-  { id: "med-vd-2", nome: "Dr. Paulo Andrade", organization_id: DEMO_ORG_ID, especialidade: "Dermatologia" },
+  { id: "00000000-0000-0000-0000-000000000002", nome: "Dr. Paulo Andrade", organization_id: DEMO_ORG_ID, especialidade: "Dermatologia" },
+  { id: "med-vd-3", nome: "Dra. Camila Torres", organization_id: DEMO_ORG_ID, especialidade: "Dermatologia estética" },
+  { id: "med-vd-4", nome: "Dr. Felipe Rocha", organization_id: DEMO_ORG_ID, especialidade: "Tricologia" },
+  { id: "med-vd-5", nome: "Dra. Luísa Martins", organization_id: DEMO_ORG_ID, especialidade: "Dermatologia pediátrica" },
   { id: "med-sr-1", nome: "Dra. Helena Prado", organization_id: "org-2", especialidade: "Implantodontia" },
   { id: "med-sr-2", nome: "Dr. Vitor Camargo", organization_id: "org-2", especialidade: "Ortodontia" },
   { id: "med-in-1", nome: "Dra. Bianca Correia", organization_id: "org-3", especialidade: "Nutrição clínica" },
@@ -358,6 +363,12 @@ export function demoConsultas(): Consulta[] {
     // Amanhã
     base({ id: "d6", paciente_nome: "Rafael Costa", paciente_telefone: "(11) 99555-6677", paciente_nascimento: "2000-09-09", data_hora: em(1, 9, 0), tipo: "primeira", status: "pendente", motivo: "Acne persistente", valor: 350 }),
     base({ id: "d7", paciente_nome: "Patrícia Gomes", convenio: "Amil", data_hora: em(1, 10, 30), tipo: "retorno", status: "confirmada", valor: 0 }),
+    // Amanhã às 10:30 a clínica lota: cinco profissionais ao mesmo tempo
+    base({ id: "d7b", medico_id: "00000000-0000-0000-0000-000000000002", paciente_nome: "Sérgio Almeida", paciente_telefone: "(11) 99121-3434", data_hora: em(1, 10, 30), tipo: "primeira", status: "confirmada", valor: 350 }),
+    base({ id: "d7c", medico_id: "med-vd-3", paciente_nome: "Renata Duarte", paciente_telefone: "(11) 99232-4545", data_hora: em(1, 10, 30), duracao_min: 60, tipo: "primeira", status: "pendente", valor: 350 }),
+    base({ id: "d7d", medico_id: "med-vd-4", paciente_nome: "Gustavo Pires", data_hora: em(1, 10, 30), tipo: "retorno", status: "confirmada", valor: 0 }),
+    base({ id: "d7e", medico_id: "med-vd-5", paciente_nome: "Lara Moreira", paciente_telefone: "(11) 99343-5656", data_hora: em(1, 10, 30), tipo: "primeira", status: "pendente", valor: 350 }),
+    base({ id: "d7f", medico_id: "00000000-0000-0000-0000-000000000002", paciente_nome: "Otávio Reis", data_hora: em(1, 11, 0), tipo: "retorno", status: "pendente", valor: 0 }),
     base({ id: "d8", paciente_nome: "Eduardo Nunes", paciente_telefone: "(11) 99666-7788", data_hora: em(1, 15, 0), tipo: "teleconsulta", status: "cancelada", observacao: "Paciente remarcou.", valor: 250 }),
     // Próximos dias
     base({ id: "d9", paciente_nome: "Fernanda Dias", paciente_telefone: "(11) 99777-8899", paciente_nascimento: "1992-03-15", data_hora: em(2, 8, 0), tipo: "primeira", status: "confirmada", motivo: "Queda de cabelo", valor: 350 }),
@@ -371,18 +382,18 @@ export function demoConsultas(): Consulta[] {
     // Pacientes que não voltaram há meses: alimentam o "sem retorno" do painel
     base({ id: "d29", paciente_nome: "Gabriela Antunes", paciente_telefone: "(11) 99431-2210", data_hora: em(-205, 10, 0), tipo: "primeira", status: "realizada", motivo: "Acne", valor: 350 }),
     base({ id: "d30", paciente_nome: "Márcio Tavares", paciente_telefone: "(11) 99876-5541", data_hora: em(-248, 15, 30), tipo: "retorno", status: "realizada", valor: 0 }),
-    base({ id: "d31", organization_id: DEMO_ORG_ID, medico_id: "med-vd-2", paciente_nome: "Paula Siqueira", paciente_telefone: "(11) 98123-7788", data_hora: em(-290, 9, 0), tipo: "primeira", status: "realizada", motivo: "Melasma", valor: 400 }),
+    base({ id: "d31", organization_id: DEMO_ORG_ID, medico_id: "00000000-0000-0000-0000-000000000002", paciente_nome: "Paula Siqueira", paciente_telefone: "(11) 98123-7788", data_hora: em(-290, 9, 0), tipo: "primeira", status: "realizada", motivo: "Melasma", valor: 400 }),
     // Aniversariante da semana: nascimento sempre daqui a dois dias
     base({ id: "d32", paciente_nome: "Roberta Campos", paciente_telefone: "(11) 99654-3321", paciente_nascimento: `1988-${em(2, 12).slice(5, 10)}`, data_hora: em(-40, 11, 0), tipo: "retorno", status: "realizada", valor: 0 }),
 
     // Faltas recentes: alimentam a taxa de faltas do painel
     base({ id: "d27", paciente_nome: "Vinícius Prado", paciente_telefone: "(11) 99121-3434", data_hora: em(-2, 9, 0), tipo: "primeira", status: "faltou", motivo: "Avaliação de pintas", valor: 350 }),
-    base({ id: "d28", organization_id: DEMO_ORG_ID, medico_id: "med-vd-2", paciente_nome: "Sabrina Lopes", data_hora: em(-3, 15, 0), tipo: "retorno", status: "faltou", valor: 0 }),
+    base({ id: "d28", organization_id: DEMO_ORG_ID, medico_id: "00000000-0000-0000-0000-000000000002", paciente_nome: "Sabrina Lopes", data_hora: em(-3, 15, 0), tipo: "retorno", status: "faltou", valor: 0 }),
 
     // Segundo médico da mesma clínica — dá o que filtrar por profissional
-    base({ id: "d15", organization_id: DEMO_ORG_ID, medico_id: "med-vd-2", paciente_nome: "Camila Nogueira", paciente_telefone: "(11) 98111-2020", data_hora: daquiA(75), tipo: "primeira", status: "confirmada", motivo: "Melasma", valor: 400 }),
-    base({ id: "d16", organization_id: DEMO_ORG_ID, medico_id: "med-vd-2", paciente_nome: "Rodrigo Salles", data_hora: em(1, 14, 0), tipo: "retorno", status: "pendente", valor: 0 }),
-    base({ id: "d17", organization_id: DEMO_ORG_ID, medico_id: "med-vd-2", paciente_nome: "Tatiana Reis", paciente_telefone: "(11) 98222-3030", data_hora: em(2, 16, 30), tipo: "primeira", status: "confirmada", motivo: "Preenchimento facial", valor: 1200 }),
+    base({ id: "d15", organization_id: DEMO_ORG_ID, medico_id: "00000000-0000-0000-0000-000000000002", paciente_nome: "Camila Nogueira", paciente_telefone: "(11) 98111-2020", data_hora: daquiA(75), tipo: "primeira", status: "confirmada", motivo: "Melasma", valor: 400 }),
+    base({ id: "d16", organization_id: DEMO_ORG_ID, medico_id: "00000000-0000-0000-0000-000000000002", paciente_nome: "Rodrigo Salles", data_hora: em(1, 14, 0), tipo: "retorno", status: "pendente", valor: 0 }),
+    base({ id: "d17", organization_id: DEMO_ORG_ID, medico_id: "00000000-0000-0000-0000-000000000002", paciente_nome: "Tatiana Reis", paciente_telefone: "(11) 98222-3030", data_hora: em(2, 16, 30), tipo: "primeira", status: "confirmada", motivo: "Preenchimento facial", valor: 1200 }),
 
     // Outras clínicas da carteira — só o super admin enxerga
     base({ id: "d18", organization_id: "org-2", medico_id: "med-sr-1", convenio: "Particular", paciente_nome: "Everton Muniz", paciente_telefone: "(41) 99111-3040", data_hora: em(0, 8, 0), duracao_min: 60, tipo: "primeira", status: "confirmada", motivo: "Avaliação para implante", valor: 480 }),
@@ -450,7 +461,7 @@ export function demoDisponibilidade(): Disponibilidade[] {
   }));
   // Segunda profissional da clínica: terças e quintas à tarde
   for (const d of [2, 4]) {
-    dias.push({ id: `disp-vd2-${d}`, medico_id: "med-vd-2", dia_semana: d, hora_inicio: "13:00", hora_fim: "19:00" });
+    dias.push({ id: `disp-vd2-${d}`, medico_id: "00000000-0000-0000-0000-000000000002", dia_semana: d, hora_inicio: "13:00", hora_fim: "19:00" });
   }
   dias.push({
     id: "disp-6",

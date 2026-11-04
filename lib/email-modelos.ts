@@ -226,6 +226,8 @@ export type DadosEmailConsulta = {
   hora: string;
   diaSemana: string;
   medico?: string | null;
+  /** Serviço da consulta ("Quiropraxia"): com vários profissionais no mesmo horário, é o que situa o paciente. */
+  servico?: string | null;
   endereco?: string | null;
   link?: string | null;
   /** "hoje", "amanhã", "na segunda-feira" — usado no lembrete. */
@@ -262,6 +264,7 @@ export function emailPacienteAgendada(
     ${blocoDados([
       ["Data", `${d.data} (${d.diaSemana})`],
       ["Horário", d.hora],
+      ["Serviço", d.servico],
       ["Profissional", d.medico],
       ["Local", d.endereco],
     ])}
@@ -309,6 +312,7 @@ export function emailPacienteLembrete(
     ${blocoDados([
       ["Data", `${d.data} (${d.diaSemana})`],
       ["Horário", d.hora],
+      ["Serviço", d.servico],
       ["Profissional", d.medico],
       ["Local", d.endereco],
     ])}
@@ -349,6 +353,7 @@ export function emailPacienteConfirmou(
     ${blocoDados([
       ["Data", `${d.data} (${d.diaSemana})`],
       ["Horário", d.hora],
+      ["Serviço", d.servico],
       ["Profissional", d.medico],
       ["Local", d.endereco],
     ])}
@@ -385,6 +390,7 @@ export function emailPacienteRemarcada(
     ${blocoDados([
       ["Data", `${d.data} (${d.diaSemana})`],
       ["Horário", d.hora],
+      ["Serviço", d.servico],
       ["Profissional", d.medico],
       ["Local", d.endereco],
     ])}
@@ -400,6 +406,44 @@ export function emailPacienteRemarcada(
     assunto: `Sua consulta foi remarcada para ${d.data}`,
     html: layout(m, corpo),
     texto: `Ola, ${d.paciente}! Sua consulta foi remarcada para ${d.data} as ${d.hora}. Confirme ou peca outro horario em: ${d.link ?? ""}`,
+  };
+}
+
+/**
+ * Mesmo dia e horário, outro profissional. A pessoa só precisa saber com
+ * quem vai ser — por isso o novo nome vem na frase, e não só nos dados.
+ */
+export function emailPacienteProfissionalTrocado(
+  m: MarcaEmail,
+  d: DadosEmailConsulta & { anterior: string | null }
+): Modelo {
+  const corpo = `
+  <tr><td style="padding:24px 32px;">
+    ${faixa(TEAL, MENTA, "Seu atendimento mudou de profissional")}
+    <p style="margin:0 0 4px;font-size:16px;color:${TEXTO};">
+      Olá, ${esc(d.paciente)}!
+    </p>
+    <p style="margin:0;font-size:15px;color:${CINZA};line-height:1.6;">
+      Sua consulta continua no mesmo dia e horário, agora com
+      <strong style="color:${TEXTO};">${esc(d.medico ?? "outro profissional")}</strong>${d.anterior ? ` (antes com ${esc(d.anterior)})` : ""}.
+    </p>
+    ${blocoDados([
+      ["Data", `${d.data} (${d.diaSemana})`],
+      ["Horário", d.hora],
+      ["Serviço", d.servico],
+      ["Profissional", d.medico],
+      ["Local", d.endereco],
+    ])}
+    <p style="margin:0;font-size:15px;color:${CINZA};line-height:1.6;">
+      Você não precisa fazer nada. Se preferir outro horário, é só nos chamar.
+    </p>
+    ${d.link ? botao("Ver os detalhes da consulta", d.link) : ""}
+  </td></tr>`;
+
+  return {
+    assunto: `Sua consulta de ${d.data}, às ${d.hora}, agora é com ${d.medico ?? "outro profissional"}`,
+    html: layout(m, corpo),
+    texto: `Ola, ${d.paciente}! Sua consulta de ${d.data} as ${d.hora} continua no mesmo horario, agora com ${d.medico ?? "outro profissional"}.`,
   };
 }
 
@@ -422,6 +466,7 @@ export function emailClinicaConfirmou(
     ${blocoDados([
       ["Data", `${d.data} (${d.diaSemana})`],
       ["Horário", d.hora],
+      ["Serviço", d.servico],
       ["Profissional", d.medico],
       ["Telefone", d.telefone],
     ])}
@@ -454,6 +499,7 @@ export function emailClinicaReagendar(
     ${blocoDados([
       ["Data atual", `${d.data} (${d.diaSemana})`],
       ["Horário", d.hora],
+      ["Serviço", d.servico],
       ["Profissional", d.medico],
       ["Telefone", d.telefone],
     ])}
@@ -489,6 +535,7 @@ export function emailClinicaCancelou(
     ${blocoDados([
       ["Data", `${d.data} (${d.diaSemana})`],
       ["Horário", d.hora],
+      ["Serviço", d.servico],
       ["Profissional", d.medico],
       ["Telefone", d.telefone],
     ])}
@@ -637,6 +684,98 @@ export function emailAgendaDoDia(
   };
 }
 
+export type HorarioDaClinica = {
+  hora: string;
+  /** Consultas ao mesmo tempo nesse horário. */
+  ocupadas: number;
+  itens: { paciente: string; profissional: string; servico?: string | null; situacao: string }[];
+};
+
+/**
+ * Resumo da manhã para quem cuida da agenda inteira (gestor e recepção):
+ * a clínica por horário, cada consulta com o seu profissional, e as
+ * contas que importam de manhã — onde ainda cabe gente e quem não
+ * confirmou.
+ */
+export function emailAgendaDaClinica(
+  m: MarcaEmail,
+  d: {
+    nome: string;
+    data: string;
+    diaSemana: string;
+    limite: number | null;
+    horarios: HorarioDaClinica[];
+    profissionais: number;
+    pendentes: number;
+    painel: string;
+  }
+): Modelo {
+  const total = d.horarios.reduce((s, h) => s + h.itens.length, 0);
+  const totalTxt = `${total} consulta${total === 1 ? "" : "s"}`;
+  const lotados = d.limite ? d.horarios.filter((h) => h.ocupadas >= d.limite!).length : 0;
+
+  const blocos = d.horarios
+    .map((h) => {
+      const cheio = d.limite !== null && h.ocupadas >= d.limite;
+      const selo = d.limite
+        ? `<span style="display:inline-block;margin-left:8px;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;${
+            cheio ? "background:#FEE2E2;color:#B91C1C;" : `background:${MENTA};color:${TEAL};`
+          }">${h.ocupadas}/${d.limite}${cheio ? " · lotado" : ""}</span>`
+        : "";
+      const linhas = h.itens
+        .map(
+          (i) => `
+          <tr>
+            <td style="padding:4px 0 4px 12px;font-size:14px;color:${TEXTO};border-left:3px solid ${TEAL};">
+              <strong>${esc(i.profissional)}</strong>${i.servico ? `<span style="color:${CINZA};"> · ${esc(i.servico)}</span>` : ""}
+              <br /><span style="font-size:13px;">${esc(i.paciente)}</span>
+              <span style="font-size:12px;color:${CINZA};"> · ${esc(i.situacao)}</span>
+            </td>
+          </tr>`
+        )
+        .join("");
+      return `
+      <tr><td style="padding:12px 0 4px;border-bottom:1px solid ${BORDA};">
+        <p style="margin:0 0 6px;font-size:15px;font-weight:700;color:${AZUL};">${esc(h.hora)}${selo}</p>
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">${linhas}</table>
+      </td></tr>`;
+    })
+    .join("");
+
+  const resumo = [
+    totalTxt,
+    `${d.profissionais} profissiona${d.profissionais === 1 ? "l" : "is"} atendendo`,
+    d.limite ? `${lotados} horário${lotados === 1 ? "" : "s"} lotado${lotados === 1 ? "" : "s"}` : null,
+    d.pendentes ? `${d.pendentes} sem confirmação` : "todas confirmadas ou a caminho",
+  ].filter(Boolean);
+
+  const corpo = `
+  <tr><td style="padding:24px 32px;">
+    ${faixa(AZUL, MENTA, `Agenda da clínica hoje: ${totalTxt}`)}
+    <p style="margin:0 0 4px;font-size:16px;color:${TEXTO};">Bom dia, ${esc(d.nome)}!</p>
+    <p style="margin:0;font-size:15px;color:${CINZA};line-height:1.6;">
+      ${esc(d.diaSemana)}, ${esc(d.data)}. ${esc(resumo.join(" · "))}.
+    </p>
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:12px 0 16px;">
+      ${blocos}
+    </table>
+    ${botao("Abrir a agenda", d.painel, AZUL)}
+  </td></tr>`;
+
+  return {
+    assunto: `Agenda da clínica hoje (${d.data}): ${totalTxt}`,
+    html: layout(m, corpo),
+    texto: [
+      `Agenda da clinica, ${d.data}: ${resumo.join(" · ")}`,
+      ...d.horarios.flatMap((h) => [
+        `${h.hora}${d.limite ? ` (${h.ocupadas}/${d.limite})` : ""}`,
+        ...h.itens.map((i) => `  ${i.profissional}${i.servico ? ` · ${i.servico}` : ""}: ${i.paciente} (${i.situacao})`),
+      ]),
+      d.painel,
+    ].join("\n"),
+  };
+}
+
 /** Consulta cancelada, para o paciente. Sem culpa e com o caminho de volta. */
 /**
  * Campanha da clínica para pacientes (disparo). O texto é o da equipe,
@@ -696,6 +835,7 @@ export function emailPacienteCancelada(m: MarcaEmail, d: DadosEmailConsulta): Mo
     ${blocoDados([
       ["Data", `${d.data} (${d.diaSemana})`],
       ["Horário", d.hora],
+      ["Serviço", d.servico],
       ["Profissional", d.medico],
     ])}
     <p style="margin:0;font-size:15px;color:${CINZA};line-height:1.6;">

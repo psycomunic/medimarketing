@@ -7,7 +7,15 @@ import { createAdminClient, adminDisponivel } from "@/lib/supabase/admin";
 import { getDevidas, gerarPendentes } from "@/lib/supabase/confirmacoes";
 import { emailConfigurado } from "@/lib/email";
 import { envioAutomatico } from "@/lib/envio";
-import { emailAgendaDoDia, emailEquipe, emailPacienteLembrete, type ItemAgenda } from "@/lib/email-modelos";
+import {
+  emailAgendaDaClinica,
+  emailAgendaDoDia,
+  emailEquipe,
+  emailPacienteLembrete,
+  type HorarioDaClinica,
+  type ItemAgenda,
+} from "@/lib/email-modelos";
+import { limiteValido, ocupacaoDoIntervalo } from "@/lib/agenda-capacidade";
 import { msgAgendaDoDia } from "@/lib/mensagens";
 import {
   diaDaSemana,
@@ -34,7 +42,8 @@ import { enfileirar, processarFila, type ItemFila, type RelatorioFila } from "@/
  *
  *   1. cria a confirmação das consultas novas (com a hora do lembrete);
  *   2. põe na fila os lembretes que venceram;
- *   3. de manhã, o resumo da agenda de cada profissional;
+ *   3. de manhã, o resumo da agenda de cada profissional e, para gestor e
+ *      recepção, o da clínica inteira;
  *   4. à tarde, o alerta de quem ainda não confirmou o próximo dia útil;
  *   5. entrega o que está na fila e tenta de novo o que falhou.
  *
@@ -118,7 +127,7 @@ async function enfileirarLembretes(): Promise<number> {
   for (const c of devidas) {
     const { data: consulta } = await admin
       .from("consultas")
-      .select("paciente_nome,paciente_telefone,paciente_email,data_hora,medico_id,status")
+      .select("paciente_nome,paciente_telefone,paciente_email,data_hora,medico_id,status,servico_nome")
       .eq("id", c.consulta_id)
       .maybeSingle();
 
@@ -183,6 +192,7 @@ async function enfileirarLembretes(): Promise<number> {
           hora: formatarHora(consulta.data_hora),
           diaSemana: diaDaSemana(consulta.data_hora),
           medico: medico?.nome ?? null,
+          servico: consulta.servico_nome ?? null,
           endereco,
           link,
           quando: diaRelativo(consulta.data_hora),
@@ -241,13 +251,16 @@ async function resumosDoDia(orgIds: string[]): Promise<number> {
   for (const orgId of orgIds) {
     const { data: consultas } = await admin
       .from("consultas")
-      .select("id,medico_id,paciente_nome,data_hora,status,tipo")
+      .select("id,medico_id,paciente_nome,data_hora,status,tipo,duracao_min,servico_nome")
       .eq("organization_id", orgId)
       .gte("data_hora", inicio.toISOString())
       .lt("data_hora", fim.toISOString())
       .neq("status", "cancelada")
       .order("data_hora");
     if (!consultas?.length) continue;
+
+    // A clínica inteira, para quem cuida da agenda de todos
+    total += await resumoDaClinica(orgId, dia, hora, inicio, consultas);
 
     // Quem já recebeu hoje não entra de novo
     const { data: feitos } = await admin
@@ -314,6 +327,114 @@ async function resumosDoDia(orgIds: string[]): Promise<number> {
     }
   }
 
+  return total;
+}
+
+type ConsultaDoResumo = {
+  id: string;
+  medico_id: string;
+  paciente_nome: string;
+  data_hora: string;
+  status: string;
+  duracao_min: number | null;
+  servico_nome?: string | null;
+};
+
+/**
+ * Resumo da manhã da clínica inteira, para gestor e recepção: as consultas
+ * por horário, cada uma com o profissional, a ocupação de cada horário e
+ * quem ainda não confirmou. Cada pessoa recebe na hora que escolheu.
+ */
+async function resumoDaClinica(
+  orgId: string,
+  dia: string,
+  hora: number,
+  inicio: Date,
+  consultas: ConsultaDoResumo[]
+): Promise<number> {
+  const admin = createAdminClient();
+
+  const { data: feitos } = await admin
+    .from("envios")
+    .select("usuario_id")
+    .eq("organization_id", orgId)
+    .eq("evento", "agenda_da_clinica")
+    .like("chave", `agenda_clinica:${dia}:%`);
+  const jaFoi = new Set((feitos ?? []).map((f) => f.usuario_id));
+
+  const membros = await membrosDaClinica(orgId);
+  const destino = membros.filter(
+    (m) =>
+      (m.role === "gestor" || m.role === "secretaria") &&
+      !jaFoi.has(m.id) &&
+      hora >= m.resumoHora &&
+      hora < m.resumoHora + JANELA_RESUMO_H &&
+      canaisEfetivos("agenda_da_clinica", m.role, false, m.canais).length > 0
+  );
+  if (!destino.length) return 0;
+
+  const [clinica, { data: org }, { data: confs }] = await Promise.all([
+    clinicaParaEnvio(orgId),
+    admin.from("organizations").select("*").eq("id", orgId).maybeSingle(),
+    admin.from("confirmacoes").select("consulta_id,status").in("consulta_id", consultas.map((c) => c.id)),
+  ]);
+  if (!clinica) return 0;
+
+  const limite = limiteValido((org as { max_consultas_horario?: number | null } | null)?.max_consultas_horario);
+  const statusConf = new Map((confs ?? []).map((c) => [c.consulta_id, c.status]));
+  const nomes = new Map(membros.map((m) => [m.id, m.nome]));
+  const situacao = (c: ConsultaDoResumo) =>
+    c.status === "confirmada" ? "confirmou" : c.status === "realizada" ? "atendido" : SITUACAO[statusConf.get(c.id) ?? ""] ?? "a confirmar";
+
+  const porHora = new Map<string, ConsultaDoResumo[]>();
+  for (const c of consultas) {
+    const h = formatarHora(c.data_hora);
+    porHora.set(h, [...(porHora.get(h) ?? []), c]);
+  }
+  const horarios: HorarioDaClinica[] = [...porHora.entries()].map(([h, lista]) => ({
+    hora: h,
+    ocupadas: ocupacaoDoIntervalo(consultas, new Date(lista[0].data_hora), 30).simultaneas,
+    itens: lista.map((c) => ({
+      paciente: c.paciente_nome,
+      profissional: nomes.get(c.medico_id) ?? "Profissional",
+      servico: c.servico_nome,
+      situacao: situacao(c),
+    })),
+  }));
+  const pendentes = consultas.filter((c) => situacao(c) !== "confirmou" && situacao(c) !== "atendido").length;
+  const profissionais = new Set(consultas.map((c) => c.medico_id)).size;
+  const painel = urlPainel("/app/agenda");
+  const marca = { clinica: clinica.nome, logoUrl: clinica.logo_url, emailClinica: clinica.email, telefoneClinica: clinica.telefone };
+  const data = formatarData(inicio.toISOString());
+  const diaSemana = diaDaSemana(inicio.toISOString());
+
+  let total = 0;
+  for (const m of destino) {
+    const email = emailAgendaDaClinica(marca, {
+      nome: m.nome,
+      data,
+      diaSemana,
+      limite,
+      horarios,
+      profissionais,
+      pendentes,
+      painel,
+    });
+    total += await avisarEquipe({
+      organizationId: orgId,
+      evento: "agenda_da_clinica",
+      chave: `agenda_clinica:${dia}`,
+      somente: [m.id],
+      titulo: `Agenda da clínica hoje: ${consultas.length} consulta${consultas.length === 1 ? "" : "s"}`,
+      descricao: `${profissionais} profissiona${profissionais === 1 ? "l" : "is"} atendendo · ${pendentes} sem confirmação.`,
+      href: "/app/agenda",
+      tipoPainel: "agenda",
+      whatsapp: email.texto,
+      email,
+      membros,
+      clinica,
+    });
+  }
   return total;
 }
 

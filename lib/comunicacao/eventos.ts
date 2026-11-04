@@ -30,7 +30,12 @@ export type EventoEquipe =
   | "paciente_cancelou"
   | "agenda_do_dia"
   | "pendentes_vespera"
-  | "envio_falhou";
+  | "envio_falhou"
+  | "profissional_trocado"
+  | "horario_lotado"
+  | "encaixe_acima_limite"
+  | "vaga_aberta"
+  | "agenda_da_clinica";
 
 type Relacao = "medico" | "gestor" | "secretaria";
 
@@ -87,6 +92,31 @@ export const EVENTOS: Record<EventoEquipe, Definicao> = {
     rotulo: "Mensagem que não chegou ao paciente",
     descricao: "Lembrete ou aviso que falhou depois das tentativas.",
     padrao: { gestor: ["painel"], secretaria: ["painel"] },
+  },
+  profissional_trocado: {
+    rotulo: "Consulta trocou de profissional",
+    descricao: "Mesmo horário, outro profissional: quem saiu e quem entrou ficam sabendo.",
+    padrao: { medico: TODOS, gestor: ["painel"], secretaria: ["painel"] },
+  },
+  horario_lotado: {
+    rotulo: "Horário lotado",
+    descricao: "Quando um horário chega ao limite de consultas ao mesmo tempo da clínica.",
+    padrao: { gestor: ["painel"], secretaria: ["painel"] },
+  },
+  encaixe_acima_limite: {
+    rotulo: "Encaixe acima do limite",
+    descricao: "Quando uma consulta é marcada além do limite do horário.",
+    padrao: { gestor: ["painel", "email"] },
+  },
+  vaga_aberta: {
+    rotulo: "Vaga aberta em horário lotado",
+    descricao: "Um horário que estava lotado voltou a ter vaga: dá para encaixar alguém.",
+    padrao: { gestor: ["painel"], secretaria: ["painel", "email"] },
+  },
+  agenda_da_clinica: {
+    rotulo: "Resumo da agenda da clínica",
+    descricao: "De manhã, todas as consultas do dia por horário, com os profissionais e as vagas.",
+    padrao: { gestor: ["email"], secretaria: ["email"] },
   },
 };
 

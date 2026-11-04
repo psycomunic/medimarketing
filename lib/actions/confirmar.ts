@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { sincronizarReceita } from "@/lib/financeiro/agenda";
 import { createAdminClient, adminDisponivel } from "@/lib/supabase/admin";
 import { comunicarConsulta } from "@/lib/comunicacao/consulta";
+import { comunicarOcupacao } from "@/lib/comunicacao/ocupacao";
 import type { StatusConfirmacao } from "@/lib/supabase/types";
 
 export type RespostaPaciente = "confirmado" | "reagendar" | "recusado";
@@ -94,6 +95,7 @@ export async function responderConfirmacao(
   // escolheu) e manda o recibo ao paciente que confirmou. O pedido de
   // remarcação sai como prioridade alta: é o que pede retorno rápido.
   await comunicarConsulta(conf.consulta_id, { tipo: "resposta", resposta, atorId: null, token });
+  if (resposta === "recusado") await comunicarOcupacao(conf.consulta_id, { tipo: "saiu", atorId: null });
 
   revalidatePath(`/confirmar/${token}`);
   revalidatePath("/app/confirmacoes");

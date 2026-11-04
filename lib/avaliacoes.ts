@@ -303,7 +303,7 @@ function demoAvaliacoes(): Avaliacao[] {
       id: `av-${i}`,
       consulta_id: `c-av-${i}`,
       organization_id: "demo",
-      medico_id: i % 3 === 0 ? "med-vd-2" : null,
+      medico_id: i % 3 === 0 ? "00000000-0000-0000-0000-000000000002" : null,
       paciente_nome: nomes[i % nomes.length],
       token: `demo-${i}`,
       enviado_em: d.toISOString(),
