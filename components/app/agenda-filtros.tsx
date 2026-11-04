@@ -1,6 +1,7 @@
 "use client";
 
-import { Search, SlidersHorizontal, X } from "lucide-react";
+import { useState } from "react";
+import { ChevronDown, Search, SlidersHorizontal, X } from "lucide-react";
 import type { StatusConsulta, TipoConsulta } from "@/lib/supabase/types";
 import type { OpcoesAgenda } from "@/lib/supabase/queries";
 import { rotuloStatus, rotuloTipo } from "@/lib/agenda";
@@ -88,6 +89,10 @@ export function AgendaFiltros({
   servicos?: string[];
 }) {
   const ativos = contarFiltrosAtivos(filtros);
+  // Filtros de lista (sem a busca): recolhidos até alguém precisar deles,
+  // para o calendário do dia aparecer logo ao abrir a agenda
+  const selecionados = ativos - (filtros.busca ? 1 : 0);
+  const [aberto, setAberto] = useState(selecionados > 0);
   const multiClinica = opcoes.clinicas.length > 1;
 
   const medicos = filtros.clinica
@@ -107,39 +112,55 @@ export function AgendaFiltros({
   }
 
   return (
-    <div className="rounded-lg border border-border bg-white p-4 shadow-soft">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="flex items-center gap-1.5 text-sm font-semibold text-azul-medico">
-          <SlidersHorizontal className="size-4 text-teal" />
-          Filtros
-        </span>
-
-        <div className="relative min-w-[200px] flex-1">
+    <div className="rounded-xl border border-border bg-white p-2 shadow-soft">
+      <div className="flex items-center gap-2">
+        <div className="relative min-w-0 flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-cinza-suave" />
           <Input
             value={filtros.busca}
             onChange={(e) => set("busca", e.target.value)}
             placeholder="Buscar paciente ou telefone"
-            className="h-10 pl-9"
+            className="h-10 border-transparent bg-branco-clinico pl-9 shadow-none"
             aria-label="Buscar paciente"
           />
         </div>
+
+        <button
+          type="button"
+          onClick={() => setAberto((a) => !a)}
+          aria-expanded={aberto}
+          className={cn(
+            "inline-flex h-10 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-sm font-semibold transition-colors",
+            selecionados > 0
+              ? "border-teal bg-verde-menta text-azul-medico"
+              : "border-border bg-white text-cinza-texto hover:border-teal"
+          )}
+        >
+          <SlidersHorizontal className="size-4 text-teal" />
+          <span className="hidden sm:inline">Filtros</span>
+          {selecionados > 0 && (
+            <span className="grid min-w-5 place-items-center rounded-full bg-teal px-1 text-[11px] text-white">{selecionados}</span>
+          )}
+          <ChevronDown className={cn("size-4 text-cinza-suave transition-transform", aberto && "rotate-180")} />
+        </button>
 
         {ativos > 0 && (
           <button
             type="button"
             onClick={() => onChange(FILTROS_VAZIOS)}
-            className="inline-flex items-center gap-1.5 rounded-full bg-verde-menta px-3 py-1.5 text-xs font-semibold text-azul-medico transition-colors hover:bg-teal-claro/40"
+            aria-label="Limpar filtros"
+            title="Limpar filtros"
+            className="grid size-10 shrink-0 place-items-center rounded-lg text-cinza-suave transition-colors hover:bg-verde-menta hover:text-azul-medico"
           >
-            <X className="size-3.5" />
-            Limpar {ativos}
+            <X className="size-4" />
           </button>
         )}
       </div>
 
       <div
         className={cn(
-          "mt-3 grid gap-3 sm:grid-cols-2",
+          "grid grid-cols-2 gap-3 px-1",
+          aberto ? "mt-3 pb-1" : "hidden",
           ["lg:grid-cols-4", "lg:grid-cols-5", "lg:grid-cols-6"][(multiClinica ? 1 : 0) + (servicos.length ? 1 : 0)]
         )}
       >

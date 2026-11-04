@@ -207,6 +207,15 @@ export function AgendaCalendar({
         : format(cursor, "EEEE, dd 'de' MMMM", { locale: ptBR })
   );
 
+  // No celular o título encolhe: "Qua, 04 nov" cabe ao lado das setas
+  const tituloCurto = capitalizar(
+    visao === "mes"
+      ? format(cursor, "MMM yyyy", { locale: ptBR })
+      : visao === "semana"
+        ? `${format(startOfWeek(cursor, { weekStartsOn: 0 }), "dd/MM")} – ${format(endOfWeek(cursor, { weekStartsOn: 0 }), "dd/MM")}`
+        : format(cursor, "EEE, dd MMM", { locale: ptBR }).replace(".", "")
+  );
+
   // "Hoje" só tem efeito quando o período na tela não inclui hoje
   const hojeAgora = new Date();
   const noPeriodoDeHoje =
@@ -259,23 +268,24 @@ export function AgendaCalendar({
   return (
     <div>
       {/* Cabeçalho */}
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <div>
+      <header className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
           <h1 className="text-2xl md:text-3xl">Agenda</h1>
-          <p className="mt-1 text-cinza-suave">
+          <p className="mt-1 hidden text-cinza-suave sm:block">
             Suas consultas marcadas pela nossa equipe, em tempo real.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex shrink-0 flex-wrap justify-end gap-2">
           <AgendaLinks links={linksAgenda} />
-          <Button variant="primary" onClick={() => abrirNova()}>
+          {/* No celular, o "+" da barra inferior marca a consulta */}
+          <Button variant="primary" onClick={() => abrirNova()} className="hidden lg:inline-flex">
             <Plus className="size-4" /> Nova consulta
           </Button>
         </div>
       </header>
 
       {/* Filtros */}
-      <div className="mt-6">
+      <div className="mt-4 sm:mt-6">
         <AgendaFiltros
           filtros={filtros}
           onChange={setFiltros}
@@ -323,6 +333,7 @@ export function AgendaCalendar({
           </button>
           <SeletorData
             titulo={titulo}
+            tituloCurto={tituloCurto}
             cursor={cursor}
             onEscolher={setCursor}
             contarDia={contarDia}
@@ -356,40 +367,8 @@ export function AgendaCalendar({
         )}
       </div>
 
-      {/* Resumo do período visível */}
-      {doPeriodo.total > 0 && (
-        <dl className="mt-4 grid gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-3 lg:grid-cols-5">
-          {[
-            { r: "consultas", v: String(doPeriodo.total), cor: "text-azul-medico" },
-            { r: "confirmadas", v: String(doPeriodo.confirmadas), cor: "text-sucesso" },
-            { r: "pendentes", v: String(doPeriodo.pendentes), cor: "text-alerta" },
-            {
-              r: "sem resposta",
-              v: String(doPeriodo.aguardandoConfirmacao),
-              cor: "text-cinza-suave",
-            },
-            {
-              r: "previsto",
-              v: doPeriodo.previsto
-                ? doPeriodo.previsto.toLocaleString("pt-BR", {
-                    style: "currency",
-                    currency: "BRL",
-                    maximumFractionDigits: 0,
-                  })
-                : "—",
-              cor: "text-teal",
-            },
-          ].map((c) => (
-            <div key={c.r} className="bg-white px-4 py-2.5">
-              <dd className={cn("font-heading text-lg font-bold", c.cor)}>{c.v}</dd>
-              <dt className="text-[11px] text-cinza-suave">{c.r}</dt>
-            </div>
-          ))}
-        </dl>
-      )}
-
-      {/* Corpo */}
-      <div className="mt-5">
+      {/* Corpo: o calendário logo abaixo da navegação, sem nada no caminho */}
+      <div className="mt-3 sm:mt-4">
         {visao === "mes" && (
           <MonthView
             cursor={cursor}
@@ -434,6 +413,38 @@ export function AgendaCalendar({
           />
         )}
       </div>
+
+      {/* Resumo do período visível */}
+      {doPeriodo.total > 0 && (
+        <dl className="mt-4 grid grid-cols-3 gap-px overflow-hidden rounded-lg border border-border bg-border lg:grid-cols-5">
+          {[
+            { r: "consultas", v: String(doPeriodo.total), cor: "text-azul-medico" },
+            { r: "confirmadas", v: String(doPeriodo.confirmadas), cor: "text-sucesso" },
+            { r: "pendentes", v: String(doPeriodo.pendentes), cor: "text-alerta" },
+            {
+              r: "sem resposta",
+              v: String(doPeriodo.aguardandoConfirmacao),
+              cor: "text-cinza-suave",
+            },
+            {
+              r: "previsto",
+              v: doPeriodo.previsto
+                ? doPeriodo.previsto.toLocaleString("pt-BR", {
+                    style: "currency",
+                    currency: "BRL",
+                    maximumFractionDigits: 0,
+                  })
+                : "—",
+              cor: "text-teal",
+            },
+          ].map((c) => (
+            <div key={c.r} className="bg-white px-3 py-2.5 sm:px-4">
+              <dd className={cn("font-heading text-lg font-bold", c.cor)}>{c.v}</dd>
+              <dt className="text-[11px] text-cinza-suave">{c.r}</dt>
+            </div>
+          ))}
+        </dl>
+      )}
 
       {/* Legenda de status */}
       <div className="mt-6 flex flex-wrap gap-4 text-xs text-cinza-suave">
@@ -1181,8 +1192,8 @@ function DayView({
 
   return (
     <div className="rounded-xl border border-border bg-white shadow-soft">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-5 py-4">
-        <p className="font-heading font-semibold text-azul-medico">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3 sm:px-5 sm:py-4">
+        <p className="hidden font-heading font-semibold text-azul-medico sm:block">
           {capitalizar(format(cursor, "EEEE, dd 'de' MMMM", { locale: ptBR }))}
         </p>
         <div className="flex flex-wrap items-center gap-3 text-sm text-cinza-suave">
@@ -1652,7 +1663,8 @@ function LinhaConsulta({
   return (
     <li>
       {/* Linha em div, e não em button: o atalho do WhatsApp é um
-          link, e link dentro de botão é HTML inválido. */}
+          link, e link dentro de botão é HTML inválido. No celular tudo
+          empilha (nada espremido em colunas); no computador, em linha. */}
       <div
         className={cn(
           "group flex w-full overflow-hidden rounded-xl border bg-white text-left transition-all hover:shadow-soft",
@@ -1665,44 +1677,51 @@ function LinhaConsulta({
 
         <button onClick={() => onConsulta(c)} className="flex min-w-0 flex-1 text-left">
           {/* Faixa de horário */}
-          <div className="flex w-[4.5rem] shrink-0 flex-col items-center justify-center border-r border-border bg-branco-clinico py-3">
-            <span className="font-heading text-base font-bold text-azul-medico">{format(inicio, "HH:mm")}</span>
-            {fim && <span className="text-[11px] text-cinza-suave">{format(fim, "HH:mm")}</span>}
+          <div className="flex w-14 shrink-0 flex-col items-center justify-center border-r border-border bg-branco-clinico py-3 sm:w-[4.5rem]">
+            <span className="font-heading text-[15px] font-bold tabular-nums text-azul-medico sm:text-base">{format(inicio, "HH:mm")}</span>
+            {fim && <span className="text-[11px] tabular-nums text-cinza-suave">{format(fim, "HH:mm")}</span>}
           </div>
 
           {/* Conteúdo */}
-          <div className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3">
+          <div className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 sm:px-4 sm:py-3">
             <div className="min-w-0 flex-1">
-              <p className="flex min-w-0 items-center gap-1.5">
-                <span className={cn("truncate font-semibold text-cinza-texto", cancelada && "line-through")}>
+              <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                <span
+                  className={cn(
+                    "font-semibold leading-snug text-cinza-texto [overflow-wrap:anywhere]",
+                    cancelada && "line-through"
+                  )}
+                >
                   {c.paciente_nome}
                 </span>
                 {c.origem === "link" && <SeloLink />}
               </p>
               <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-cinza-suave">
+                {/* No celular a situação vai aqui, em texto, no lugar do selo da direita */}
+                <span className={cn("font-semibold sm:hidden", tomStatus[c.status].texto)}>{rotuloStatus[c.status]}</span>
                 {multiClinica && c.organizacao_nome && (
                   <span className="flex items-center gap-1 font-medium text-azul-medico">
-                    <Building2 className="size-3.5 text-teal" />
+                    <Building2 className="size-3.5 shrink-0 text-teal" />
                     {c.organizacao_nome}
                   </span>
                 )}
                 {c.medico_nome && (
                   <span className={cn("flex items-center gap-1", cor && "font-semibold", cor?.texto)}>
                     {cor ? (
-                      <span className={cn("size-2.5 rounded-full", cor.ponto)} />
+                      <span className={cn("size-2.5 shrink-0 rounded-full", cor.ponto)} />
                     ) : (
-                      <UserRound className="size-3.5 text-teal" />
+                      <UserRound className="size-3.5 shrink-0 text-teal" />
                     )}
                     {c.medico_nome}
                   </span>
                 )}
                 <span className="flex items-center gap-1">
-                  <Stethoscope className="size-3.5 text-teal" />
+                  <Stethoscope className="size-3.5 shrink-0 text-teal" />
                   {c.servico_nome ? `${c.servico_nome} · ${rotuloTipo[c.tipo]}` : rotuloTipo[c.tipo]}
                 </span>
                 {c.convenio && (
                   <span className="flex items-center gap-1">
-                    <ShieldCheck className="size-3.5 text-teal" />
+                    <ShieldCheck className="size-3.5 shrink-0 text-teal" />
                     {c.convenio}
                   </span>
                 )}
@@ -1716,21 +1735,23 @@ function LinhaConsulta({
               {c.motivo && <p className="mt-1 truncate text-xs text-cinza-suave/80">{c.motivo}</p>}
             </div>
 
-            <Badge variant={c.status}>{rotuloStatus[c.status]}</Badge>
+            <Badge variant={c.status} className="hidden shrink-0 sm:inline-flex">
+              {rotuloStatus[c.status]}
+            </Badge>
           </div>
         </button>
 
         {/* Confirmação à vista, sem precisar abrir a ficha */}
-        <div className="flex shrink-0 items-center gap-1.5 border-l border-border px-3">
+        <div className="flex shrink-0 items-center gap-1.5 border-l border-border px-2 sm:px-3">
           <SeloConfirmacao confirmacao={conf} />
-          {conf && c.paciente_telefone && (
+          {conf && c.paciente_telefone ? (
             <a
               href={linkWhatsApp(c.paciente_telefone, conf.mensagem)}
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
               className={cn(
-                "grid size-9 place-items-center rounded-md transition-colors",
+                "grid size-10 place-items-center rounded-md transition-colors",
                 conf.status === "pendente"
                   ? "bg-sucesso/12 text-sucesso hover:bg-sucesso/20"
                   : "text-cinza-suave hover:bg-verde-menta hover:text-teal"
@@ -1740,8 +1761,12 @@ function LinhaConsulta({
             >
               <MessageCircle className="size-4" />
             </a>
+          ) : (
+            <ChevronRight className="size-4 shrink-0 text-cinza-suave/40 transition-colors group-hover:text-teal" />
           )}
-          <ChevronRight className="size-4 shrink-0 text-cinza-suave/40 transition-colors group-hover:text-teal" />
+          {conf && c.paciente_telefone && (
+            <ChevronRight className="hidden size-4 shrink-0 text-cinza-suave/40 transition-colors group-hover:text-teal sm:block" />
+          )}
         </div>
       </div>
     </li>

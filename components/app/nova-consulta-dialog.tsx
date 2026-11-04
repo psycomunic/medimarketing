@@ -723,10 +723,10 @@ export function NovaConsultaDialog({
 
   return (
     <Dialog open={aberto} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl gap-0 bg-branco-clinico p-0">
+      <DialogContent className="max-w-5xl gap-0 bg-branco-clinico p-0 pb-0 sm:pb-0">
         <DialogHeader className="border-b border-border bg-white px-5 py-4 sm:px-6">
           <DialogTitle>Nova consulta</DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="hidden sm:block">
             Marque o paciente, o médico e o horário. O médico é avisado na hora, e o
             paciente recebe a confirmação.
           </DialogDescription>
@@ -1115,8 +1115,10 @@ export function NovaConsultaDialog({
                       </span>
                       {semExpediente && <span>· sem expediente cadastrado, mostrando das 8h às 18h</span>}
                     </p>
-                    <div className="grid max-h-40 grid-cols-4 gap-1.5 overflow-y-auto pr-1 sm:grid-cols-6">
-                      {horarios.map((h) => (
+                    {/* Sem rolagem própria: a janela já rola, e caixa rolando dentro
+                        de caixa cortava os horários no celular */}
+                    <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 sm:gap-1.5">
+                      {horarios.filter((h) => h.motivo !== "Já passou").map((h) => (
                         <button
                           key={h.hora}
                           type="button"
@@ -1124,7 +1126,7 @@ export function NovaConsultaDialog({
                           title={h.motivo}
                           onClick={() => setHora(h.hora)}
                           className={cn(
-                            "rounded-md border px-2 py-1.5 text-xs font-medium tabular-nums transition-colors",
+                            "flex min-h-11 flex-col items-center justify-center rounded-lg border px-1 py-1.5 text-sm font-medium tabular-nums transition-colors sm:min-h-0 sm:rounded-md sm:text-xs",
                             hora === h.hora
                               ? "border-teal bg-teal text-white"
                               : h.livre
@@ -1136,7 +1138,7 @@ export function NovaConsultaDialog({
                           {limiteHorario !== null && h.ocupacao > 0 && (
                             <span
                               className={cn(
-                                "block text-[9px] font-semibold leading-tight",
+                                "block text-[10px] font-semibold leading-tight sm:text-[9px]",
                                 hora === h.hora ? "text-white/80" : h.cheio ? "text-coral" : "text-cinza-suave"
                               )}
                             >
@@ -1441,7 +1443,7 @@ export function NovaConsultaDialog({
             </aside>
           </div>
 
-          <div className="sticky bottom-0 z-10 flex flex-col-reverse gap-3 border-t border-border bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+          <div className="sticky bottom-0 z-10 flex flex-col-reverse gap-3 border-t border-border bg-white px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:pb-3">
             {erro ? (
               <div className="rounded-md bg-coral/10 px-3 py-2 text-sm text-coral">
                 {erro}
@@ -1466,10 +1468,10 @@ export function NovaConsultaDialog({
               </span>
             )}
             <div className="flex gap-2 sm:justify-end">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="flex-1 sm:flex-none">
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="shrink-0 whitespace-nowrap">
                 Cancelar
               </Button>
-              <Button type="submit" variant="primary" disabled={pending} className="flex-1 sm:flex-none">
+              <Button type="submit" variant="primary" disabled={pending} className="flex-1 whitespace-nowrap sm:flex-none">
                 {pending ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
                 {pending ? "Criando…" : "Criar consulta"}
               </Button>

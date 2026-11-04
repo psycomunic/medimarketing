@@ -40,7 +40,9 @@ export function AgendaLinks({ links }: { links: LinkDaAgenda[] }) {
   return (
     <>
       <Button variant="outline" onClick={() => setAberto(true)}>
-        <Link2 className="size-4" /> {so ? "Meu link de agendamento" : "Links de agendamento"}
+        <Link2 className="size-4" />
+        <span className="sm:hidden">{so ? "Meu link" : "Links"}</span>
+        <span className="hidden sm:inline">{so ? "Meu link de agendamento" : "Links de agendamento"}</span>
       </Button>
 
       <Dialog open={aberto} onOpenChange={setAberto}>

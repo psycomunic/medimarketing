@@ -26,11 +26,14 @@ import { cn } from "@/lib/utils";
  */
 export function SeletorData({
   titulo,
+  tituloCurto,
   cursor,
   onEscolher,
   contarDia,
 }: {
   titulo: string;
+  /** Versão curta para o celular ("Qua, 04 nov"); sem ela, o título inteiro. */
+  tituloCurto?: string;
   cursor: Date;
   onEscolher: (d: Date) => void;
   /** Quantas consultas ativas o dia tem, para o pontinho. */
@@ -74,7 +77,8 @@ export function SeletorData({
       >
         <CalendarDays className="size-4 shrink-0 text-teal" />
         <span className="truncate font-heading text-base font-semibold text-azul-medico sm:text-lg">
-          {titulo}
+          <span className="sm:hidden">{tituloCurto ?? titulo}</span>
+          <span className="hidden sm:inline">{titulo}</span>
         </span>
         <ChevronDown className={cn("size-4 shrink-0 text-cinza-suave transition-transform", aberto && "rotate-180")} />
       </button>
@@ -211,7 +215,7 @@ export function FaixaDias({
               type="button"
               onClick={() => onEscolher(d)}
               className={cn(
-                "flex min-w-0 flex-col items-center rounded-lg border px-1 py-2 transition-all",
+                "flex min-w-0 flex-col items-center rounded-lg border px-0.5 py-2 transition-all sm:px-1",
                 escolhido
                   ? "border-azul-medico bg-azul-medico text-white shadow-soft"
                   : hoje
@@ -221,11 +225,13 @@ export function FaixaDias({
             >
               <span
                 className={cn(
-                  "text-[10px] font-semibold uppercase tracking-wide",
+                  "max-w-full text-[10px] font-semibold uppercase sm:tracking-wide",
                   escolhido ? "text-white/75" : hoje ? "text-teal" : "text-cinza-suave"
                 )}
               >
-                {hoje ? "Hoje" : format(d, "EEE", { locale: ptBR }).replace(".", "")}
+                {/* No celular o chip é estreito: o dia de hoje já se destaca pela cor */}
+                <span className="sm:hidden">{DIAS_CURTOS[d.getDay()]}</span>
+                <span className="hidden sm:inline">{hoje ? "Hoje" : DIAS_CURTOS[d.getDay()]}</span>
               </span>
               <span className="font-heading text-lg font-bold leading-tight">{format(d, "d")}</span>
               <span
