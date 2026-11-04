@@ -208,7 +208,13 @@ export async function criarConsulta(input: {
 
   // Vaga: o profissional livre e a clínica abaixo do limite do horário
   const duracao = input.duracao_min ?? 30;
-  const vaga = await lerVaga({ organizationId, medicoId, dataHora: input.data_hora, duracaoMin: duracao });
+  const vaga = await lerVaga({
+    organizationId,
+    medicoId,
+    dataHora: input.data_hora,
+    duracaoMin: duracao,
+    servicoId: input.servico_id ?? null,
+  });
   const recusa = recusarVaga(vaga, {
     gestor: ehSuperAdmin || perfil?.role === "gestor",
     ehOProfissional: medicoId === userId,
@@ -334,7 +340,7 @@ export async function trocarProfissional(
   const [{ data: c }, { data: perfil }, { data: alvo }] = await Promise.all([
     supabase
       .from("consultas")
-      .select("id,organization_id,medico_id,data_hora,duracao_min,status")
+      .select("id,organization_id,medico_id,data_hora,duracao_min,status,servico_id")
       .eq("id", id)
       .maybeSingle(),
     supabase.from("profiles").select("role").eq("id", userId).maybeSingle(),
@@ -353,6 +359,7 @@ export async function trocarProfissional(
       dataHora: c.data_hora,
       duracaoMin: c.duracao_min ?? 30,
       ignorarId: c.id,
+      servicoId: c.servico_id ?? null,
     });
     // A própria consulta já ocupa o horário: o limite não muda com a troca
     const recusa = recusarVaga(

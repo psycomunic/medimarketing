@@ -25,7 +25,14 @@ import {
   UserPlus,
   Video,
 } from "lucide-react";
-import type { Bloqueio, Disponibilidade, PrecoProcedimento, TipoConsulta } from "@/lib/supabase/types";
+import type {
+  Bloqueio,
+  Disponibilidade,
+  Fechamento,
+  PrecoProcedimento,
+  ProfissionalServico,
+  TipoConsulta,
+} from "@/lib/supabase/types";
 import type { ConsultaComContexto } from "@/lib/supabase/queries";
 import {
   Dialog,
@@ -40,6 +47,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { rotuloTipo } from "@/lib/agenda";
 import { limiteValido, lotado, ocupacaoDoIntervalo } from "@/lib/agenda-capacidade";
+import { fechamentoNoIntervalo } from "@/lib/agenda-horarios";
 import { criarConsulta } from "@/lib/actions/consultas";
 import { salvarAnexo } from "@/lib/actions/anexos";
 import { calcularDisparo } from "@/lib/lembretes";
@@ -195,7 +203,13 @@ export function NovaConsultaDialog({
   servicos = [],
   limite = null,
   medicoInicial = null,
+  fechamentos = [],
+  vinculos = [],
 }: {
+  /** Horários que cada profissional fechou, por serviço. */
+  fechamentos?: Fechamento[];
+  /** Que serviço cada profissional atende (vazio = qualquer um). */
+  vinculos?: ProfissionalServico[];
   aberto: boolean;
   data: Date | null;
   onOpenChange: (aberto: boolean) => void;
@@ -465,6 +479,21 @@ export function NovaConsultaDialog({
     );
   }, [consultas, clinicaId, dia]);
   const limiteHorario = limiteValido(limite);
+  const diaDaSemanaEscolhido = dia ? new Date(`${dia}T12:00:00`).getDay() : 0;
+
+  // Profissional que faz o serviço escolhido: sem ninguém ligado a ele, todos fazem
+  const ligadosAoServico = servicoId ? vinculos.filter((v) => v.servico_id === servicoId).map((v) => v.medico_id) : [];
+  const fazServico = (id: string) => ligadosAoServico.length === 0 || ligadosAoServico.includes(id);
+  const fechadoAs = (id: string, minutoIni: number) =>
+    !!dia &&
+    !!fechamentoNoIntervalo(fechamentos, {
+      medicoId: id,
+      servicoId: servicoId || null,
+      dia,
+      semana: diaDaSemanaEscolhido,
+      ini: minutoIni,
+      fim: minutoIni + duracao,
+    });
 
   const janelas = useMemo(() => {
     if (!dia || !medicoId) return [];
@@ -506,12 +535,22 @@ export function NovaConsultaDialog({
         const passou = ehHoje && m < agoraMin;
         const oc = ocupacaoDoIntervalo(daClinicaNoDia, new Date(`${dia}T${hhmm(m)}:00`), duracao);
         const cheio = lotado(oc, limiteHorario);
+        const fech = fechamentoNoIntervalo(fechamentos, {
+          medicoId,
+          servicoId: servicoId || null,
+          dia,
+          semana: diaDaSemanaEscolhido,
+          ini: m,
+          fim: m + duracao,
+        });
         lista.push({
           hora: hhmm(m),
-          livre: !conflito && !folga && !passou && !cheio,
+          livre: !conflito && !folga && !passou && !cheio && !fech,
           motivo: conflito
             ? conflito.paciente
-            : folga
+            : fech
+              ? `Agenda fechada${fech.motivo ? ` (${fech.motivo})` : ""}`
+              : folga
               ? "Bloqueado"
               : passou
                 ? "Já passou"
@@ -524,7 +563,7 @@ export function NovaConsultaDialog({
       }
     }
     return lista;
-  }, [dia, duracao, janelas, semExpediente, ocupadas, bloqueado, daClinicaNoDia, limiteHorario]);
+  }, [dia, duracao, janelas, semExpediente, ocupadas, bloqueado, daClinicaNoDia, limiteHorario, fechamentos, medicoId, servicoId, diaDaSemanaEscolhido]);
 
   // O horário escolhido na clínica: quantas já estão nele e quem está livre
   const noHorario = useMemo(() => {
@@ -532,12 +571,14 @@ export function NovaConsultaDialog({
     const quando = new Date(`${dia}T${hora}:00`);
     if (!isValid(quando)) return null;
     const oc = ocupacaoDoIntervalo(daClinicaNoDia, quando, duracao);
+    const m = minutos(hora);
     return {
       ...oc,
       cheio: lotado(oc, limiteHorario),
-      livres: daClinica.filter((p) => !oc.ocupados.has(p.id)),
+      livres: daClinica.filter((p) => !oc.ocupados.has(p.id) && fazServico(p.id) && !fechadoAs(p.id, m)),
     };
-  }, [daClinicaNoDia, dia, hora, duracao, limiteHorario, daClinica]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [daClinicaNoDia, dia, hora, duracao, limiteHorario, daClinica, servicoId, vinculos, fechamentos]);
 
   const livres = horarios.filter((h) => h.livre).length;
   const inicioEscolhido = minutos(hora || "00:00");
@@ -755,7 +796,11 @@ export function NovaConsultaDialog({
                           <option key={p.id} value={p.id}>
                             {p.nome}
                             {p.id === usuarioId ? " (você)" : ""}
-                            {noHorario?.ocupados.has(p.id) ? ` (ocupado às ${hora})` : ""}
+                            {!fazServico(p.id) && servico
+                              ? ` (não atende ${servico.nome})`
+                              : noHorario?.ocupados.has(p.id)
+                                ? ` (ocupado às ${hora})`
+                                : ""}
                           </option>
                         ))}
                       </select>
@@ -1143,6 +1188,14 @@ export function NovaConsultaDialog({
                       <p className="mt-1 text-cinza-suave">Todos os profissionais já têm consulta nesse horário.</p>
                     )}
                   </div>
+                )}
+
+                {medicoId && servico && !fazServico(medicoId) && (
+                  <p className="mt-3 flex items-start gap-2 rounded-md border border-alerta/40 bg-alerta/8 px-3 py-2 text-xs text-cinza-texto">
+                    <TriangleAlert className="mt-0.5 size-4 shrink-0 text-alerta" />
+                    {medico?.nome ?? "Esse profissional"} não está marcado para {servico.nome}. Confira o profissional ou
+                    os serviços dele em Disponibilidade.
+                  </p>
                 )}
 
                 {(conflitoEscolhido || emFolga) && (

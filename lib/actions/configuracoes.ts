@@ -50,6 +50,10 @@ const clinicaSchema = z.object({
   pesquisaAtiva: z.boolean().optional(),
   linkAvaliacao: z.string().trim().url("Link de avaliação inválido.").optional().or(z.literal("")),
   /** Consultas no mesmo horário. Nulo = sem limite; ausente = coluna ainda não existe. */
+  /** Link de agendamento; ausentes enquanto o SQL não rodou. */
+  agendamentoAntecedenciaH: z.number().int().min(0).max(168).optional(),
+  agendamentoPrazoDias: z.number().int().min(1, "O prazo mínimo é 1 dia.").max(180, "O prazo máximo é 180 dias.").optional(),
+  agendamentoMostrarPreco: z.boolean().optional(),
   maxConsultasHorario: z.number().int().min(1, "O limite mínimo é 1 consulta.").max(50, "O limite máximo é 50.").nullable().optional(),
   /** Só a equipe Medi Marketing muda o plano; para os demais é ignorado. */
   plano: z.enum(["essencial", "performance", "full"]).optional(),
@@ -91,6 +95,9 @@ export async function salvarClinica(input: ClinicaInput): Promise<ActionResult> 
       ...(d.pesquisaAtiva !== undefined ? { pesquisa_ativa: d.pesquisaAtiva } : {}),
       ...(d.linkAvaliacao !== undefined ? { link_avaliacao: d.linkAvaliacao || null } : {}),
       ...(d.maxConsultasHorario !== undefined ? { max_consultas_horario: d.maxConsultasHorario } : {}),
+      ...(d.agendamentoAntecedenciaH !== undefined ? { agendamento_antecedencia_h: d.agendamentoAntecedenciaH } : {}),
+      ...(d.agendamentoPrazoDias !== undefined ? { agendamento_prazo_dias: d.agendamentoPrazoDias } : {}),
+      ...(d.agendamentoMostrarPreco !== undefined ? { agendamento_mostrar_preco: d.agendamentoMostrarPreco } : {}),
       ...(d.plano && ctx.profile.role === "super_admin" ? { plano: d.plano } : {}),
     })
     .eq("id", orgId);

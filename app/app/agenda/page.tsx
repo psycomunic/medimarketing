@@ -1,5 +1,12 @@
 import { AgendaCalendar } from "@/components/app/agenda-calendar";
-import { getAgenda, emModoDemo, getBloqueios, getDisponibilidade } from "@/lib/supabase/queries";
+import {
+  getAgenda,
+  emModoDemo,
+  getBloqueios,
+  getDisponibilidade,
+  getFechamentos,
+  getServicosDosProfissionais,
+} from "@/lib/supabase/queries";
 import { exigirModulo } from "@/lib/acesso";
 import { getClinicasDisponiveis, getUsuarios } from "@/lib/supabase/usuarios";
 import { getConfirmacoesDaAgenda } from "@/lib/supabase/confirmacoes";
@@ -23,7 +30,18 @@ export default async function AgendaPage() {
   const inicio = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
   const fim = new Date(hoje.getFullYear(), hoje.getMonth() + 3, 0, 23, 59, 59);
 
-  const [{ consultas, opcoes }, equipe, clinicas, demo, disponibilidade, bloqueios, pacientes, servicos] = await Promise.all([
+  const [
+    { consultas, opcoes },
+    equipe,
+    clinicas,
+    demo,
+    disponibilidade,
+    bloqueios,
+    pacientes,
+    servicos,
+    fechamentos,
+    vinculos,
+  ] = await Promise.all([
     getAgenda(inicio.toISOString(), fim.toISOString()),
     getUsuarios(escopo),
     getClinicasDisponiveis(escopo),
@@ -33,6 +51,8 @@ export default async function AgendaPage() {
     getPacientesBasicos(),
     // Serviços da tabela de preços (sem o financeiro instalado, a lista vem vazia)
     getPrecos(organizacao?.id ?? null).catch(() => []),
+    getFechamentos(),
+    getServicosDosProfissionais(organizacao?.id ?? null),
   ]);
 
   // Estado da confirmação de cada consulta, para a ficha já abrir com ele
@@ -76,6 +96,8 @@ export default async function AgendaPage() {
         servicos={servicos}
         limite={organizacao?.max_consultas_horario ?? null}
         podeApagar={ehSuperAdmin || role === "gestor"}
+        fechamentos={fechamentos}
+        vinculos={vinculos}
       />
     </div>
   );

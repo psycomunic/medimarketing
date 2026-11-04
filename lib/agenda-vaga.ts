@@ -3,6 +3,8 @@ import "server-only";
 import { createAdminClient, adminDisponivel } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { limiteValido, ocupacaoDoIntervalo, type ConsultaOcupando } from "@/lib/agenda-capacidade";
+import { fechamentoNoIntervalo, type RegraFechamento } from "@/lib/agenda-horarios";
+import { paredeEmBrasilia } from "@/lib/lembretes";
 
 /**
  * Conferência de vaga no servidor, antes de gravar.
@@ -20,12 +22,14 @@ export type Vaga = {
   /** Pico de consultas no intervalo, sem a que está sendo marcada. */
   simultaneas: number;
   profissionalOcupado: boolean;
+  /** O profissional fechou a agenda desse serviço nesse horário: o motivo (ou "Agenda fechada"). */
+  fechado: string | null;
 };
 
 export type RecusaVaga = {
   ok: false;
   erro: string;
-  codigo: "lotado" | "profissional_ocupado";
+  codigo: "lotado" | "profissional_ocupado" | "fechado";
 };
 
 const JANELA_MAX_MIN = 8 * 60; // nenhuma consulta dura mais que isso
@@ -36,13 +40,15 @@ export async function lerVaga(p: {
   dataHora: string;
   duracaoMin: number;
   ignorarId?: string | null;
+  /** Serviço da consulta, para os fechamentos de um serviço só. */
+  servicoId?: string | null;
 }): Promise<Vaga> {
   const db = adminDisponivel() ? createAdminClient() : await createClient();
   const inicio = new Date(p.dataHora);
   const fim = new Date(inicio.getTime() + p.duracaoMin * 60000);
   const desde = new Date(inicio.getTime() - JANELA_MAX_MIN * 60000);
 
-  const [{ data: org }, { data: consultas }] = await Promise.all([
+  const [{ data: org }, { data: consultas }, { data: fechamentos }] = await Promise.all([
     db.from("organizations").select("*").eq("id", p.organizationId).maybeSingle(),
     db
       .from("consultas")
@@ -51,7 +57,20 @@ export async function lerVaga(p: {
       .neq("status", "cancelada")
       .gte("data_hora", desde.toISOString())
       .lt("data_hora", fim.toISOString()),
+    // Sem a tabela (SQL ainda não rodou), vem erro e nenhum fechamento
+    db.from("fechamentos").select("*").eq("medico_id", p.medicoId),
   ]);
+
+  // Fechamentos são hora de parede de Brasília, como o expediente
+  const parede = paredeEmBrasilia(inicio);
+  const fech = fechamentoNoIntervalo((fechamentos ?? []) as RegraFechamento[], {
+    medicoId: p.medicoId,
+    servicoId: p.servicoId ?? null,
+    dia: parede.dia,
+    semana: parede.semana,
+    ini: parede.minutos,
+    fim: parede.minutos + p.duracaoMin,
+  });
 
   const oc = ocupacaoDoIntervalo((consultas ?? []) as ConsultaOcupando[], inicio, p.duracaoMin, p.ignorarId);
   return {
@@ -59,6 +78,7 @@ export async function lerVaga(p: {
     limite: limiteValido((org as { max_consultas_horario?: number | null } | null)?.max_consultas_horario),
     simultaneas: oc.simultaneas,
     profissionalOcupado: oc.ocupados.has(p.medicoId),
+    fechado: fech ? fech.motivo || "Agenda fechada" : null,
   };
 }
 
@@ -78,6 +98,17 @@ export function recusarVaga(
       erro: quem.gestor
         ? `Esse horário já tem ${v.simultaneas} de ${v.limite} consultas. Confirme o encaixe para salvar acima do limite.`
         : `Esse horário está lotado (${v.simultaneas} de ${v.limite} consultas). Escolha outro horário ou peça ao gestor para encaixar.`,
+    };
+  }
+  if (v.fechado && !(quem.encaixe && (quem.gestor || quem.ehOProfissional))) {
+    const nome = quem.nomeProfissional ?? "O profissional";
+    return {
+      ok: false,
+      codigo: "fechado",
+      erro:
+        quem.gestor || quem.ehOProfissional
+          ? `${nome} fechou a agenda desse serviço nesse horário (${v.fechado}). Confirme o encaixe para salvar assim mesmo.`
+          : `${nome} fechou a agenda desse serviço nesse horário (${v.fechado}). Escolha outro horário ou outro profissional.`,
     };
   }
   if (v.profissionalOcupado && !(quem.encaixe && (quem.gestor || quem.ehOProfissional))) {

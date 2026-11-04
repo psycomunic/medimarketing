@@ -172,6 +172,26 @@ export function diaEmBrasilia(d: Date = new Date()): string {
   return `${p.ano}-${p.mes}-${p.dia}`;
 }
 
+/** O instante de "AAAA-MM-DD" + minutos do dia, na hora de Brasília. */
+export function instanteEmBrasilia(dia: string, minutos: number): Date {
+  const [ano, mes, d] = dia.split("-").map(Number);
+  return deBrasilia(ano, mes, d, Math.floor(minutos / 60), minutos % 60);
+}
+
+/** Dia, dia da semana (0 = domingo) e minutos do dia de um instante, em Brasília. */
+export function paredeEmBrasilia(d: Date): { dia: string; semana: number; minutos: number } {
+  const p = partesEmBrasilia(d);
+  const dia = `${p.ano}-${p.mes}-${p.dia}`;
+  const semana = new Date(Date.UTC(Number(p.ano), Number(p.mes) - 1, Number(p.dia), 12)).getUTCDay();
+  return { dia, semana, minutos: Number(p.hora) * 60 + Number(p.minuto) };
+}
+
+/** "AAAA-MM-DD" somado de n dias (meio-dia em UTC evita virar o dia). */
+export function somarDias(dia: string, n: number): string {
+  const [a, m, d] = dia.split("-").map(Number);
+  return new Date(Date.UTC(a, m - 1, d + n, 12)).toISOString().slice(0, 10);
+}
+
 /** Hora cheia de agora em Brasília (0-23). */
 export function horaEmBrasilia(d: Date = new Date()): number {
   return Number(partesEmBrasilia(d).hora);

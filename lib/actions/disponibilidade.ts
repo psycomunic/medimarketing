@@ -26,13 +26,18 @@ export type DisponibilidadeItem = {
 /**
  * Substitui toda a disponibilidade semanal do médico pelos itens informados
  * (estratégia simples de "apagar e reinserir").
+ *
+ * Sem `medicoId`, é a do próprio usuário. Com ele, a recepção e o gestor
+ * ajustam a de um colega da clínica — a RLS confere quem pode.
  */
 export async function salvarDisponibilidade(
-  itens: DisponibilidadeItem[]
+  itens: DisponibilidadeItem[],
+  medicoId?: string
 ): Promise<ActionResult> {
   if (await emModoDemo()) return { ok: false, erro: MSG_DEMO };
-  const { supabase, userId } = await getUserId();
-  if (!userId) return { ok: false, erro: "Sessão expirada." };
+  const { supabase, userId: eu } = await getUserId();
+  if (!eu) return { ok: false, erro: "Sessão expirada." };
+  const userId = medicoId || eu;
 
   // Valida intervalos
   for (const i of itens) {
@@ -46,6 +51,7 @@ export async function salvarDisponibilidade(
     .delete()
     .eq("medico_id", userId);
   if (del.error) return { ok: false, erro: "Não foi possível salvar." };
+  // A RLS não acusa erro ao apagar o que não pode: confere pelo insert
 
   if (itens.length > 0) {
     const { error } = await supabase.from("disponibilidade").insert(
@@ -68,10 +74,12 @@ export async function adicionarBloqueio(input: {
   data_inicio: string;
   data_fim: string;
   motivo?: string;
+  medicoId?: string;
 }): Promise<ActionResult> {
   if (await emModoDemo()) return { ok: false, erro: MSG_DEMO };
-  const { supabase, userId } = await getUserId();
-  if (!userId) return { ok: false, erro: "Sessão expirada." };
+  const { supabase, userId: eu } = await getUserId();
+  if (!eu) return { ok: false, erro: "Sessão expirada." };
+  const userId = input.medicoId || eu;
   if (input.data_inicio > input.data_fim) {
     return { ok: false, erro: "A data inicial deve ser antes da final." };
   }

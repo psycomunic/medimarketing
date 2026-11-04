@@ -275,7 +275,12 @@ function FormClinica({
     pesquisaAtiva: o.pesquisa_ativa ?? false,
     linkAvaliacao: o.link_avaliacao ?? "",
     maxConsultasHorario: o.max_consultas_horario == null ? "" : String(o.max_consultas_horario),
+    antecedencia: String(o.agendamento_antecedencia_h ?? 2),
+    prazo: String(o.agendamento_prazo_dias ?? 30),
+    mostrarPreco: o.agendamento_mostrar_preco ?? false,
   });
+  // As colunas do link de agendamento só existem depois do SQL
+  const temLink = o.agendamento_prazo_dias !== undefined;
   // As colunas da pesquisa só existem depois do SQL: sem elas, nem envia
   const temPesquisa = o.pesquisa_ativa !== undefined;
   const temLimite = o.max_consultas_horario !== undefined;
@@ -293,6 +298,9 @@ function FormClinica({
         pesquisaAtiva: temPesquisa ? v.pesquisaAtiva : undefined,
         linkAvaliacao: temPesquisa ? v.linkAvaliacao : undefined,
         maxConsultasHorario: temLimite ? (v.maxConsultasHorario.trim() ? Number(v.maxConsultasHorario) : null) : undefined,
+        agendamentoAntecedenciaH: temLink ? Number(v.antecedencia || 0) : undefined,
+        agendamentoPrazoDias: temLink ? Number(v.prazo || 30) : undefined,
+        agendamentoMostrarPreco: temLink ? v.mostrarPreco : undefined,
         lembreteDiasUteis: Number(v.lembreteDiasUteis || 1),
         lembreteHora: Number(v.lembreteHora || 9),
       });
@@ -468,6 +476,50 @@ function FormClinica({
             />
             <p className="text-xs text-cinza-suave">Em branco, a clínica fica sem limite.</p>
           </div>
+
+          {temLink && (
+            <div className="mt-6 border-t border-border pt-5">
+              <h3 className="font-semibold text-azul-medico">Link de agendamento</h3>
+              <p className="mt-1 text-sm text-cinza-suave">
+                O que o paciente vê ao marcar sozinho pelo link de cada profissional (em Disponibilidade).
+              </p>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-1.5">
+                  <Label htmlFor="antecedencia">Antecedência mínima</Label>
+                  <Select id="antecedencia" value={v.antecedencia} onChange={(e) => setV({ ...v, antecedencia: e.target.value })}>
+                    {[0, 1, 2, 3, 4, 6, 12, 24, 48].map((h) => (
+                      <option key={h} value={String(h)}>
+                        {h === 0 ? "Sem antecedência" : h < 24 ? `${h} hora${h === 1 ? "" : "s"} antes` : `${h / 24} dia${h === 24 ? "" : "s"} antes`}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="prazo">Até quantos dias à frente</Label>
+                  <Input
+                    id="prazo"
+                    type="number"
+                    min={1}
+                    max={180}
+                    value={v.prazo}
+                    onChange={(e) => setV({ ...v, prazo: e.target.value })}
+                  />
+                </div>
+              </div>
+              <label className="mt-4 flex items-start gap-2.5 rounded-md border border-border bg-branco-clinico px-4 py-3">
+                <input
+                  type="checkbox"
+                  checked={v.mostrarPreco}
+                  onChange={(e) => setV({ ...v, mostrarPreco: e.target.checked })}
+                  className="mt-0.5 size-4 accent-teal"
+                />
+                <span className="text-sm text-cinza-texto">
+                  Mostrar o preço particular do serviço no link
+                  <span className="mt-0.5 block text-xs text-cinza-suave">Desligado, o paciente vê só o nome e a duração.</span>
+                </span>
+              </label>
+            </div>
+          )}
         </section>
       )}
 

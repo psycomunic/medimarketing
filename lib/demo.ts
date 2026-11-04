@@ -19,9 +19,11 @@ import type {
   Bloqueio,
   Consulta,
   Disponibilidade,
+  Fechamento,
   Lead,
   Organization,
   Profile,
+  ProfissionalServico,
   Role,
 } from "@/lib/supabase/types";
 
@@ -66,6 +68,9 @@ function org(
     lembrete_ativo: true,
     // Vários profissionais atendem ao mesmo tempo, até cinco por horário
     max_consultas_horario: 5,
+    agendamento_antecedencia_h: 2,
+    agendamento_prazo_dias: 30,
+    agendamento_mostrar_preco: true,
     pesquisa_ativa: true,
     link_avaliacao: "https://g.page/r/clinica-vida-derma/review",
     // Na demonstração nada sai de verdade: sem conexão, o painel mostra
@@ -470,7 +475,68 @@ export function demoDisponibilidade(): Disponibilidade[] {
     hora_inicio: "08:00",
     hora_fim: "12:00",
   });
+  // Os demais profissionais da clínica: segunda a sexta, horário comercial
+  for (const m of ["med-vd-3", "med-vd-4", "med-vd-5"]) {
+    for (const d of [1, 2, 3, 4, 5]) {
+      dias.push({ id: `disp-${m}-${d}`, medico_id: m, dia_semana: d, hora_inicio: "08:00", hora_fim: "18:00" });
+    }
+  }
   return dias;
+}
+
+/** Endereço do link de agendamento de cada profissional da demonstração. */
+export const DEMO_SLUGS_AGENDA: Record<string, string> = {
+  [DEMO_USER_ID]: "dra-marina-alves",
+  "00000000-0000-0000-0000-000000000002": "dr-paulo-andrade",
+  "med-vd-3": "dra-camila-torres",
+  "med-vd-4": "dr-felipe-rocha",
+  "med-vd-5": "dra-luisa-martins",
+};
+
+/**
+ * Serviços de cada profissional da demonstração (ids de demoPrecos):
+ * 0 consulta, 1 retorno, 2 teleconsulta, 3 toxina, 4 preenchimento,
+ * 5 peeling, 6 laser, 7 microagulhamento, 8 biópsia.
+ */
+export function demoServicosDosProfissionais(): ProfissionalServico[] {
+  const mapa: Record<string, number[]> = {
+    [DEMO_USER_ID]: [0, 1, 2, 8],
+    "00000000-0000-0000-0000-000000000002": [0, 1, 3, 4],
+    "med-vd-3": [3, 4, 5, 6, 7],
+    "med-vd-4": [0, 1],
+    "med-vd-5": [0, 1, 2],
+  };
+  return Object.entries(mapa).flatMap(([medico_id, ids]) =>
+    ids.map((i) => ({ medico_id, servico_id: `dpreco-${i}`, organization_id: DEMO_ORG_ID }))
+  );
+}
+
+/** Fechamentos da demonstração: o pedido real que originou o recurso. */
+export function demoFechamentos(): Fechamento[] {
+  return [
+    {
+      id: "fech-1",
+      organization_id: DEMO_ORG_ID,
+      medico_id: "med-vd-3",
+      servico_id: "dpreco-6",
+      dia_semana: 5,
+      data: null,
+      hora_inicio: "13:00",
+      hora_fim: "18:00",
+      motivo: "Laser em manutenção às sextas",
+    },
+    {
+      id: "fech-2",
+      organization_id: DEMO_ORG_ID,
+      medico_id: "med-vd-4",
+      servico_id: null,
+      dia_semana: 3,
+      data: null,
+      hora_inicio: "14:00",
+      hora_fim: "18:00",
+      motivo: "Curso",
+    },
+  ];
 }
 
 /** Bloqueio fictício (férias no próximo mês). */

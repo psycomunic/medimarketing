@@ -63,7 +63,7 @@ const rotuloTipoConsulta = (t: string | null) =>
  */
 
 export type EventoConsulta =
-  | { tipo: "nova"; atorId: string | null; avisarPaciente?: boolean }
+  | { tipo: "nova"; atorId: string | null; avisarPaciente?: boolean; viaLink?: boolean }
   | { tipo: "cancelada"; atorId: string | null; avisarPaciente: boolean }
   | { tipo: "remarcada"; atorId: string | null; anterior: string; token?: string | null }
   /** Mesmo horário, outro profissional: `anteriorId` é quem saiu. */
@@ -132,7 +132,8 @@ async function comunicar(consultaId: string, ev: EventoConsulta): Promise<void> 
   };
   const painelAgenda = urlPainel("/app/agenda");
   const aviso: AvisoEquipe = { ...base, telefone: c.paciente_telefone, painel: painelAgenda };
-  const nomeAtor = ator?.nome ?? null;
+  // Marcada pelo próprio paciente, no link de agendamento
+  const nomeAtor = ator?.nome ?? (ev.tipo === "nova" && ev.viaLink ? "o paciente, pelo link de agendamento" : null);
   const momento = Date.now();
 
   const paciente: ItemFila[] = [];

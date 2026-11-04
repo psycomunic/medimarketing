@@ -1,6 +1,8 @@
 "use client";
 
-import type { PrecoProcedimento } from "@/lib/supabase/types";
+import type { Fechamento, PrecoProcedimento, ProfissionalServico } from "@/lib/supabase/types";
+import { fechamentoNoIntervalo, type RegraFechamento } from "@/lib/agenda-horarios";
+import { catalogoServicos } from "@/lib/servicos";
 
 import type { PacienteBasico } from "@/lib/supabase/pacientes";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -88,7 +90,13 @@ export function AgendaCalendar({
   servicos = [],
   limite: limiteBruto = null,
   podeApagar = false,
+  fechamentos = [],
+  vinculos = [],
 }: {
+  /** Horários fechados por profissional e serviço. */
+  fechamentos?: Fechamento[];
+  /** Que serviço cada profissional atende. */
+  vinculos?: ProfissionalServico[];
   /** Gestor: apaga consultas marcadas por engano. */
   podeApagar?: boolean;
   consultasIniciais: ConsultaComContexto[];
@@ -121,6 +129,12 @@ export function AgendaCalendar({
   const limite = limiteValido(limiteBruto);
   // A mesma pessoa tem a mesma cor em todas as visões
   const cores = useMemo(() => coresDosProfissionais(profissionais), [profissionais]);
+  // Nome do serviço de um fechamento, para a célula dizer o que está fechado
+  const nomeServico = useMemo(() => {
+    const mapa = new Map<string, string>();
+    for (const s of catalogoServicos(servicos)) for (const l of s.linhas) mapa.set(l.id, s.nome);
+    return mapa;
+  }, [servicos]);
   const [filtros, setFiltros] = useState<FiltrosAgenda>(FILTROS_VAZIOS);
 
   const consultas = useMemo(
@@ -406,6 +420,8 @@ export function AgendaCalendar({
             profissionais={profissionais}
             cores={cores}
             limite={limite}
+            fechamentos={fechamentos}
+            nomeServico={nomeServico}
             onConsulta={setSelecionada}
             onNova={(quando, medicoId) => abrirNova(quando ?? cursor, medicoId)}
           />
@@ -461,6 +477,8 @@ export function AgendaCalendar({
         lembrete={lembrete}
         limite={limite}
         medicoInicial={medicoNova}
+        fechamentos={fechamentos}
+        vinculos={vinculos}
         onCriada={(quando) => {
           setCursor(quando);
           setVisao("dia");
@@ -1109,6 +1127,8 @@ function DayView({
   profissionais,
   cores,
   limite,
+  fechamentos,
+  nomeServico,
   onConsulta,
   onNova,
 }: {
@@ -1119,6 +1139,8 @@ function DayView({
   profissionais: ProfissionalDia[];
   cores: Map<string, CorProfissional>;
   limite: number | null;
+  fechamentos: RegraFechamento[];
+  nomeServico: Map<string, string>;
   onConsulta: (c: Consulta) => void;
   /** Sem argumentos: o dia. Com horário e profissional: já preenchidos. */
   onNova: (quando?: Date, medicoId?: string) => void;
@@ -1199,6 +1221,8 @@ function DayView({
             colunas={colunas}
             cores={cores}
             limite={limite}
+            fechamentos={fechamentos}
+            nomeServico={nomeServico}
             confirmacoes={confirmacoes}
             onConsulta={onConsulta}
             onNova={onNova}
@@ -1243,6 +1267,8 @@ function GradeProfissionais({
   colunas,
   cores,
   limite,
+  fechamentos,
+  nomeServico,
   confirmacoes,
   onConsulta,
   onNova,
@@ -1252,6 +1278,8 @@ function GradeProfissionais({
   colunas: ProfissionalDia[];
   cores: Map<string, CorProfissional>;
   limite: number | null;
+  fechamentos: RegraFechamento[];
+  nomeServico: Map<string, string>;
   confirmacoes: Record<string, ConfirmacaoDaConsulta>;
   onConsulta: (c: Consulta) => void;
   onNova: (quando?: Date, medicoId?: string) => void;
@@ -1272,6 +1300,16 @@ function GradeProfissionais({
   const hoje = isToday(cursor);
   const blocoAgora = hoje ? blocoDe(agora) : -1;
   const largura = `minmax(${colunas.length > 4 ? "9.5rem" : "11rem"}, 1fr)`;
+
+  const diaTexto = format(cursor, "yyyy-MM-dd");
+  const semana = cursor.getDay();
+  // Fechamentos do profissional que pegam este bloco (de um serviço ou de todos)
+  const fechadosNoBloco = (medicoId: string, m: number) =>
+    fechamentos.filter(
+      (f) =>
+        f.medico_id === medicoId &&
+        fechamentoNoIntervalo([f], { medicoId, servicoId: f.servico_id, dia: diaTexto, semana, ini: m, fim: m + 30 })
+    );
 
   const emData = (m: number) => {
     const d = new Date(cursor);
@@ -1352,6 +1390,9 @@ function GradeProfissionais({
                 const aqui = consultas.filter(
                   (c) => c.medico_id === p.id && blocoDe(new Date(c.data_hora)) === m
                 );
+                const fechados = fechadosNoBloco(p.id, m);
+                const fechTodos = fechados.find((f) => f.servico_id === null) ?? null;
+                const fechParcial = fechados.filter((f) => f.servico_id !== null);
                 // Consulta que começou antes e ainda ocupa este bloco
                 const continua =
                   aqui.length === 0 &&
@@ -1377,6 +1418,13 @@ function GradeProfissionais({
                       </div>
                     ) : continua ? (
                       <div className={cn("h-full min-h-[2.75rem] rounded-md border-l-[3px]", cor?.fundo, cor?.borda)} />
+                    ) : fechTodos ? (
+                      <div
+                        className="flex h-full min-h-[2.75rem] items-center justify-center rounded-md bg-[repeating-linear-gradient(135deg,rgba(107,122,130,0.06),rgba(107,122,130,0.06)_6px,rgba(107,122,130,0.13)_6px,rgba(107,122,130,0.13)_12px)] px-1 text-center text-[10px] font-medium text-cinza-suave"
+                        title={`Agenda fechada${fechTodos.motivo ? `: ${fechTodos.motivo}` : ""}`}
+                      >
+                        {m === inicioDoFechamento(fechTodos) ? `Fechado${fechTodos.motivo ? ` · ${fechTodos.motivo}` : ""}` : ""}
+                      </div>
                     ) : cheio || passou ? (
                       <div
                         className={cn("h-full min-h-[2.75rem] rounded-md", cheio && "bg-[repeating-linear-gradient(135deg,transparent,transparent_6px,rgba(232,93,74,0.07)_6px,rgba(232,93,74,0.07)_12px)]")}
@@ -1385,10 +1433,25 @@ function GradeProfissionais({
                     ) : (
                       <button
                         onClick={() => onNova(quando, p.id)}
-                        className="flex h-full min-h-[2.75rem] w-full items-center justify-center rounded-md text-[11px] font-medium text-teal opacity-0 transition hover:bg-verde-menta/60 hover:opacity-100 focus-visible:opacity-100"
+                        className={cn(
+                          "group/cel relative flex h-full min-h-[2.75rem] w-full flex-col items-center justify-center rounded-md text-[11px] font-medium text-teal transition hover:bg-verde-menta/60",
+                          fechParcial.length > 0 && "bg-cinza-suave/[0.06]"
+                        )}
                         aria-label={`Marcar consulta com ${p.nome} às ${hhmm(m)}`}
+                        title={
+                          fechParcial.length
+                            ? `Sem ${fechParcial.map((f) => nomeServico.get(f.servico_id ?? "") ?? "serviço").join(", ")} neste horário`
+                            : undefined
+                        }
                       >
-                        <Plus className="mr-0.5 size-3" /> {hhmm(m)}
+                        <span className="flex items-center opacity-0 transition group-hover/cel:opacity-100 group-focus-visible/cel:opacity-100">
+                          <Plus className="mr-0.5 size-3" /> {hhmm(m)}
+                        </span>
+                        {fechParcial.length > 0 && (
+                          <span className="px-1 text-center text-[10px] leading-tight text-cinza-suave">
+                            sem {fechParcial.map((f) => nomeServico.get(f.servico_id ?? "") ?? "serviço").join(", ")}
+                          </span>
+                        )}
                       </button>
                     )}
                   </div>
@@ -1401,10 +1464,17 @@ function GradeProfissionais({
 
       <p className="border-t border-border px-4 py-2 text-[11px] text-cinza-suave">
         Clique num espaço vazio para marcar com aquele profissional, já no horário. Faixa colorida = consulta
-        que continua do horário anterior. Listras = horário lotado.
+        que continua do horário anterior. Listras vermelhas = horário lotado; cinza = agenda fechada.
       </p>
     </div>
   );
+}
+
+/** Bloco de 30 min em que o fechamento começa: é onde vai o rótulo. */
+function inicioDoFechamento(f: RegraFechamento): number {
+  const [h, m] = f.hora_inicio.split(":").map(Number);
+  const ini = h * 60 + m;
+  return ini - (ini % 30);
 }
 
 /** Consulta dentro da célula do profissional: nome, horário e serviço. */
@@ -1442,6 +1512,7 @@ function CartaoGrade({
             {c.paciente_nome}
           </span>
           {c.tipo === "teleconsulta" && <Video className="size-3 shrink-0 text-cinza-suave" />}
+          {c.origem === "link" && <SeloLink />}
         </span>
         <span className={cn("block truncate text-[11px] font-medium tabular-nums", tom.texto)}>
           {format(ini, "HH:mm")} – {format(fim, "HH:mm")}
@@ -1592,8 +1663,11 @@ function LinhaConsulta({
           {/* Conteúdo */}
           <div className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3">
             <div className="min-w-0 flex-1">
-              <p className={cn("truncate font-semibold text-cinza-texto", cancelada && "line-through")}>
-                {c.paciente_nome}
+              <p className="flex min-w-0 items-center gap-1.5">
+                <span className={cn("truncate font-semibold text-cinza-texto", cancelada && "line-through")}>
+                  {c.paciente_nome}
+                </span>
+                {c.origem === "link" && <SeloLink />}
               </p>
               <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-cinza-suave">
                 {multiClinica && c.organizacao_nome && (
@@ -1661,6 +1735,18 @@ function LinhaConsulta({
         </div>
       </div>
     </li>
+  );
+}
+
+/** O próprio paciente marcou pelo link de agendamento. */
+function SeloLink() {
+  return (
+    <span
+      className="shrink-0 rounded-full bg-azul-medico/10 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-azul-medico"
+      title="Marcada pelo paciente pelo link de agendamento"
+    >
+      via link
+    </span>
   );
 }
 

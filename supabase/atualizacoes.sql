@@ -2617,3 +2617,77 @@ create index if not exists idx_leads_campanha on public.leads (organization_id, 
 -- =====================================================================
 alter table public.organizations add column if not exists max_consultas_horario integer default 5
   check (max_consultas_horario is null or max_consultas_horario between 1 and 50);
+
+-- =====================================================================
+-- Agenda por serviço e link público de agendamento.
+--
+-- profissional_servicos: o que cada profissional atende (Tabela de preços).
+-- fechamentos: horários em que um profissional não atende um serviço (ou
+--   nenhum), toda semana ou numa data — os colegas seguem atendendo.
+-- profiles.slug_agenda / agenda_publica: o link do profissional.
+-- organizations.agendamento_*: antecedência, prazo e preço no link.
+-- consultas.origem: 'link' quando o próprio paciente marcou.
+-- =====================================================================
+create table if not exists public.profissional_servicos (
+  medico_id       uuid not null references public.profiles(id) on delete cascade,
+  servico_id      uuid not null references public.tabela_precos(id) on delete cascade,
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  primary key (medico_id, servico_id)
+);
+create index if not exists idx_prof_servicos_org on public.profissional_servicos (organization_id);
+
+alter table public.profissional_servicos enable row level security;
+drop policy if exists "prof_servicos_select" on public.profissional_servicos;
+create policy "prof_servicos_select" on public.profissional_servicos for select to authenticated
+  using (organization_id = public.minha_org() or public.is_super_admin());
+drop policy if exists "prof_servicos_gestor" on public.profissional_servicos;
+create policy "prof_servicos_gestor" on public.profissional_servicos for all to authenticated
+  using ((organization_id = public.minha_org() and public.is_gestor()) or public.is_super_admin())
+  with check ((organization_id = public.minha_org() and public.is_gestor()) or public.is_super_admin());
+
+create table if not exists public.fechamentos (
+  id              uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  medico_id       uuid not null references public.profiles(id) on delete cascade,
+  -- nulo = todos os serviços do profissional
+  servico_id      uuid references public.tabela_precos(id) on delete cascade,
+  -- um dos dois: toda semana (dia_semana, 0 = domingo) ou uma data
+  dia_semana      smallint check (dia_semana between 0 and 6),
+  data            date,
+  hora_inicio     time not null,
+  hora_fim        time not null,
+  motivo          text,
+  criado_por      uuid references public.profiles(id) on delete set null,
+  created_at      timestamptz not null default now(),
+  check ((dia_semana is null) <> (data is null)),
+  check (hora_inicio < hora_fim)
+);
+create index if not exists idx_fechamentos_medico on public.fechamentos (medico_id);
+
+alter table public.fechamentos enable row level security;
+drop policy if exists "fechamentos_all" on public.fechamentos;
+create policy "fechamentos_all" on public.fechamentos for all to authenticated
+  using (
+    medico_id = auth.uid()
+    or public.is_super_admin()
+    or (organization_id = public.minha_org() and public.is_operacional())
+  )
+  with check (
+    medico_id = auth.uid()
+    or public.is_super_admin()
+    or (organization_id = public.minha_org() and public.is_operacional())
+  );
+
+alter table public.profiles add column if not exists slug_agenda text;
+alter table public.profiles add column if not exists agenda_publica boolean not null default false;
+create unique index if not exists idx_profiles_slug_agenda
+  on public.profiles (organization_id, slug_agenda) where slug_agenda is not null;
+
+alter table public.organizations add column if not exists agendamento_antecedencia_h integer not null default 2
+  check (agendamento_antecedencia_h between 0 and 168);
+alter table public.organizations add column if not exists agendamento_prazo_dias integer not null default 30
+  check (agendamento_prazo_dias between 1 and 180);
+alter table public.organizations add column if not exists agendamento_mostrar_preco boolean not null default false;
+
+alter table public.consultas add column if not exists origem text
+  check (origem is null or origem in ('link'));

@@ -22,9 +22,15 @@ type DiaConfig = { ativo: boolean; inicio: string; fim: string };
 export function DisponibilidadeManager({
   disponibilidadeInicial,
   bloqueiosIniciais,
+  medicoId,
+  proprio = true,
 }: {
   disponibilidadeInicial: Disponibilidade[];
   bloqueiosIniciais: Bloqueio[];
+  /** Profissional cuja agenda está na tela (a recepção e o gestor escolhem). */
+  medicoId?: string;
+  /** É a agenda de quem está logado: muda o "você" dos textos. */
+  proprio?: boolean;
 }) {
   const router = useRouter();
 
@@ -59,7 +65,7 @@ export function DisponibilidadeManager({
       .filter((d) => d.ativo)
       .map((d) => ({ dia_semana: d.dia_semana, hora_inicio: d.inicio, hora_fim: d.fim }));
 
-    const res = await salvarDisponibilidade(itens);
+    const res = await salvarDisponibilidade(itens, medicoId);
     setSalvando(false);
     if (res.ok) {
       setMsg("Disponibilidade salva!");
@@ -76,7 +82,7 @@ export function DisponibilidadeManager({
             Horários de atendimento
           </h2>
           <p className="text-sm text-cinza-suave">
-            Marque os dias em que você atende e ajuste os horários.
+            Marque os dias de atendimento e ajuste os horários. É o que a agenda e o link de agendamento oferecem.
           </p>
         </div>
 
@@ -147,13 +153,21 @@ export function DisponibilidadeManager({
       </section>
 
       {/* Bloqueios */}
-      <Bloqueios bloqueios={bloqueiosIniciais} />
+      <Bloqueios bloqueios={bloqueiosIniciais} medicoId={medicoId} proprio={proprio} />
     </div>
   );
 }
 
 /* ---------------------- Bloqueios de período ---------------------- */
-function Bloqueios({ bloqueios }: { bloqueios: Bloqueio[] }) {
+function Bloqueios({
+  bloqueios,
+  medicoId,
+  proprio,
+}: {
+  bloqueios: Bloqueio[];
+  medicoId?: string;
+  proprio: boolean;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [inicio, setInicio] = useState("");
@@ -169,10 +183,13 @@ function Bloqueios({ bloqueios }: { bloqueios: Bloqueio[] }) {
       return;
     }
     startTransition(async () => {
+      // Data sem hora seria lida em UTC e cairia no dia anterior: vai do
+      // começo do primeiro dia ao fim do último, no horário local
       const res = await adicionarBloqueio({
-        data_inicio: new Date(inicio).toISOString(),
-        data_fim: new Date(fim).toISOString(),
+        data_inicio: new Date(`${inicio}T00:00:00`).toISOString(),
+        data_fim: new Date(`${fim}T23:59:59`).toISOString(),
         motivo,
+        medicoId,
       });
       if (res.ok) {
         setInicio("");
@@ -197,7 +214,8 @@ function Bloqueios({ bloqueios }: { bloqueios: Bloqueio[] }) {
           Bloqueios de período
         </h2>
         <p className="text-sm text-cinza-suave">
-          Férias, congressos ou folgas em que você não atende.
+          Férias, congressos ou folgas em que {proprio ? "você não atende" : "o profissional não atende"}: fecha todos os
+          serviços. Para fechar só um serviço ou um turno, use &quot;Fechar a agenda&quot;.
         </p>
       </div>
 

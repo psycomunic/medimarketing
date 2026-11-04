@@ -75,6 +75,12 @@ export type Organization = {
    * profissional). Nulo = sem limite; ausente enquanto o SQL não rodou.
    */
   max_consultas_horario?: number | null;
+  /** Link de agendamento: horas mínimas antes da consulta. */
+  agendamento_antecedencia_h?: number;
+  /** Link de agendamento: até quantos dias à frente. */
+  agendamento_prazo_dias?: number;
+  /** Link de agendamento: mostra o preço do serviço ao paciente. */
+  agendamento_mostrar_preco?: boolean;
   /** Pesquisa de satisfação automática após a consulta (opcional até o SQL rodar). */
   pesquisa_ativa?: boolean;
   /** Link para o paciente avaliar a clínica no Google. */
@@ -112,6 +118,10 @@ export type Profile = {
    */
   aguardando_liberacao: boolean;
   created_at: string;
+  /** Pedaço do link público de agendamento (/agendar/clinica/<slug>). */
+  slug_agenda?: string | null;
+  /** O link público do profissional está no ar. */
+  agenda_publica?: boolean;
 };
 
 export type Consulta = {
@@ -134,6 +144,8 @@ export type Consulta = {
   servico_id?: string | null;
   /** Nome do serviço na hora da marcação: o histórico não muda se a tabela mudar. */
   servico_nome?: string | null;
+  /** "link" quando o próprio paciente marcou pelo link público. */
+  origem?: "link" | null;
   /** Ficha do paciente (nulo até o SQL do banco de pacientes rodar). */
   paciente_id?: string | null;
   criado_por: string | null;
@@ -374,6 +386,30 @@ export type Bloqueio = {
   data_inicio: string;
   data_fim: string;
   motivo: string | null;
+};
+
+/**
+ * Horário em que um profissional não atende um serviço (ou nenhum, com
+ * `servico_id` nulo): toda semana (`dia_semana`) ou numa data (`data`).
+ * Os colegas e a clínica seguem atendendo normalmente.
+ */
+export type Fechamento = {
+  id: string;
+  organization_id: string;
+  medico_id: string;
+  servico_id: string | null;
+  dia_semana: number | null;
+  data: string | null;
+  hora_inicio: string;
+  hora_fim: string;
+  motivo: string | null;
+};
+
+/** Serviço da Tabela de preços que o profissional atende. */
+export type ProfissionalServico = {
+  medico_id: string;
+  servico_id: string;
+  organization_id: string;
 };
 
 /**
@@ -1242,6 +1278,12 @@ export interface Database {
         Omit<Bloqueio, "id"> & { id?: string },
         Partial<Bloqueio>
       >;
+      fechamentos: Tabela<
+        Fechamento,
+        Omit<Fechamento, "id"> & { id?: string; criado_por?: string | null },
+        Partial<Fechamento>
+      >;
+      profissional_servicos: Tabela<ProfissionalServico, ProfissionalServico, Partial<ProfissionalServico>>;
       leads: Tabela<
         Lead,
         // Os campos de trabalho do funil têm default no banco: quem insere

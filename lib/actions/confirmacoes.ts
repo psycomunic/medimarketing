@@ -272,7 +272,7 @@ export async function reagendarConsulta(
 
   const { data: antes } = await r.admin
     .from("consultas")
-    .select("data_hora,medico_id,duracao_min,organization_id")
+    .select("data_hora,medico_id,duracao_min,organization_id,servico_id")
     .eq("id", r.conf.consulta_id)
     .maybeSingle();
 
@@ -284,6 +284,7 @@ export async function reagendarConsulta(
         dataHora: quando.toISOString(),
         duracaoMin: antes.duracao_min ?? 30,
         ignorarId: r.conf.consulta_id,
+        servicoId: antes.servico_id ?? null,
       })
     : null;
   if (vaga) {

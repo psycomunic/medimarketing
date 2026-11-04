@@ -4,8 +4,10 @@ import type {
   Bloqueio,
   Consulta,
   Disponibilidade,
+  Fechamento,
   Organization,
   Profile,
+  ProfissionalServico,
   Role,
 } from "@/lib/supabase/types";
 import {
@@ -17,6 +19,8 @@ import {
   demoConsultasVisiveis,
   demoDisponibilidade,
   demoBloqueios,
+  demoFechamentos,
+  demoServicosDosProfissionais,
   papelDemoValido,
 } from "@/lib/demo";
 
@@ -286,6 +290,28 @@ export async function getDisponibilidade(): Promise<Disponibilidade[]> {
     .select("*")
     .order("dia_semana", { ascending: true });
   return data ?? [];
+}
+
+/**
+ * Fechamentos de agenda por serviço que o usuário enxerga (os dele e, na
+ * recepção e na gestão, os da clínica). Sem a tabela, lista vazia.
+ */
+export async function getFechamentos(medicoId?: string): Promise<Fechamento[]> {
+  if (await emModoDemo()) return demoFechamentos().filter((f) => !medicoId || f.medico_id === medicoId);
+  const supabase = await createClient();
+  let q = supabase.from("fechamentos").select("*").order("data", { ascending: true, nullsFirst: true });
+  if (medicoId) q = q.eq("medico_id", medicoId);
+  const { data } = await q;
+  return (data ?? []) as Fechamento[];
+}
+
+/** Que serviço cada profissional atende. Vazio = ninguém definiu ainda. */
+export async function getServicosDosProfissionais(orgId: string | null): Promise<ProfissionalServico[]> {
+  if (await emModoDemo()) return demoServicosDosProfissionais();
+  if (!orgId) return [];
+  const supabase = await createClient();
+  const { data } = await supabase.from("profissional_servicos").select("*").eq("organization_id", orgId);
+  return (data ?? []) as ProfissionalServico[];
 }
 
 /** Bloqueios (futuros e recentes) do médico logado. */
