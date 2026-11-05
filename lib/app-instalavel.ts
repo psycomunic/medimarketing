@@ -49,4 +49,7 @@ export const viewportApp: Viewport = {
   themeColor: "#0B4F6C",
   // Ocupa a tela toda no iPhone; as barras usam env(safe-area-inset-*)
   viewportFit: "cover",
+  // Teclado aberto encolhe a área útil (Android): a janela de baixo
+  // sobe junto com o campo, em vez de ficar escondida atrás dele
+  interactiveWidget: "resizes-content",
 };

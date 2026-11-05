@@ -164,7 +164,7 @@ export function ConsultaDialog({
 
   return (
     <Dialog open={!!consulta} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92vh] max-w-2xl overflow-y-auto">
+      <DialogContent className="max-w-2xl overflow-y-auto">
         <DialogHeader>
           <div className="flex flex-wrap items-center gap-2">
             <DialogTitle>{consulta.paciente_nome}</DialogTitle>

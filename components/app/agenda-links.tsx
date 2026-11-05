@@ -46,7 +46,7 @@ export function AgendaLinks({ links }: { links: LinkDaAgenda[] }) {
       </Button>
 
       <Dialog open={aberto} onOpenChange={setAberto}>
-        <DialogContent className="max-h-[90vh] max-w-xl overflow-y-auto">
+        <DialogContent className="max-w-xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{so ? "Link de agendamento" : "Links de agendamento"}</DialogTitle>
             <DialogDescription>

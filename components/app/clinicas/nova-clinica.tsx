@@ -104,7 +104,7 @@ export function NovaClinica({ demo }: { demo: boolean }) {
           <Plus /> Nova clínica
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[90vh] max-w-xl overflow-y-auto">
+      <DialogContent className="max-w-xl overflow-y-auto">
         {feito ? (
           <div className="grid gap-4">
             <DialogHeader>

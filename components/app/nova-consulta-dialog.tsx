@@ -160,6 +160,13 @@ function iniciais(nome: string): string {
   return ((partes[0][0] ?? "") + (partes.length > 1 ? partes[partes.length - 1][0] : "")).toUpperCase();
 }
 
+/** "Dr. Paulo Andrade" → "Dr. Paulo": o tratamento sozinho não diz quem é. */
+function primeiroNome(nome: string): string {
+  const partes = nome.trim().split(/\s+/);
+  if (partes.length > 1 && /^(dr|dra|prof|profa)\.?$/i.test(partes[0])) return `${partes[0]} ${partes[1]}`;
+  return partes[0] ?? nome;
+}
+
 function Secao({
   n,
   titulo,
@@ -255,6 +262,8 @@ export function NovaConsultaDialog({
   const [conhecido, setConhecido] = useState<PacienteConhecido | null>(null);
   const [telefone, setTelefone] = useState("");
   const [email, setEmail] = useState("");
+  // Celular: e-mail e nascimento ficam recolhidos até alguém pedir
+  const [maisDados, setMaisDados] = useState(false);
   const [nascimento, setNascimento] = useState("");
   const [convenio, setConvenio] = useState("Particular");
   const [convenioOutro, setConvenioOutro] = useState(false);
@@ -597,8 +606,12 @@ export function NovaConsultaDialog({
    * engano impossível de não ver.
    */
   const diasAdiante = dataValida ? differenceInCalendarDays(escolhida, new Date()) : 0;
+  // Só a primeira letra maiúscula: "Quarta-feira, 4 de novembro de 2026"
   const porExtenso = dataValida
-    ? format(escolhida, "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR })
+    ? (() => {
+        const t = format(escolhida, "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR });
+        return t.charAt(0).toUpperCase() + t.slice(1);
+      })()
     : null;
   const distancia = !dataValida
     ? null
@@ -983,7 +996,7 @@ export function NovaConsultaDialog({
                       inputMode="tel"
                     />
                   </div>
-                  <div className="grid gap-1.5">
+                  <div className={cn("gap-1.5", maisDados || email || nascimento ? "grid" : "hidden sm:grid")}>
                     <Label htmlFor="email">E-mail</Label>
                     <Input
                       id="email"
@@ -993,7 +1006,7 @@ export function NovaConsultaDialog({
                       placeholder="paciente@email.com"
                     />
                   </div>
-                  <div className="grid gap-1.5">
+                  <div className={cn("gap-1.5", maisDados || email || nascimento ? "grid" : "hidden sm:grid")}>
                     <Label htmlFor="nascimento">
                       Data de nascimento
                       {idade !== null && idade >= 0 && idade < 130 && (
@@ -1007,6 +1020,15 @@ export function NovaConsultaDialog({
                       onChange={(e) => setNascimento(e.target.value)}
                     />
                   </div>
+                  {!(maisDados || email || nascimento) && (
+                    <button
+                      type="button"
+                      onClick={() => setMaisDados(true)}
+                      className="-my-1 flex min-h-10 items-center gap-1.5 text-left text-sm font-semibold text-teal sm:hidden"
+                    >
+                      <Plus className="size-4 shrink-0" /> E-mail e data de nascimento
+                    </button>
+                  )}
                   <div className="grid gap-1.5">
                     <Label htmlFor="convenio">Convênio</Label>
                     <select
@@ -1214,7 +1236,7 @@ export function NovaConsultaDialog({
                   <p className="mt-3 flex items-start gap-2 rounded-md border border-alerta/40 bg-alerta/8 px-3 py-2 text-xs text-cinza-texto">
                     <TriangleAlert className="mt-0.5 size-4 shrink-0 text-alerta" />
                     <span>
-                      <strong className="capitalize">{porExtenso}</strong>, {distancia}. Confira: o campo de
+                      <strong>{porExtenso}</strong>, {distancia}. Confira: o campo de
                       data segue o idioma do seu navegador, e nele o dia pode estar no lugar do mês.
                     </span>
                   </p>
@@ -1279,7 +1301,7 @@ export function NovaConsultaDialog({
                     adicionarArquivos(e.dataTransfer.files);
                   }}
                   className={cn(
-                    "flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed px-4 py-6 text-center transition-colors",
+                    "flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed px-4 py-4 text-center transition-colors sm:py-6",
                     arrastando
                       ? "border-teal bg-verde-menta/60"
                       : "border-border bg-branco-clinico hover:border-teal/60 hover:bg-verde-menta/30"
@@ -1287,7 +1309,8 @@ export function NovaConsultaDialog({
                 >
                   <Paperclip className="size-5 text-teal" />
                   <span className="text-sm font-medium text-azul-medico">
-                    Arraste aqui ou clique para anexar
+                    <span className="sm:hidden">Toque para anexar</span>
+                    <span className="hidden sm:inline">Arraste aqui ou clique para anexar</span>
                   </span>
                   <span className="text-xs text-cinza-suave">
                     Exames, pedidos, encaminhamentos, receitas · PDF, imagem ou Word · até 10 MB cada
@@ -1361,7 +1384,7 @@ export function NovaConsultaDialog({
                     <CalendarCheck className="mt-0.5 size-4 shrink-0 text-teal" />
                     <div className="min-w-0">
                       <dt className="sr-only">Quando</dt>
-                      <dd className="font-medium capitalize text-azul-medico">{porExtenso ?? "Escolha a data"}</dd>
+                      <dd className="font-medium text-azul-medico">{porExtenso ?? "Escolha a data"}</dd>
                       {dataValida && (
                         <dd className="text-xs text-cinza-suave">
                           {hora} às {fimConsulta} · {distancia}
@@ -1403,7 +1426,7 @@ export function NovaConsultaDialog({
                   <ul className="mt-2 grid gap-1.5 text-xs text-cinza-texto">
                     <li className="flex items-center gap-2">
                       <Bell className="size-3.5 shrink-0 text-teal" />
-                      {medico ? `${medico.nome.split(" ")[0]} é avisado` : "O médico é avisado"} no painel
+                      {medico ? `${primeiroNome(medico.nome)} é avisado` : "O médico é avisado"} no painel
                     </li>
                     <li className={cn("flex items-center gap-2", !(avisarPaciente && avisoWhats) && "text-cinza-suave line-through")}>
                       <MessageCircle className="size-3.5 shrink-0 text-teal" />

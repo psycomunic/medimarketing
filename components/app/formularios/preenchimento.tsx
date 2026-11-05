@@ -550,7 +550,7 @@ export function PreenchimentoFormulario({
       </div>
 
       <Dialog open={confirmando} onOpenChange={(v) => !enviando && setConfirmando(v)}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto">
+        <DialogContent className="overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Enviar o diagnóstico?</DialogTitle>
             <DialogDescription>

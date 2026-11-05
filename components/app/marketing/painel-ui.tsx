@@ -83,7 +83,7 @@ export function ImportarRelatorio({ organizationId, demo }: { organizationId?: s
         <Upload /> Importar relatório
       </Button>
       <Dialog open={aberto} onOpenChange={setAberto}>
-        <DialogContent className="max-h-[92vh] max-w-2xl overflow-y-auto">
+        <DialogContent className="max-w-2xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Importar relatório de anúncios</DialogTitle>
             <DialogDescription>O CSV exportado do Gerenciador de Anúncios (Meta) ou do Google Ads. Importar o mesmo período de novo atualiza os números.</DialogDescription>

@@ -124,7 +124,7 @@ export function LeadDialog({
   return (
     <>
       <Dialog open={!!lead} onOpenChange={onOpenChange}>
-        <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
+        <DialogContent className="max-w-3xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{lead.nome}</DialogTitle>
             <DialogDescription>

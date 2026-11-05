@@ -289,3 +289,66 @@
     box-shadow: 0 8px 40px -12px rgba(0, 0, 0, 0.6);
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* Celular e tablet: formulários sem zoom e sem deslizar para o lado   */
+/* ------------------------------------------------------------------ */
+@layer base {
+  /*
+   * O iPhone dá zoom sozinho ao tocar em qualquer campo com letra menor
+   * que 16px: a tela aumenta, desliza para o lado e os campos ficam
+   * cortados. Em tela de toque, todo campo tem pelo menos 16px.
+   */
+  @media (pointer: coarse), (max-width: 767px) {
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+    select,
+    textarea {
+      font-size: max(16px, 1em) !important;
+    }
+  }
+
+  /*
+   * Data e hora no iPhone têm largura mínima própria, maior que a coluna
+   * que recebem no celular. Sem a aparência nativa, ocupam exatamente o
+   * espaço — o seletor do sistema continua abrindo ao tocar.
+   */
+  @supports (-webkit-touch-callout: none) {
+    input[type="date"],
+    input[type="time"],
+    input[type="datetime-local"],
+    input[type="month"] {
+      -webkit-appearance: none;
+      appearance: none;
+      min-width: 0;
+      max-width: 100%;
+      display: flex;
+      align-items: center;
+    }
+    input[type="date"]::-webkit-date-and-time-value,
+    input[type="time"]::-webkit-date-and-time-value,
+    input[type="datetime-local"]::-webkit-date-and-time-value {
+      text-align: left;
+      margin: 0;
+    }
+  }
+
+  /* Nada encosta para fora da largura da tela */
+  html,
+  body {
+    max-width: 100%;
+    overflow-x: clip;
+  }
+}
+
+/*
+ * Tela de toque: botão pequeno demais é toque errado. Botões de texto e
+ * pílulas ganham pelo menos 36px de altura; botões só de ícone (size-*)
+ * e os flutuantes (absolute/fixed) mantêm o tamanho desenhado.
+ */
+@media (pointer: coarse) {
+  main button:not([class*="size-"]):not([class*="absolute"]):not([class*="fixed"]):not([role="switch"]):not([role="checkbox"]),
+  main a[class*="inline-flex"]:not([class*="size-"]),
+  [role="dialog"] button:not([class*="size-"]):not([class*="absolute"]):not([role="switch"]):not([role="checkbox"]) {
+    min-height: 36px;
+  }
+}
