@@ -71,9 +71,9 @@ const DialogContent = React.forwardRef<
       className={cn(
         // Celular: painel de baixo para cima, largura toda, respeitando a
         // barra de gestos do iPhone. A partir de sm: janela no centro.
-        "fixed inset-x-0 bottom-0 z-50 grid max-h-[calc(100dvh-env(safe-area-inset-top)-0.75rem)] w-full grid-cols-[minmax(0,1fr)] gap-4 overflow-y-auto overflow-x-hidden overscroll-contain rounded-t-2xl border border-border bg-white p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-card focus:outline-none",
+        "fixed inset-x-0 bottom-0 z-50 mx-auto grid max-w-lg max-h-[calc(100dvh-env(safe-area-inset-top)-0.75rem)] w-full grid-cols-[minmax(0,1fr)] gap-4 overflow-y-auto overflow-x-hidden overscroll-contain rounded-t-2xl border border-border bg-white p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-card focus:outline-none",
         "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-bottom-8",
-        "sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:max-h-[calc(100dvh-2rem)] sm:w-[calc(100vw-2rem)] sm:max-w-lg sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-lg sm:pb-6 sm:data-[state=open]:slide-in-from-bottom-0 sm:data-[state=open]:zoom-in-95",
+        "sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:max-h-[calc(100dvh-2rem)] sm:mx-0 sm:w-[calc(100vw-2rem)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-lg sm:pb-6 sm:data-[state=open]:slide-in-from-bottom-0 sm:data-[state=open]:zoom-in-95",
         className
       )}
       {...props}
