@@ -24,6 +24,7 @@ import type {
 } from "@/lib/supabase/types";
 import { HistoricoEnvios } from "@/components/app/avisos/historico";
 import { PreferenciasAviso } from "@/components/app/avisos/preferencias";
+import { AtendeProfissionais } from "@/components/app/avisos/atende-profissionais";
 import { rotuloPapel } from "@/lib/rbac";
 import type { UsuarioGerenciavel } from "@/lib/supabase/usuarios";
 import {
@@ -190,13 +191,20 @@ function AvisosDaEquipe({
   const [aberto, setAberto] = useState<string | null>(null);
   const pessoas = equipe.filter((u) => u.ativo && !u.aguardando_liberacao && u.role !== "super_admin");
   const porId = new Map(preferencias.map((p) => [p.usuario_id, p]));
+  // Quem atende: a secretária escolhe de quais profissionais recebe os avisos
+  const profissionais = pessoas
+    .filter((u) => u.role === "medico" || u.role === "gestor")
+    .map((u) => ({ id: u.id, nome: u.nome ?? "Sem nome" }));
+  const nomeDe = new Map(profissionais.map((p) => [p.id, p.nome]));
+  const atendeDe = (u: UsuarioGerenciavel) => (u.atende_profissionais ?? []).filter((id) => nomeDe.has(id));
 
   return (
     <section className="rounded-lg border border-border bg-white shadow-soft">
       <header className="border-b border-border px-5 py-4">
         <h2 className="text-lg font-semibold text-azul-medico">Avisos da equipe</h2>
         <p className="mt-1 text-sm text-cinza-suave">
-          Quem recebe cada aviso da agenda e por qual canal. Cada pessoa também ajusta o seu em Meu Perfil.
+          Quem recebe cada aviso da agenda e por qual canal. O aviso de uma consulta só chega ao profissional dela, à gestão e
+          às secretárias dele. Cada pessoa também ajusta o seu em Meu Perfil.
         </p>
       </header>
       {pessoas.length === 0 ? (
@@ -217,13 +225,25 @@ function AvisosDaEquipe({
                     <span className="block truncate text-sm font-medium text-cinza-texto">{u.nome ?? "Sem nome"}</span>
                     <span className="block truncate text-xs text-cinza-suave">
                       {rotuloPapel(u.role)} · {p ? "avisos personalizados" : "padrão do papel"}
+                      {u.role === "secretaria" &&
+                        (atendeDe(u).length
+                          ? ` · atende ${atendeDe(u).map((id) => nomeDe.get(id)).join(", ")}`
+                          : " · recepção geral")}
                       {!u.telefone && " · sem telefone"}
                     </span>
                   </span>
                   <span className="shrink-0 text-sm font-medium text-teal">{aberto === u.id ? "Fechar" : "Ajustar"}</span>
                 </button>
                 {aberto === u.id && (
-                  <div className="mt-3">
+                  <div className="mt-3 space-y-3">
+                    {u.role === "secretaria" && (
+                      <AtendeProfissionais
+                        secretariaId={u.id}
+                        profissionais={profissionais}
+                        inicial={atendeDe(u)}
+                        demo={demo}
+                      />
+                    )}
                     <PreferenciasAviso
                       usuarioId={u.id}
                       papel={u.role}

@@ -19,6 +19,7 @@ import { Logo } from "@/components/logo";
 import { MarcaClinica } from "@/components/marca-clinica";
 import { SeletorTema } from "@/components/app/tema";
 import { logout } from "@/lib/actions/auth";
+import { soltarAparelho } from "@/components/app/avisos/soltar-aparelho";
 import { cn } from "@/lib/utils";
 import { GRUPOS, modulosDoPapel, rotuloPapel } from "@/lib/rbac";
 import type { Role } from "@/lib/supabase/types";
@@ -211,7 +212,7 @@ export function Sidebar({
               )}
             </Link>
             <SeletorTema compacto />
-            <form action={logout}>
+            <form action={sair}>
               <button
                 type="submit"
                 title="Sair"
@@ -241,7 +242,7 @@ export function Sidebar({
             <div className="mt-2 px-1">
               <SeletorTema />
             </div>
-            <form action={logout}>
+            <form action={sair}>
               <button
                 type="submit"
                 className="mt-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-cinza-suave transition-colors hover:bg-coral/10 hover:text-coral"
@@ -412,6 +413,12 @@ function BarraInferior({
       </div>
     </nav>
   );
+}
+
+/** Solta as notificações do aparelho antes de encerrar a sessão. */
+async function sair() {
+  await soltarAparelho();
+  await logout();
 }
 
 function inicial(nome: string) {

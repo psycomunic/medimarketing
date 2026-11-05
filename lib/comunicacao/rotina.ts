@@ -386,23 +386,27 @@ async function resumoDaClinica(
   const situacao = (c: ConsultaDoResumo) =>
     c.status === "confirmada" ? "confirmou" : c.status === "realizada" ? "atendido" : SITUACAO[statusConf.get(c.id) ?? ""] ?? "a confirmar";
 
-  const porHora = new Map<string, ConsultaDoResumo[]>();
-  for (const c of consultas) {
-    const h = formatarHora(c.data_hora);
-    porHora.set(h, [...(porHora.get(h) ?? []), c]);
-  }
-  const horarios: HorarioDaClinica[] = [...porHora.entries()].map(([h, lista]) => ({
-    hora: h,
-    ocupadas: ocupacaoDoIntervalo(consultas, new Date(lista[0].data_hora), 30).simultaneas,
-    itens: lista.map((c) => ({
-      paciente: c.paciente_nome,
-      profissional: nomes.get(c.medico_id) ?? "Profissional",
-      servico: c.servico_nome,
-      situacao: situacao(c),
-    })),
-  }));
-  const pendentes = consultas.filter((c) => situacao(c) !== "confirmou" && situacao(c) !== "atendido").length;
-  const profissionais = new Set(consultas.map((c) => c.medico_id)).size;
+  // A ocupação de cada horário é da clínica inteira; a lista, só do que a pessoa acompanha
+  const montar = (visiveis: ConsultaDoResumo[]) => {
+    const porHora = new Map<string, ConsultaDoResumo[]>();
+    for (const c of visiveis) {
+      const h = formatarHora(c.data_hora);
+      porHora.set(h, [...(porHora.get(h) ?? []), c]);
+    }
+    const horarios: HorarioDaClinica[] = [...porHora.entries()].map(([h, lista]) => ({
+      hora: h,
+      ocupadas: ocupacaoDoIntervalo(consultas, new Date(lista[0].data_hora), 30).simultaneas,
+      itens: lista.map((c) => ({
+        paciente: c.paciente_nome,
+        profissional: nomes.get(c.medico_id) ?? "Profissional",
+        servico: c.servico_nome,
+        situacao: situacao(c),
+      })),
+    }));
+    const pendentes = visiveis.filter((c) => situacao(c) !== "confirmou" && situacao(c) !== "atendido").length;
+    const profissionais = new Set(visiveis.map((c) => c.medico_id)).size;
+    return { visiveis, horarios, pendentes, profissionais };
+  };
   const painel = urlPainel("/app/agenda");
   const marca = { clinica: clinica.nome, logoUrl: clinica.logo_url, emailClinica: clinica.email, telefoneClinica: clinica.telefone };
   const data = formatarData(inicio.toISOString());
@@ -410,6 +414,9 @@ async function resumoDaClinica(
 
   let total = 0;
   for (const m of destino) {
+    const doGrupo = m.role === "secretaria" && m.atende.length ? consultas.filter((c) => m.atende.includes(c.medico_id)) : consultas;
+    if (!doGrupo.length) continue;
+    const { visiveis, horarios, pendentes, profissionais } = montar(doGrupo);
     const email = emailAgendaDaClinica(marca, {
       nome: m.nome,
       data,
@@ -425,7 +432,7 @@ async function resumoDaClinica(
       evento: "agenda_da_clinica",
       chave: `agenda_clinica:${dia}`,
       somente: [m.id],
-      titulo: `Agenda da clínica hoje: ${consultas.length} consulta${consultas.length === 1 ? "" : "s"}`,
+      titulo: `Agenda da clínica hoje: ${visiveis.length} consulta${visiveis.length === 1 ? "" : "s"}`,
       descricao: `${profissionais} profissiona${profissionais === 1 ? "l" : "is"} atendendo · ${pendentes} sem confirmação.`,
       href: "/app/agenda",
       tipoPainel: "agenda",
@@ -462,7 +469,7 @@ async function alertasDeVespera(orgIds: string[]): Promise<number> {
 
     const { data: pendentes } = await admin
       .from("consultas")
-      .select("id,paciente_nome,data_hora,paciente_telefone")
+      .select("id,medico_id,paciente_nome,data_hora,paciente_telefone")
       .eq("organization_id", orgId)
       .eq("status", "pendente")
       .gte("data_hora", inicio.toISOString())
@@ -474,33 +481,55 @@ async function alertasDeVespera(orgIds: string[]): Promise<number> {
     if (!clinica) continue;
 
     const quando = diaRelativo(inicio.toISOString());
-    const n = pendentes.length;
-    const titulo = `${n} paciente${n === 1 ? "" : "s"} de ${quando} sem confirmação`;
-    const lista = pendentes.map((p) => `${formatarHora(p.data_hora)} ${p.paciente_nome}`);
     const painel = urlPainel("/app/confirmacoes");
+    const membros = await membrosDaClinica(orgId);
 
-    total += await avisarEquipe({
-      organizationId: orgId,
-      evento: "pendentes_vespera",
-      chave: `vespera:${hoje}`,
-      titulo,
-      descricao: `${lista.slice(0, 6).join(" · ")}${n > 6 ? ` e mais ${n - 6}` : ""}. Vale ligar ou reenviar o lembrete.`,
-      href: "/app/confirmacoes",
-      tipoPainel: "lembrete_atrasado",
-      prioridade: "alta",
-      whatsapp: [`*${titulo}*`, "", ...lista, "", `Confirmações: ${painel}`].join("\n"),
-      email: emailEquipe(
-        { clinica: clinica.nome, logoUrl: clinica.logo_url, emailClinica: clinica.email, telefoneClinica: clinica.telefone },
-        {
-          assunto: titulo,
-          faixa: { texto: titulo, cor: "#B45309", fundo: "#FEF3C7" },
-          frase: "Estes pacientes ainda não responderam ao lembrete:",
-          dados: pendentes.map((p) => [formatarHora(p.data_hora), `${p.paciente_nome}${p.paciente_telefone ? ` · ${p.paciente_telefone}` : ""}`]),
-          botao: { texto: "Abrir Confirmações", url: painel },
-        }
-      ),
-      clinica,
-    });
+    // Gestão e recepção geral veem todos; a secretária de um profissional,
+    // só os pacientes dele
+    const grupos = new Map<string, { pessoas: string[]; lista: typeof pendentes }>();
+    for (const m of membros) {
+      if (m.role !== "gestor" && m.role !== "secretaria") continue;
+      const geral = m.role === "gestor" || m.atende.length === 0;
+      const chaveGrupo = geral ? "todos" : [...m.atende].sort().join(",");
+      const g = grupos.get(chaveGrupo) ?? {
+        pessoas: [],
+        lista: geral ? pendentes : pendentes.filter((p) => m.atende.includes(p.medico_id)),
+      };
+      g.pessoas.push(m.id);
+      grupos.set(chaveGrupo, g);
+    }
+
+    for (const { pessoas, lista: doGrupo } of grupos.values()) {
+      if (!doGrupo.length) continue;
+      const n = doGrupo.length;
+      const titulo = `${n} paciente${n === 1 ? "" : "s"} de ${quando} sem confirmação`;
+      const lista = doGrupo.map((p) => `${formatarHora(p.data_hora)} ${p.paciente_nome}`);
+
+      total += await avisarEquipe({
+        organizationId: orgId,
+        evento: "pendentes_vespera",
+        chave: `vespera:${hoje}`,
+        somente: pessoas,
+        titulo,
+        descricao: `${lista.slice(0, 6).join(" · ")}${n > 6 ? ` e mais ${n - 6}` : ""}. Vale ligar ou reenviar o lembrete.`,
+        href: "/app/confirmacoes",
+        tipoPainel: "lembrete_atrasado",
+        prioridade: "alta",
+        whatsapp: [`*${titulo}*`, "", ...lista, "", `Confirmações: ${painel}`].join("\n"),
+        email: emailEquipe(
+          { clinica: clinica.nome, logoUrl: clinica.logo_url, emailClinica: clinica.email, telefoneClinica: clinica.telefone },
+          {
+            assunto: titulo,
+            faixa: { texto: titulo, cor: "#B45309", fundo: "#FEF3C7" },
+            frase: "Estes pacientes ainda não responderam ao lembrete:",
+            dados: doGrupo.map((p) => [formatarHora(p.data_hora), `${p.paciente_nome}${p.paciente_telefone ? ` · ${p.paciente_telefone}` : ""}`]),
+            botao: { texto: "Abrir Confirmações", url: painel },
+          }
+        ),
+        membros,
+        clinica,
+      });
+    }
   }
 
   return total;

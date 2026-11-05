@@ -2718,3 +2718,12 @@ create policy "push_proprias" on public.push_inscricoes for all to authenticated
 alter table public.envios drop constraint if exists envios_canal_check;
 alter table public.envios add constraint envios_canal_check
   check (canal in ('email','whatsapp','painel','push'));
+
+-- --------------------------------------------------------------------
+-- Secretária de quem: avisos de consulta só para quem tem a ver
+--
+-- Lista dos profissionais de quem a secretária cuida. Ela recebe os
+-- avisos das consultas só deles. Vazia = recepção geral (recebe todos).
+-- --------------------------------------------------------------------
+alter table public.profiles
+  add column if not exists atende_profissionais uuid[] not null default '{}';

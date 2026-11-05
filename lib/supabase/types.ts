@@ -122,6 +122,11 @@ export type Profile = {
   slug_agenda?: string | null;
   /** O link público do profissional está no ar. */
   agenda_publica?: boolean;
+  /**
+   * Secretária: de quais profissionais ela cuida. Recebe os avisos das
+   * consultas só deles. Vazio = recepção geral, recebe de todos.
+   */
+  atende_profissionais?: string[] | null;
 };
 
 export type Consulta = {

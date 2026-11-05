@@ -322,12 +322,18 @@ async function avisarFalha(item: Envio, erro: string): Promise<void> {
       .eq("id", item.confirmacao_id);
   }
 
+  // Profissional da consulta: a secretária de outro não precisa saber
+  const { data: consulta } = item.consulta_id
+    ? await admin.from("consultas").select("medico_id").eq("id", item.consulta_id).maybeSingle()
+    : { data: null };
+
   // Import tardio: equipe.ts importa esta fila
   const { avisarEquipe } = await import("@/lib/comunicacao/equipe");
   await avisarEquipe({
     organizationId: item.organization_id,
     evento: "envio_falhou",
     consultaId: item.consulta_id,
+    medicoId: consulta?.medico_id ?? null,
     chave: `falha:${item.id}`,
     titulo: `Mensagem não chegou a ${item.destino_nome ?? "um paciente"}`,
     descricao: `${item.canal === "email" ? "E-mail" : "WhatsApp"} (${rotuloEvento(item.evento)}) falhou ${MAX_TENTATIVAS} vezes: ${erro}. Vale contato manual.`,

@@ -204,3 +204,52 @@ export async function enviarTeste(): Promise<ResultadoTeste> {
     resultados: (envios ?? []).map((e) => ({ canal: e.canal, status: e.status, erro: e.erro })),
   };
 }
+
+/**
+ * De quais profissionais a secretária cuida. Ela passa a receber os
+ * avisos das consultas só deles; lista vazia = recepção geral.
+ */
+export async function salvarAtendimentoSecretaria(
+  secretariaId: string,
+  profissionais: string[]
+): Promise<ActionResult> {
+  const lista = z.array(z.string().uuid()).max(50).safeParse(profissionais);
+  if (!secretariaId || !lista.success) return { ok: false, erro: "Seleção inválida." };
+
+  const ctx = await contexto(["super_admin", "gestor"]);
+  if (ctx.estado !== "ok") return bloqueio(ctx);
+  if (!adminDisponivel()) return { ok: false, erro: MSG_SEM_CHAVE };
+
+  const admin = createAdminClient();
+  const { data: alvo } = await admin
+    .from("profiles")
+    .select("id,organization_id,role")
+    .eq("id", secretariaId)
+    .maybeSingle();
+  if (!alvo?.organization_id || alvo.role !== "secretaria") return { ok: false, erro: "Secretária não encontrada." };
+  if (ctx.profile.role !== "super_admin" && ctx.profile.organization_id !== alvo.organization_id) {
+    return { ok: false, erro: "Essa pessoa não é da sua clínica." };
+  }
+
+  // Só profissionais da mesma clínica
+  const ids = [...new Set(lista.data)];
+  let validos: string[] = [];
+  if (ids.length) {
+    const { data } = await admin
+      .from("profiles")
+      .select("id")
+      .eq("organization_id", alvo.organization_id)
+      .in("role", ["medico", "gestor"])
+      .in("id", ids);
+    validos = (data ?? []).map((p) => p.id);
+  }
+
+  const { error } = await admin.from("profiles").update({ atende_profissionais: validos }).eq("id", alvo.id);
+  if (error) {
+    console.error("[avisos] Vínculo da secretária:", error.message);
+    return { ok: false, erro: "Não foi possível salvar. Rode antes o SQL novo (atende_profissionais) no Supabase." };
+  }
+
+  revalidatePath("/app/configuracoes");
+  return { ok: true };
+}

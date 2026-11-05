@@ -17,6 +17,11 @@ import type { CanalAviso, Organization, Role, TipoNotificacao } from "@/lib/supa
  *
  * Quem fez a ação não recebe o aviso dela — a secretária que marcou a
  * consulta não precisa ser avisada de que marcou.
+ *
+ * Aviso de uma consulta só chega a quem tem a ver com ela: o profissional
+ * que atende, a gestão da clínica e as secretárias desse profissional
+ * (ou as de recepção geral, sem profissional marcado). Outro médico
+ * nunca recebe, nem que escolha receber em Meu Perfil.
  */
 
 export type MembroEquipe = {
@@ -27,7 +32,27 @@ export type MembroEquipe = {
   email: string | null;
   canais: Partial<Record<string, CanalAviso[]>>;
   resumoHora: number;
+  /** Secretária: profissionais de quem cuida. Vazio = recepção geral. */
+  atende: string[];
 };
+
+/** Esta pessoa tem a ver com a consulta deste profissional? */
+export function cuidaDaConsulta(m: Pick<MembroEquipe, "id" | "role" | "atende">, medicoId: string): boolean {
+  if (m.id === medicoId) return true;
+  if (m.role === "gestor") return true;
+  if (m.role === "secretaria") return m.atende.length === 0 || m.atende.includes(medicoId);
+  return false;
+}
+
+/** Vínculos secretária → profissionais. Sem a coluna no banco, ninguém tem vínculo. */
+async function vinculosDaClinica(organizationId: string): Promise<Map<string, string[]>> {
+  const { data, error } = await createAdminClient()
+    .from("profiles")
+    .select("id,atende_profissionais")
+    .eq("organization_id", organizationId);
+  if (error || !data) return new Map();
+  return new Map(data.map((p) => [p.id, (p.atende_profissionais ?? []).filter(Boolean)]));
+}
 
 export type ClinicaEnvio = Pick<
   Organization,
@@ -39,13 +64,14 @@ export async function membrosDaClinica(organizationId: string): Promise<MembroEq
   if (!adminDisponivel()) return [];
   const admin = createAdminClient();
 
-  const [{ data: perfis }, { data: prefs }] = await Promise.all([
+  const [{ data: perfis }, { data: prefs }, vinculos] = await Promise.all([
     admin
       .from("profiles")
       .select("id,nome,role,telefone,ativo,aguardando_liberacao")
       .eq("organization_id", organizationId)
       .eq("ativo", true),
     admin.from("preferencias_aviso").select("*").eq("organization_id", organizationId),
+    vinculosDaClinica(organizationId),
   ]);
 
   const porUsuario = new Map((prefs ?? []).map((p) => [p.usuario_id, p]));
@@ -71,6 +97,7 @@ export async function membrosDaClinica(organizationId: string): Promise<MembroEq
     email: emails[i],
     canais: porUsuario.get(p.id)?.canais ?? {},
     resumoHora: porUsuario.get(p.id)?.resumo_hora ?? 7,
+    atende: p.role === "secretaria" ? vinculos.get(p.id) ?? [] : [],
   }));
 }
 
@@ -146,6 +173,8 @@ export async function avisarEquipe(a: AvisoEquipeInput): Promise<number> {
     if (a.atorId && m.id === a.atorId) continue;
     if (a.somente && !a.somente.includes(m.id)) continue;
     if (a.exceto?.includes(m.id)) continue;
+    // Aviso de consulta: só quem tem a ver com ela
+    if (a.medicoId && !cuidaDaConsulta(m, a.medicoId)) continue;
 
     const canais = canaisEfetivos(a.evento, m.role, m.id === a.medicoId, m.canais);
 
